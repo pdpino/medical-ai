@@ -1,0 +1,14 @@
+# Runs and logs
+workspace/
+log/
+logs/
+models/
+runs/
+nohup.out
+
+
+# Python env
+**/.ipynb_checkpoints/
+**/__pycache__
+**/*.egg-info
+pyenv/
