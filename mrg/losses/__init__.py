@@ -1,0 +1,23 @@
+import torch
+from torch import nn
+
+from mrg.losses.focal import FocalLoss
+from mrg.losses.bce import WeigthedBCELoss, WeigthedBCEByDiseaseLoss
+
+_LOSS_CLASSES = {
+    'bce': nn.BCELoss,
+    'wbce': WeigthedBCELoss,
+    'wbce_by_disease': WeigthedBCEByDiseaseLoss,
+    'focal': FocalLoss,
+}
+
+AVAILABLE_LOSSES = list(_LOSS_CLASSES)
+
+def get_loss_function(loss_name, **loss_params):
+    if loss_name not in _LOSS_CLASSES:
+        raise Exception(f'Loss not found: {loss_name}')
+        
+    LossClass = _LOSS_CLASSES[loss_name]
+        
+    loss = LossClass(**loss_params)
+    return loss
