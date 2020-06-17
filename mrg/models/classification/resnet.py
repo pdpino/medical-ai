@@ -10,7 +10,7 @@ class Resnet50CNN(nn.Module):
         
         self.labels = list(labels)
 
-        if not freeze:
+        if freeze:
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
 
@@ -26,19 +26,24 @@ class Resnet50CNN(nn.Module):
             nn.Linear(n_resnet_features, n_diseases),
             nn.Sigmoid()
         )
+
+        self.features_size = n_resnet_features * n_resnet_output_size * n_resnet_output_size
         
     def forward(self, x):
+        # x shape: batch_size, 3, height, width
+        # 3 as in RGB, heigth and width are usually 512 for CXR14
+
         x = self.features(x)
-        # shape: n_samples, n_features, height = 16, width = 16
+        # shape: batch_size, n_features, height = 16, width = 16
         
         x = self.global_pool(x)
-        # shape: n_samples, n_features, height = 1, width = 1
+        # shape: batch_size, n_features, height = 1, width = 1
 
         x = x.view(x.size(0), -1)
-        # shape: n_samples, n_features
+        # shape: batch_size, n_features
         
         x = self.prediction(x)
-        # shape: n_samples, n_diseases
+        # shape: batch_size, n_diseases
 
         return x,
 
@@ -53,7 +58,7 @@ class Resnet50CNN(nn.Module):
         x = self.base_cnn.layer3(x)
         x = self.base_cnn.layer4(x)
 
-        # n_samples, 2048, height=16, width=16
+        # batch_size, 2048, height=16, width=16
         return x
 
 
@@ -61,7 +66,7 @@ class Resnet50CNN(nn.Module):
         ### DEPRECATED, use captum
 
         x = self.features(x)
-        # shape: n_samples, n_features, height = 16, width = 16
+        # shape: batch_size, n_features, height = 16, width = 16
         
 
         # Calculate CAM
@@ -71,17 +76,17 @@ class Resnet50CNN(nn.Module):
         # x: activations from prev layer
         # bbox: for each sample, multiply n_features dimensions
         activations = torch.matmul(pred_weights, x.transpose(1, 2)).transpose(1, 2)
-        # shape: n_samples, n_diseases, height, width
+        # shape: batch_size, n_diseases, height, width
         
         x = self.global_pool(x)
-        # shape: n_samples, n_features, 1, 1
+        # shape: batch_size, n_features, 1, 1
         
         x = x.view(x.size(0), -1)
-        # shape: n_samples, n_features
+        # shape: batch_size, n_features
         
         embedding = x
         
         x = self.prediction(x)
-        # shape: n_samples, n_diseases
+        # shape: batch_size, n_diseases
         
         return x, embedding, activations
