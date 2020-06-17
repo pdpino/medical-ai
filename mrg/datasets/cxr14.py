@@ -32,7 +32,7 @@ def _get_default_image_transformation(image_size=512):
     mean = 0.50576189
     return transforms.Compose([transforms.Resize(image_size),
                                transforms.ToTensor(),
-                               transforms.Normalize([mean], [1.])
+                               transforms.Normalize([mean], [1.]),
                               ])
 
 class CXR14Dataset(Dataset):

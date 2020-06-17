@@ -4,6 +4,15 @@ import time
 # import os
 # from pprint import pprint
 
+PAD_TOKEN = 'PAD'
+PAD_IDX = 0
+END_TOKEN = 'END'
+END_IDX = 1
+START_TOKEN = 'START'
+START_IDX = 2
+UNKNOWN_TOKEN = 'UNK'
+UNKNOWN_IDX = 3
+
 def get_timestamp(short=True):
     now = datetime.fromtimestamp(time.time())
 
