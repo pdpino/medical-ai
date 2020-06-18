@@ -1,7 +1,7 @@
 from datetime import datetime
 import time
+import os
 # import json
-# import os
 # from pprint import pprint
 
 PAD_TOKEN = 'PAD'
@@ -12,6 +12,8 @@ START_TOKEN = 'START'
 START_IDX = 2
 UNKNOWN_TOKEN = 'UNK'
 UNKNOWN_IDX = 3
+
+WORKSPACE_DIR = os.environ['WORKSPACE_DIR']
 
 def get_timestamp(short=True):
     now = datetime.fromtimestamp(time.time())

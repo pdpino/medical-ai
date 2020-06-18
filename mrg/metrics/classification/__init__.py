@@ -6,8 +6,6 @@ from ignite.utils import to_onehot
 from mrg.metrics.classification.roc_auc import RocAucMetric
 
 
-ALL_LOGGABLE_METRICS = ["roc_auc", "prec", "recall", "acc"]
-
 def _get_transform_one_label(label_index, use_round=True):
     """Creates a transform function to extract one label from a multi-label output."""
     def transform_fn(output):
@@ -60,10 +58,10 @@ def _attach_by_disease(engine, chosen_diseases, metric_name, MetricClass,
         metric.attach(engine, f'{metric_name}_{disease}')
 
 
-def attach_metrics_classification(engine, chosen_diseases, loss_name):
+def attach_metrics_classification(engine, chosen_diseases):
     """Attach classification metrics to an engine."""
     loss = RunningAverage(output_transform=lambda x: x[0], alpha=1)
-    loss.attach(engine, loss_name)
+    loss.attach(engine, 'loss')
     
     _attach_by_disease(engine, chosen_diseases, 'prec', Precision, True)
     _attach_by_disease(engine, chosen_diseases, 'recall', Recall, True)
