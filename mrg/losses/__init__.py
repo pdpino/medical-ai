@@ -9,6 +9,7 @@ _LOSS_CLASSES = {
     'wbce': WeigthedBCELoss,
     'wbce_by_disease': WeigthedBCEByDiseaseLoss,
     'focal': FocalLoss,
+    'cross-entropy': nn.CrossEntropyLoss, # Use only for multilabel=False models!
 }
 
 AVAILABLE_LOSSES = list(_LOSS_CLASSES)

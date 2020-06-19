@@ -37,8 +37,7 @@ def _get_default_image_transformation(image_size=512):
 
 class CXR14Dataset(Dataset):
 
-    def __init__(self, dataset_type='train', diseases=None, max_images=None):
-        """Create a Dataset object."""
+    def __init__(self, dataset_type='train', labels=None, max_samples=None):
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
         
@@ -60,11 +59,11 @@ class CXR14Dataset(Dataset):
         self.bbox_index.drop(drop_unnamed, axis=1, inplace=True)
         
         # Choose diseases names
-        if not diseases:
+        if not labels:
             self.labels = list(CXR14_DISEASES)
         else:
             # Keep only the ones that exist
-            self.labels = [d for d in diseases if d in CXR14_DISEASES]
+            self.labels = [d for d in labels if d in CXR14_DISEASES]
             
             not_found_diseases = list(set(self.labels) - set(CXR14_DISEASES))
             if not_found_diseases:
@@ -72,18 +71,21 @@ class CXR14Dataset(Dataset):
             
 
         self.n_diseases = len(self.labels)
+        self.multilabel = True
         
         # Filter labels DataFrame
         columns = ['FileName'] + self.labels
         self.label_index = self.label_index[columns]
 
-        # Keep only the images in the directory # and max_images
+        # Keep only the images in the directory 
         available_images = set(os.listdir(self.image_dir))
-        labeled_images = set(self.label_index['FileName']).intersection(available_images)
-        if max_images:
-            labeled_images = set(list(labeled_images)[:max_images])
+        available_images = set(self.label_index['FileName']).intersection(available_images)
 
-        self.label_index = self.label_index.loc[self.label_index['FileName'].isin(labeled_images)]
+        # Keep only max_samples images
+        if max_samples:
+            available_images = set(list(available_images)[:max_samples])
+
+        self.label_index = self.label_index.loc[self.label_index['FileName'].isin(available_images)]
         
         # Keep bbox_index with available images
         self.bbox_index = self.bbox_index.loc[self.bbox_index['Image Index'].isin(available_images)]

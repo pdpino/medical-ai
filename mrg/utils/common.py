@@ -13,7 +13,7 @@ START_IDX = 2
 UNKNOWN_TOKEN = 'UNK'
 UNKNOWN_IDX = 3
 
-WORKSPACE_DIR = os.environ['WORKSPACE_DIR']
+WORKSPACE_DIR = os.environ['MRG_WORKSPACE_DIR']
 
 def get_timestamp(short=True):
     now = datetime.fromtimestamp(time.time())
@@ -42,6 +42,22 @@ def labels_to_str(values, labels, thresh=0.5, sort_values=False, show_value=Fals
         return ', '.join(format_str.format(val, label) for val, label in positive)
     else:
         return 'No Findings'
+
+
+def compute_vocab(reports_iterator):
+    word_to_idx = {
+        PAD_TOKEN: PAD_IDX,
+        START_TOKEN: START_IDX,
+        END_TOKEN: END_IDX,
+        UNKNOWN_TOKEN: UNKNOWN_IDX,
+    }
+
+    for report in reports_iterator:
+        for token in report:
+            if token not in word_to_idx:
+                word_to_idx[token] = len(word_to_idx)
+
+    return word_to_idx
 
 # def write_to_txt(arr, fname, sep='\n'):
 #     """Writes a list of strings to a file"""

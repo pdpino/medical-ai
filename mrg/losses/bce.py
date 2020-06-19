@@ -2,20 +2,6 @@ import torch
 from torch import nn
 import numpy as np
 
-
-# def bce(output, target, epsilon=1e-5):
-#     """Computes binary cross entropy loss.
-    
-#     If a multi-label array is given, the BCE is summed across labels.
-#     """
-#     output = output.clamp(min=epsilon, max=1-epsilon)
-#     target = target.float()
-
-#     loss = -target * torch.log(output) - (1 - target) * torch.log(1 - output)
-
-#     return torch.sum(loss)
-
-
 class WeigthedBCELoss(nn.Module):
     def __init__(self, epsilon=1e-5):
         super().__init__()
@@ -51,6 +37,7 @@ class WeigthedBCELoss(nn.Module):
 class WeigthedBCEByDiseaseLoss(nn.Module):
     def __init__(self, epsilon=1e-5):
         super().__init__()
+
         self.epsilon = epsilon
 
     def forward(self, output, target):

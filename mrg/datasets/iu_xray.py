@@ -14,26 +14,10 @@ from mrg.utils import (
     START_IDX,
     UNKNOWN_TOKEN,
     UNKNOWN_IDX,
+    compute_vocab,
 )
 
 DATASET_DIR = os.environ['DATASET_DIR_IU_XRAY']
-
-
-# TODO: move this to utils
-def compute_vocab(reports_iterator):
-    word_to_idx = {
-        PAD_TOKEN: PAD_IDX,
-        START_TOKEN: START_IDX,
-        END_TOKEN: END_IDX,
-        UNKNOWN_TOKEN: UNKNOWN_IDX,
-    }
-
-    for report in reports_iterator:
-        for token in report:
-            if token not in word_to_idx:
-                word_to_idx[token] = len(word_to_idx)
-
-    return word_to_idx
 
 
 def _reports_iterator(reports):
@@ -53,7 +37,7 @@ class IUXRayDataset(Dataset):
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
         
-        self.dataset_type = dataset_type # TODO: use dataset type?
+        self.dataset_type = dataset_type
         self.image_format = 'RGB'
         self.transform = _get_default_image_transformation()
         
@@ -84,10 +68,6 @@ class IUXRayDataset(Dataset):
     def size(self):
         return (self.n_images, self.n_reports)
 
-    def get_by_name(self, report_name):
-        # TODO
-        raise NotImplementedError
-    
     def __len__(self):
         return self.n_reports
 
@@ -115,12 +95,12 @@ class IUXRayDataset(Dataset):
 
     def _preprocess_reports(self, reports, sort_samples=True, vocab=None):
         # Save a name_to_idx dict
-        self.name_to_idx = {}
+        # self.name_to_idx = {}
 
-        for index, report in enumerate(reports):
-            name = report['filename']
+        # for index, report in enumerate(reports):
+        #     name = report['filename']
 
-            self.name_to_idx[name] = index
+        #     self.name_to_idx[name] = index
 
         if vocab is None:
             # Compute word_to_idx dictionary

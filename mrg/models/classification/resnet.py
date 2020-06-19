@@ -3,12 +3,13 @@ import torch.nn as nn
 from torchvision import models
 
 class Resnet50CNN(nn.Module):
-    def __init__(self, labels, imagenet=True, freeze=False):
+    def __init__(self, labels, imagenet=True, freeze=False, multilabel=True):
         """Resnet-50."""
         super().__init__()
         self.base_cnn = models.resnet50(pretrained=imagenet)
         
         self.labels = list(labels)
+        self.multilabel = multilabel
 
         if freeze:
             for param in self.base_cnn.parameters():
@@ -22,10 +23,18 @@ class Resnet50CNN(nn.Module):
 
         n_diseases = len(labels)
         n_resnet_features = 2048
-        self.prediction = nn.Sequential(
-            nn.Linear(n_resnet_features, n_diseases),
-            nn.Sigmoid()
-        )
+
+        linear = nn.Linear(n_resnet_features, n_diseases)
+
+        if multilabel:
+            # Custom losses do not include sigmoid on the output
+            self.prediction = nn.Sequential(
+                linear,
+                nn.Sigmoid(),
+            )
+        else:
+            # Cross entropy loss includes softmax!
+            self.prediction = linear
 
         self.features_size = n_resnet_features * n_resnet_output_size * n_resnet_output_size
         

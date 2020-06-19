@@ -3,7 +3,7 @@ import json
 
 from mrg.utils.common import WORKSPACE_DIR
 
-RUN_STATE_DIR = os.path.join(WORKSPACE_DIR, 'train_state')
+RUN_STATE_FOLDER = 'train_state'
 
 INITIAL_TRAIN_STATE = {
     'current_epoch': 0,
@@ -12,7 +12,7 @@ INITIAL_TRAIN_STATE = {
 def _get_run_state_filepath(run_name, classification=True, debug=True):
     mode_folder = 'classification' if classification else 'report_generation'
     debug_folder = 'debug' if debug else ''
-    folder = os.path.join(RUN_STATE_DIR, mode_folder, debug_folder)
+    folder = os.path.join(WORKSPACE_DIR, mode_folder, RUN_STATE_FOLDER, debug_folder)
     os.makedirs(folder, exist_ok=True)
     filepath = os.path.join(folder, f'{run_name}.json')
 
