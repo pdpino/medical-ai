@@ -3,6 +3,8 @@ from ignite.metrics import Accuracy, Precision, Recall, RunningAverage, \
                            ConfusionMatrix # VariableAccumulation
 from ignite.utils import to_onehot
 
+from mrg.metrics.classification.accuracy import MultilabelAccuracy
+from mrg.metrics.classification.hamming import Hamming
 from mrg.metrics.classification.roc_auc import RocAucMetric
 from mrg.metrics.classification.specificity import Specificity
 
@@ -98,6 +100,11 @@ def _transform_remove_loss(output):
     _, y_pred, y_true = output
     return y_pred, y_true
 
+def _transform_remove_loss_and_round(output):
+    """Simple transform to remove the loss from the output."""
+    _, y_pred, y_true = output
+    return torch.round(y_pred), y_true
+
 
 def attach_metrics_classification(engine, labels, multilabel=True):
     """Attach classification metrics to an engine.
@@ -109,6 +116,12 @@ def attach_metrics_classification(engine, labels, multilabel=True):
     loss.attach(engine, 'loss')
     
     if multilabel:
+        acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round)
+        acc.attach(engine, 'acc')
+
+        ham = Hamming(output_transform=_transform_remove_loss_and_round)
+        ham.attach(engine, 'hamming')
+
         _attach_binary_metrics(engine, labels, 'acc', Accuracy, True)
         _attach_binary_metrics(engine, labels, 'prec', Precision, True)
         _attach_binary_metrics(engine, labels, 'recall', Recall, True)
