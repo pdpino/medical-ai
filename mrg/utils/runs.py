@@ -19,6 +19,8 @@ def _get_run_state_filepath(run_name, classification=True, debug=True):
     return filepath
 
 class RunState:
+    # DEPRECATED: use CompiledModel instead
+    # TODO: DELETEME
     def __init__(self, run_name, classification=True, debug=True):
         self.run_name = run_name
         self.filepath = _get_run_state_filepath(run_name, classification=classification, debug=debug)

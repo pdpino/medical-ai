@@ -3,10 +3,15 @@ import torch.nn as nn
 from torchvision import models
 
 class Resnet50CNN(nn.Module):
-    def __init__(self, labels, imagenet=True, freeze=False, multilabel=True):
+    def __init__(self, labels, imagenet=True, freeze=False, multilabel=True,
+                 pretrained_cnn=None, dropout=None):
         """Resnet-50."""
         super().__init__()
+
         self.base_cnn = models.resnet50(pretrained=imagenet)
+
+        if pretrained_cnn is not None:
+            self.base_cnn.load_state_dict(pretrained_cnn.state_dict())
         
         self.labels = list(labels)
         self.multilabel = multilabel
@@ -15,11 +20,16 @@ class Resnet50CNN(nn.Module):
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
 
+        # TODO: calculate this size!
         n_resnet_output_size = 16 # With input of 512
 
         self.global_pool = nn.Sequential(
             nn.MaxPool2d(n_resnet_output_size)
         )
+
+        self.flatten = nn.Flatten()
+
+        self.dropout = nn.Dropout(dropout) if dropout else None
 
         n_diseases = len(labels)
         n_resnet_features = 2048
@@ -27,13 +37,13 @@ class Resnet50CNN(nn.Module):
         linear = nn.Linear(n_resnet_features, n_diseases)
 
         if multilabel:
-            # Custom losses do not include sigmoid on the output
+            # Custom losses do not include sigmoid on the calculation
             self.prediction = nn.Sequential(
                 linear,
                 nn.Sigmoid(),
             )
         else:
-            # Cross entropy loss includes softmax!
+            # Cross entropy loss includes softmax
             self.prediction = linear
 
         self.features_size = n_resnet_features * n_resnet_output_size * n_resnet_output_size
@@ -48,9 +58,13 @@ class Resnet50CNN(nn.Module):
         x = self.global_pool(x)
         # shape: batch_size, n_features, height = 1, width = 1
 
-        x = x.view(x.size(0), -1)
+        x = self.flatten(x)
         # shape: batch_size, n_features
         
+        if self.dropout:
+            x = self.dropout(x)
+            # shape: batch_size, n_features
+
         x = self.prediction(x)
         # shape: batch_size, n_diseases
 

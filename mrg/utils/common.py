@@ -1,6 +1,7 @@
 from datetime import datetime
 import time
 import os
+import numpy as np
 # import json
 # from pprint import pprint
 
@@ -58,6 +59,11 @@ def compute_vocab(reports_iterator):
                 word_to_idx[token] = len(word_to_idx)
 
     return word_to_idx
+
+
+def arr_to_range(arr, min_value=0, max_value=1):
+    return np.interp(arr, (arr.min(), arr.max()), (min_value, max_value))
+
 
 # def write_to_txt(arr, fname, sep='\n'):
 #     """Writes a list of strings to a file"""
