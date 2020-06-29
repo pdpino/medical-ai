@@ -1,9 +1,7 @@
 import torch
 from torch.utils.data import Dataset, Sampler
 from torchvision import transforms
-# from torchvision.transforms import functional as F
 import pandas as pd
-# import numpy as np
 from PIL import Image
 import os
 import random
@@ -29,10 +27,11 @@ CXR14_DISEASES = [
 DATASET_DIR = os.environ['DATASET_DIR_CXR14']
 
 def _get_default_image_transformation(image_size=512):
-    mean = 0.50576189
+    mean = 0.4980 # 0.50576189
+    sd = 0.0458
     return transforms.Compose([transforms.Resize(image_size),
                                transforms.ToTensor(),
-                               transforms.Normalize([mean], [1.]),
+                               transforms.Normalize([mean], [sd]),
                               ])
 
 class CXR14Dataset(Dataset):
@@ -130,8 +129,8 @@ class CXR14Dataset(Dataset):
             raise
 
         image = self.transform(image)
-        
-        return image, labels, image_name, bboxes, bbox_valid
+
+        return image, labels, bboxes, bbox_valid
     
     def precompute_metadata(self):
         self.precomputed = []

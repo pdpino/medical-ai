@@ -8,7 +8,7 @@ _DATASET_DEF = {
   'covid-kaggle': CovidKaggleDataset,
 }
 
-AVAILABLE_DATASETS = list(_DATASET_DEF)
+AVAILABLE_CLASSIFICATION_DATASETS = list(_DATASET_DEF)
 
 def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labels=None,
                                 max_samples=None,
