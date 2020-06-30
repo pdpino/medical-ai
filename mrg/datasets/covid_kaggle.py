@@ -13,8 +13,11 @@ _FOLDERS = [
 ]
 
 def _get_default_image_transformation(image_size=512):
+    mean = [0.4872, 0.4875, 0.4876]
+    sd = [0.0352, 0.0352, 0.0352]
     return transforms.Compose([transforms.Resize((image_size, image_size)),
                                transforms.ToTensor(),
+                               transforms.Normalize(mean, sd)
                               ])
 
 class CovidKaggleDataset(Dataset):
