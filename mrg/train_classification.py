@@ -2,6 +2,7 @@ import time
 import argparse
 
 import torch
+from torch import nn
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer, Checkpoint, DiskSaver
 from torch import optim
@@ -12,7 +13,10 @@ from mrg.datasets import (
 )
 from mrg.losses import get_loss_function
 from mrg.metrics.classification import attach_metrics_classification
-from mrg.models.classification import init_empty_model
+from mrg.models.classification import (
+    init_empty_model,
+    AVAILABLE_CLASSIFICATION_MODELS,
+)
 from mrg.models.checkpoint import (
     CompiledModel,
     get_checkpoint_folder,
@@ -24,7 +28,7 @@ from mrg.utils import get_timestamp, duration_to_str
 DEVICE = torch.device('cuda')
 
 
-def get_step_fn(model, loss_fn, optimizer=None, training=True, device=DEVICE):
+def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, device=DEVICE):
     """Creates a step function for an Engine."""
     def step_fn(engine, data_batch):
         # Move inputs to GPU
@@ -48,7 +52,7 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, device=DEVICE):
         outputs = output_tuple[0]
         # shape: batch_size, n_labels
 
-        if model.multilabel:
+        if multilabel:
             labels = labels.float()
         else:
             labels = labels.long()
@@ -83,14 +87,15 @@ def train_model(run_name, compiled_model, train_dataloader, val_dataloader, n_ep
     
     # Classification labels
     labels = train_dataloader.dataset.labels
+    multilabel = train_dataloader.dataset.multilabel
 
     # Create validator engine
-    validator = Engine(get_step_fn(model, loss, training=False))
-    attach_metrics_classification(validator, labels, multilabel=model.multilabel)
+    validator = Engine(get_step_fn(model, loss, training=False, multilabel=multilabel))
+    attach_metrics_classification(validator, labels, multilabel=multilabel)
     
     # Create trainer engine
     trainer = Engine(get_step_fn(model, loss, optimizer=optimizer, training=True))
-    attach_metrics_classification(trainer, labels, multilabel=model.multilabel)
+    attach_metrics_classification(trainer, labels, multilabel=multilabel)
     
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
@@ -166,6 +171,7 @@ def main(run_name,
          batch_size=10,
          n_epochs=10,
          debug=True,
+         multiple_gpu=False,
          ):
     # Create run name
     run_name = f'{run_name}_{dataset_name}_{cnn_name}_lr{lr}'
@@ -196,6 +202,10 @@ def main(run_name,
                              freeze=freeze,
                             ).to(DEVICE)
 
+    if multiple_gpu:
+        # TODO: use DistributedDataParallel instead
+        model = nn.DataParallel(model)
+
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     compiled_model = CompiledModel(model, optimizer)
@@ -209,7 +219,7 @@ def main(run_name,
         print_metrics = ['loss', 'acc']
 
     # Decide loss
-    if model.multilabel:
+    if train_dataloader.dataset.multilabel:
         loss_name = 'wbce'
         # REVIEW: enable choosing a different loss?
     else:
@@ -230,9 +240,12 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # parser.add_argument('--name', type=str, default=None)
-    parser.add_argument('--dataset', type=str, default=None, required=True,
+    parser.add_argument('-d', '--dataset', type=str, default=None, required=True,
                         choices=AVAILABLE_CLASSIFICATION_DATASETS,
                         help='Choose dataset to train on')
+    parser.add_argument('-m', '--model', type=str, default=None, required=True,
+                        choices=AVAILABLE_CLASSIFICATION_MODELS,
+                        help='Choose base CNN to use')
     parser.add_argument('-noig', '--no-imagenet', action='store_true',
                         help='If present, dont use imagenet pretrained weights')
     parser.add_argument('-frz', '--freeze', action='store_true',
@@ -245,6 +258,8 @@ def parse_args():
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
+    parser.add_argument('--multiple-gpu', action='store_true',
+                        help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
 
@@ -263,7 +278,7 @@ if __name__ == '__main__':
 
     main(run_name,
          args.dataset,
-         cnn_name='resnet',
+         cnn_name=args.model,
          imagenet=not args.no_imagenet,
          freeze=args.freeze,
          max_samples=args.max_samples,
@@ -271,6 +286,7 @@ if __name__ == '__main__':
          batch_size=args.batch_size,
          n_epochs=args.epochs,
          debug=not args.no_debug,
+         multiple_gpu=args.multiple_gpu,
          )
 
     total_time = time.time() - start_time
