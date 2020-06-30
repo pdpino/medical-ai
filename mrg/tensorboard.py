@@ -29,8 +29,13 @@ class TBWriter:
         self.ignore_regex = re.compile(f'\A({self.ignore_regex})')
         # NOTE: Consider starting patterns, as metrics are written as <metric>_<disease>
 
+
+        # Capitalize so in TB appears first
         self._name_mappings = {
-            'loss': 'Loss', # Capitalize so in TB appears first
+            'loss': 'Loss',
+            'acc': 'Acc',
+            'hamming': 'Hamming',
+            'bce': 'BCELoss'
         }
 
     def write_histogram(self, model, epoch, wall_time):

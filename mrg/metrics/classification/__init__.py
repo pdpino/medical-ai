@@ -1,6 +1,14 @@
 import torch
-from ignite.metrics import Accuracy, Precision, Recall, RunningAverage, \
-                           ConfusionMatrix # VariableAccumulation
+from torch.nn.functional import binary_cross_entropy
+from ignite.metrics import (
+    Accuracy,
+    Precision,
+    Recall,
+    RunningAverage,
+    ConfusionMatrix,
+    # VariableAccumulation,
+    Loss,
+)
 from ignite.utils import to_onehot
 
 from mrg.metrics.classification.accuracy import MultilabelAccuracy
@@ -121,6 +129,10 @@ def attach_metrics_classification(engine, labels, multilabel=True):
 
         ham = Hamming(output_transform=_transform_remove_loss_and_round)
         ham.attach(engine, 'hamming')
+
+        bce_loss = Loss(binary_cross_entropy,
+                        output_transform=_transform_remove_loss_and_round)
+        bce_loss.attach(engine, 'bce')
 
         _attach_binary_metrics(engine, labels, 'acc', Accuracy, True)
         _attach_binary_metrics(engine, labels, 'prec', Precision, True)

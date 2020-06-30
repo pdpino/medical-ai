@@ -22,7 +22,7 @@ class WeigthedBCELoss(nn.Module):
         BN = 1
 
         total = np.prod(target.size())
-        positive = int((target > 0).sum())
+        positive = (target == 1).sum().item()
         negative = total - positive
 
         if positive != 0 and negative != 0:
@@ -46,9 +46,12 @@ class WeigthedBCEByDiseaseLoss(nn.Module):
 
         batch_size, n_diseases = target.size()
         
-        total = torch.Tensor().new_full((n_diseases,), batch_size).type(torch.float)
-        positive = torch.sum(target > 0, dim=0).type(torch.float)
-        negative = total - positive
+        # total = torch.Tensor().new_full((n_diseases,), batch_size).type(torch.float)
+        positive = torch.sum(target == 1, dim=0).type(torch.float)
+        negative = torch.sum(target == 0, dim=0).type(torch.float)
+        total = positive + negative
+        # shapes: n_diseases
+
 
         # If a value is zero, is set to batch_size (so the division results in 1 for that disease)
         positive = positive + ((positive == 0)*batch_size).type(positive.dtype)
