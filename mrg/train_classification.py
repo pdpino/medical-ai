@@ -94,7 +94,8 @@ def train_model(run_name, compiled_model, train_dataloader, val_dataloader, n_ep
     attach_metrics_classification(validator, labels, multilabel=multilabel)
     
     # Create trainer engine
-    trainer = Engine(get_step_fn(model, loss, optimizer=optimizer, training=True))
+    trainer = Engine(get_step_fn(model, loss, optimizer=optimizer,
+                                 training=True, multilabel=multilabel))
     attach_metrics_classification(trainer, labels, multilabel=multilabel)
     
     # Create Timer to measure wall time between epochs
