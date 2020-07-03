@@ -65,6 +65,10 @@ def arr_to_range(arr, min_value=0, max_value=1):
     return np.interp(arr, (arr.min(), arr.max()), (min_value, max_value))
 
 
+def num_trainable_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
 # def write_to_txt(arr, fname, sep='\n'):
 #     """Writes a list of strings to a file"""
 #     with open(fname, 'w') as f:

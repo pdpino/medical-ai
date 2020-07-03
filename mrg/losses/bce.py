@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-import numpy as np
 
 class WeigthedBCELoss(nn.Module):
     def __init__(self, epsilon=1e-5):
@@ -11,7 +10,7 @@ class WeigthedBCELoss(nn.Module):
     def forward(self, output, target):
         """Computes weighted binary cross entropy loss.
         
-        If a multi-label array is given, the BCE is summed across labels.
+        If a multi-label array is given, the BCE is summed/averaged across labels.
         Note that the BP and BN weights are calculated by batch, not in the whole dataset.
         """
         output = output.clamp(min=self.epsilon, max=1-self.epsilon)
@@ -21,7 +20,7 @@ class WeigthedBCELoss(nn.Module):
         BP = 1
         BN = 1
 
-        total = np.prod(target.size())
+        total = target.numel()
         positive = (target == 1).sum().item()
         negative = total - positive
 

@@ -108,6 +108,7 @@ def _transform_remove_loss(output):
     _, y_pred, y_true = output
     return y_pred, y_true
 
+
 def _transform_remove_loss_and_round(output):
     """Simple transform to remove the loss from the output."""
     _, y_pred, y_true = output

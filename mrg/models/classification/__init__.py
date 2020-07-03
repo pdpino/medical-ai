@@ -1,10 +1,11 @@
 import torch
 
-from mrg.models.classification import resnet, densenet
+from mrg.models.classification import resnet, densenet, transfusion
 
 _MODELS_DEF = {
     'resnet': resnet.Resnet50CNN,
     'densenet-121': densenet.Densenet121CNN,
+    'tfs-small': transfusion.class_wrapper('small'),
 }
 
 AVAILABLE_CLASSIFICATION_MODELS = list(_MODELS_DEF)

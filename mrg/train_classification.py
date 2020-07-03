@@ -71,8 +71,16 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
     return step_fn
 
 
-def train_model(run_name, compiled_model, train_dataloader, val_dataloader, n_epochs=1,
-               loss_name='wbce', debug=True, print_metrics=['loss', 'acc']):
+def train_model(run_name,
+                compiled_model,
+                train_dataloader,
+                val_dataloader,
+                n_epochs=1,
+                loss_name='wbce',
+                debug=True,
+                print_metrics=['loss', 'acc'],
+                device=DEVICE,
+                ):
     # Prepare run
     tb_writer = TBWriter(run_name, classification=True, debug=debug)
     initial_epoch = compiled_model.get_current_epoch()
@@ -90,12 +98,22 @@ def train_model(run_name, compiled_model, train_dataloader, val_dataloader, n_ep
     multilabel = train_dataloader.dataset.multilabel
 
     # Create validator engine
-    validator = Engine(get_step_fn(model, loss, training=False, multilabel=multilabel))
+    validator = Engine(get_step_fn(model,
+                                   loss,
+                                   training=False,
+                                   multilabel=multilabel,
+                                   device=device,
+                                   ))
     attach_metrics_classification(validator, labels, multilabel=multilabel)
     
     # Create trainer engine
-    trainer = Engine(get_step_fn(model, loss, optimizer=optimizer,
-                                 training=True, multilabel=multilabel))
+    trainer = Engine(get_step_fn(model,
+                                 loss,
+                                 optimizer=optimizer,
+                                 training=True,
+                                 multilabel=multilabel,
+                                 device=device,
+                                 ))
     attach_metrics_classification(trainer, labels, multilabel=multilabel)
     
     # Create Timer to measure wall time between epochs
