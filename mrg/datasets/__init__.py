@@ -1,7 +1,8 @@
 from torch.utils.data import DataLoader
 
-from mrg.datasets.cxr14 import CXR14Dataset, CXR14UnbalancedSampler
+from mrg.datasets.cxr14 import CXR14Dataset
 from mrg.datasets.covid_kaggle import CovidKaggleDataset
+from mrg.datasets.sampler import OneLabelUnbalancedSampler
 
 _DATASET_DEF = {
   'cxr14': CXR14Dataset,
@@ -12,7 +13,7 @@ AVAILABLE_CLASSIFICATION_DATASETS = list(_DATASET_DEF)
 
 def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labels=None,
                                 max_samples=None,
-                                oversample=False, max_os=None,
+                                oversample=False, oversample_label=0, oversample_max_ratio=None,
                                 batch_size=10, shuffle=False):
     print(f'Loading {dataset_type} dataset...')
 
@@ -24,10 +25,9 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labe
                            max_samples=max_samples)
 
     if oversample:
-        if dataset_name != 'cxr14':
-            # FIXME: only works with CXR14 dataset
-            raise Exception('Oversampler only works with CXR14')
-        sampler = CXR14UnbalancedSampler(dataset, max_os)
+        sampler = OneLabelUnbalancedSampler(dataset,
+                                            label=oversample_label,
+                                            max_ratio=oversample_max_ratio)
         dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
     else:
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)

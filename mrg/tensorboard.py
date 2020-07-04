@@ -2,6 +2,7 @@
 import os
 import re
 from tensorboardX import SummaryWriter
+from torch import nn
 
 from mrg import utils
 
@@ -39,6 +40,9 @@ class TBWriter:
         }
 
     def write_histogram(self, model, epoch, wall_time):
+        if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+            model = model.module
+
         for name, params in model.named_parameters():
             params = params.cpu().detach().numpy()
             self.writer.add_histogram(name, params, global_step=epoch, walltime=wall_time)

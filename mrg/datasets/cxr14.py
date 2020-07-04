@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset, Sampler
+from torch.utils.data import Dataset
 from torchvision import transforms
 import pandas as pd
 from PIL import Image
@@ -180,50 +180,11 @@ class CXR14Dataset(Dataset):
         
         return image_name, labels, bboxes, bbox_valid
 
+    def get_labels_presence_for(self, target_label):
+        """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
+            label for each sample.
+        """
+        if isinstance(target_label, int):
+            target_label = self.labels[target_label]
 
-class CXR14UnbalancedSampler(Sampler):
-    def __init__(self, cxr_dataset, max_os=None):
-        total_samples = len(cxr_dataset)
-        
-        # Resample the indexes considering the first disease
-        disease = cxr_dataset.labels[0]
-        
-        indexes_with_label = list(enumerate(cxr_dataset.label_index[disease]))
-        
-        positives = sum(label for idx, label in indexes_with_label)
-        negatives = total_samples - positives
-        ratio = negatives // positives if positives > 0 else 1
-        
-        OVERSAMPLE_LABEL = 1
-        UNDERSAMPLE_LABEL = 0
-
-        if ratio < 1:
-            OVERSAMPLE_LABEL = 0
-            UNDERSAMPLE_LABEL = 1
-            
-
-        # Set a maximum ratio for oversampling
-        # note that it only affects ratio > 1 (i.e. oversampling positive samples)
-        if max_os is not None:
-            ratio = min(ratio, max_os)
-        
-        self.resampled_indexes = []
-        
-        for idx, label in indexes_with_label:
-            if label == UNDERSAMPLE_LABEL:
-                self.resampled_indexes.append(idx)
-            elif label == OVERSAMPLE_LABEL:
-                for _ in range(ratio):
-                    self.resampled_indexes.append(idx)
-                    
-        random.shuffle(self.resampled_indexes)
-        
-        print(f'\tOversampling ratio: {ratio}, total {len(self.resampled_indexes)} samples (original {total_samples})')
-
-    
-    def __len__(self):
-        return len(self.resampled_indexes)
-    
-    def __iter__(self):
-        return iter(self.resampled_indexes)
-        
+        return list(enumerate(self.label_index[target_label]))

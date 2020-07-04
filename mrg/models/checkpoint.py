@@ -18,7 +18,7 @@ def get_checkpoint_folder(run_name, classification=True, debug=True):
 def get_latest_filepath(run_name, classification=True, debug=True):
     find_epoch = lambda fname: int(_EPOCH_REGEX.search(fname).group(0))
 
-    folder = get_checkpoint_folder(run_name, classification=True, debug=True)
+    folder = get_checkpoint_folder(run_name, classification=classification, debug=debug)
     files = [(find_epoch(fname), fname) for fname in os.listdir(folder)]
 
     latest_epoch, latest_fname = max(files)

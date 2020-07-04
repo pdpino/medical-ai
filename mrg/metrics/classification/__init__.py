@@ -72,15 +72,32 @@ def _get_transform_one_class(label_index):
     return transform_fn
 
 
-def _get_transform_cm(label_index, num_classes=2):
+def _get_transform_cm_multilabel(label_index):
     """Creates a transform function to prepare the input for the ConfusionMatrix metric.
     
     Works for multilabel outputs only.
+    The metric will have a 2x2 confusion-matrix, with positive and negative for the
+        selected label.
+    In this context, n_labels refers to the existing labels in the multilabel classification
+        (such as different diseases); n_classes refers to 2, as for each label it can be
+        present or absent (2 classes).
     """
+    n_classes = 2
+
     def transform_fn(output):
-        _, y_pred, y_true = output
+        """Transform multilabel arrays into one-hot and indices array, respectively.
         
-        y_pred = to_onehot(torch.round(y_pred[:, label_index]).long(), num_classes)
+        Args:
+            y_pred shape: batch_size, n_labels
+            y_true shape: batch_size, n_labels
+        Returns:
+            y_pred shape: batch_size, n_classes (one-hot)
+            y_true shape: batch_size
+        """
+        _, y_pred, y_true = output
+
+        y_pred = torch.round(y_pred[:, label_index]).long()
+        y_pred = to_onehot(y_pred, n_classes)
         y_true = y_true[:, label_index].long()
 
         return y_pred, y_true
@@ -115,8 +132,8 @@ def _transform_remove_loss_and_round(output):
     return torch.round(y_pred), y_true
 
 
-def attach_metrics_classification(engine, labels, multilabel=True):
-    """Attach classification metrics to an engine.
+def attach_metrics_classification(engine, labels, multilabel=True, include_cm=False):
+    """Attach classification metrics to an engine, to use during training.
     
     Note: most multilabel metrics are treated as binary,
         i.e. the metrics are computed separately for each label.
@@ -140,8 +157,6 @@ def attach_metrics_classification(engine, labels, multilabel=True):
         _attach_binary_metrics(engine, labels, 'recall', Recall, True)
         _attach_binary_metrics(engine, labels, 'spec', Specificity, True)
         _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False)
-        _attach_binary_metrics(engine, labels, 'cm', ConfusionMatrix,
-                        get_transform_fn=_get_transform_cm, metric_args=(2,))
     else:
         acc = Accuracy(output_transform=_transform_remove_loss)
         acc.attach(engine, 'acc')
@@ -152,3 +167,17 @@ def attach_metrics_classification(engine, labels, multilabel=True):
                            get_transform_fn=_get_transform_one_class)
         _attach_binary_metrics(engine, labels, 'spec', Specificity,
                            get_transform_fn=_get_transform_one_class)
+
+def attach_metric_cm(engine, labels, multilabel=True):
+    """Attach ConfusionMatrix metrics to an engine.
+    
+    Note that CMs are not attached during training, since they are not easily visualized (e.g. TB).
+    """
+    if multilabel:
+        _attach_binary_metrics(engine, labels, 'cm', ConfusionMatrix,
+                               get_transform_fn=_get_transform_cm_multilabel,
+                               metric_args=(2,),
+                               )
+    else:
+        cm = ConfusionMatrix(len(labels), output_transform=_transform_remove_loss_and_round)
+        cm.attach(engine, 'cm')

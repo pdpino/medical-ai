@@ -7,7 +7,7 @@ def _calc_output_size(input_size, kernel_size, stride, dilation=0, padding=0):
     Should work with Conv and MaxPool layers.
     See formula in docs https://pytorch.org/docs/stable/nn.html#conv2d
     """
-    if type(input_size) is not torch.Tensor:
+    if not isinstance(input_size, torch.Tensor):
         input_size = torch.tensor(input_size)
 
     kernel_size = torch.tensor(kernel_size)
@@ -32,13 +32,13 @@ def calc_module_output_size(model, input_size):
 
     size = input_size
     for submodule in model.modules():
-        if type(submodule) is nn.Conv2d or type(submodule) is nn.MaxPool2d:
+        if isinstance(submodule, (nn.Conv2d, nn.MaxPool2d)):
             size = _calc_output_size(size, submodule.kernel_size, submodule.stride,
                                      dilation=submodule.dilation,
                                      padding=submodule.padding,
                                      )
 
-        if type(submodule) is nn.Conv2d:
+        if isinstance(submodule, nn.Conv2d):
             last_channel_out = submodule.out_channels
 
     return last_channel_out, size

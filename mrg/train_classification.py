@@ -25,10 +25,7 @@ from mrg.tensorboard import TBWriter
 from mrg.utils import get_timestamp, duration_to_str
 
 
-DEVICE = torch.device('cuda')
-
-
-def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, device=DEVICE):
+def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, device='cuda'):
     """Creates a step function for an Engine."""
     def step_fn(engine, data_batch):
         # Move inputs to GPU
@@ -79,7 +76,7 @@ def train_model(run_name,
                 loss_name='wbce',
                 debug=True,
                 print_metrics=['loss', 'acc'],
-                device=DEVICE,
+                device='cuda',
                 ):
     # Prepare run
     tb_writer = TBWriter(run_name, classification=True, debug=debug)
@@ -189,8 +186,12 @@ def main(run_name,
          lr = 0.000001,
          batch_size=10,
          n_epochs=10,
+         oversample=False,
+         oversample_label=None,
+         oversample_max_ratio=None,
          debug=True,
          multiple_gpu=False,
+         device='cuda',
          ):
     # Create run name
     run_name = f'{run_name}_{dataset_name}_{cnn_name}_lr{lr}'
@@ -199,6 +200,8 @@ def main(run_name,
         run_name += '_noig'
     if freeze:
         run_name += '_frz'
+    if oversample:
+        run_name += '_os'
 
     print('Run: ', run_name)
 
@@ -207,7 +210,11 @@ def main(run_name,
     train_dataloader = prepare_data_classification(dataset_name,
                                                    dataset_type='train',
                                                    max_samples=max_samples,
-                                                   batch_size=batch_size)
+                                                   batch_size=batch_size,
+                                                   oversample=oversample,
+                                                   oversample_label=oversample_label,
+                                                   oversample_max_ratio=oversample_max_ratio,
+                                                   )
     val_dataloader = prepare_data_classification(dataset_name,
                                                  dataset_type='val',
                                                  max_samples=max_samples,
@@ -219,7 +226,7 @@ def main(run_name,
                              multilabel=train_dataloader.dataset.multilabel,
                              imagenet=imagenet,
                              freeze=freeze,
-                            ).to(DEVICE)
+                            ).to(device)
 
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
@@ -250,6 +257,7 @@ def main(run_name,
                 loss_name=loss_name,
                 print_metrics=print_metrics,
                 debug=debug,
+                device=device,
                 )
 
     print('Finished run: ', run_name)
@@ -277,6 +285,10 @@ def parse_args():
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
+    parser.add_argument('-os', '--oversample', default=None,
+                        help='Oversample samples with a given label')
+    parser.add_argument('--os-max-ratio', default=None,
+                        help='Max ratio ')
     parser.add_argument('--multiple-gpu', action='store_true',
                         help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
@@ -288,6 +300,8 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     args = parse_args()
 
     # TODO: once model resuming is implemented, enable names other than timestamp
@@ -304,8 +318,12 @@ if __name__ == '__main__':
          lr=args.learning_rate,
          batch_size=args.batch_size,
          n_epochs=args.epochs,
+         oversample=args.oversample is not None,
+         oversample_label=args.oversample,
+         oversample_max_ratio=args.os_max_ratio,
          debug=not args.no_debug,
          multiple_gpu=args.multiple_gpu,
+         device=device,
          )
 
     total_time = time.time() - start_time

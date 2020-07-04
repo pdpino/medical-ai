@@ -25,9 +25,7 @@ class Hamming(Metric):
         """
         outputs, labels = output
 
-        batch_size, n_labels = outputs.size()
-
-        self._n_samples += batch_size * n_labels
+        self._n_samples += outputs.numel()
         self._result += torch.sum(outputs != labels).item()
 
     @sync_all_reduce('_n_samples', '_result')

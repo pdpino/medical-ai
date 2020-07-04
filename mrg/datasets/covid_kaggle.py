@@ -68,3 +68,15 @@ class CovidKaggleDataset(Dataset):
         image = self.transform(image)
 
         return image, label
+
+    def get_labels_presence_for(self, target_label):
+        """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
+            label for each sample.
+        """
+        if isinstance(target_label, str):
+            target_label = self.labels.index(target_label)
+
+        return [
+            (idx, int(target_label == label))
+            for idx, (_, label) in enumerate(self.images_metadata)
+        ]
