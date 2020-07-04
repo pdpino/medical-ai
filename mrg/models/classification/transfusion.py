@@ -88,6 +88,8 @@ class TransfusionCBRCNN(nn.Module):
         if pretrained_cnn is not None:
             self.load_state_dict(pretrained_cnn.state_dict())
 
+        self.features_size = out_h * out_w * out_channels
+
 
     def forward(self, x):
         # x shape: batch_size, channels, height, width
@@ -102,3 +104,6 @@ class TransfusionCBRCNN(nn.Module):
         # x shape: batch_size, n_labels
 
         return x,
+
+    def features(self, x):
+        return self.conv(x)

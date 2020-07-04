@@ -44,6 +44,9 @@ class TBWriter:
             model = model.module
 
         for name, params in model.named_parameters():
+            if params.numel() == 0:
+                continue
+
             params = params.cpu().detach().numpy()
             self.writer.add_histogram(name, params, global_step=epoch, walltime=wall_time)
 

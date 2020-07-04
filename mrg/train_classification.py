@@ -3,9 +3,9 @@ import argparse
 
 import torch
 from torch import nn
+from torch import optim
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer, Checkpoint, DiskSaver
-from torch import optim
 
 from mrg.datasets import (
     prepare_data_classification,
@@ -19,7 +19,8 @@ from mrg.models.classification import (
 )
 from mrg.models.checkpoint import (
     CompiledModel,
-    get_checkpoint_folder,
+    attach_checkpoint_saver,
+    save_metadata,
 )
 from mrg.tensorboard import TBWriter
 from mrg.utils import get_timestamp, duration_to_str
@@ -85,7 +86,7 @@ def train_model(run_name,
         print('Resuming from epoch: ', initial_epoch)
     
     # Unwrap stuff
-    model, optimizer = compiled_model.state()
+    model, optimizer = compiled_model.get_model_optimizer()
     
     # Prepare loss
     loss = get_loss_function(loss_name)
@@ -112,19 +113,18 @@ def train_model(run_name,
                                  device=device,
                                  ))
     attach_metrics_classification(trainer, labels, multilabel=multilabel)
-    
+
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, step=Events.EPOCH_COMPLETED)
 
     # Attach checkpoint
-    folderpath = get_checkpoint_folder(run_name, classification=True, debug=debug)
-    checkpoint = Checkpoint(
-        compiled_model.to_save_checkpoint(),
-        DiskSaver(folderpath, require_empty=False, atomic=False),
-        # global_step_transform=lambda trainer, _: trainer.state.epoch + initial_epoch,
-    )
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint)
+    attach_checkpoint_saver(run_name,
+                            compiled_model,
+                            trainer,
+                            classification=True,
+                            debug=debug,
+                            )
 
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_metrics(trainer):
@@ -151,10 +151,8 @@ def train_model(run_name,
         # Print results
         print_str = f'Finished epoch {epoch}/{max_epochs}'
         for metric in print_metrics:
-            if not (metric in train_metrics and metric in val_metrics):
-                continue
-            train_value = train_metrics[metric]
-            val_value = val_metrics[metric]
+            train_value = train_metrics.get(metric, -1)
+            val_value = val_metrics.get(metric, -1)
             metric_str = f' {metric} {train_value:.4f} {val_value:.4f},'
             print_str += metric_str
 
@@ -221,20 +219,38 @@ def main(run_name,
                                                  batch_size=batch_size)
 
     # Create model
-    model = init_empty_model(cnn_name,
-                             train_dataloader.dataset.labels,
-                             multilabel=train_dataloader.dataset.multilabel,
-                             imagenet=imagenet,
-                             freeze=freeze,
-                            ).to(device)
+    model_kwargs = {
+        'model_name': cnn_name,
+        'labels': train_dataloader.dataset.labels,
+        'multilabel': train_dataloader.dataset.multilabel,
+        'imagenet': imagenet,
+        'freeze': freeze,
+    }
+    model = init_empty_model(**model_kwargs).to(device)
 
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
         model = nn.DataParallel(model)
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
 
+    # Create optimizer
+    opt_kwargs = {
+        'lr': lr,
+    }
+    optimizer = optim.Adam(model.parameters(), **opt_kwargs)
+
+    # Save model metadata
+    metadata = {
+        'model_kwargs': model_kwargs,
+        'opt_kwargs': opt_kwargs,
+        # TODO: add hparams here?
+    }
+    save_metadata(metadata, run_name, classification=True, debug=debug)
+
+
+    # Create compiled_model
     compiled_model = CompiledModel(model, optimizer)
+
 
     # Print metrics (hardcoded)
     if dataset_name == 'cxr14':
