@@ -105,11 +105,12 @@ def train_model(run_name,
                 n_epochs=1,
                 loss_name='wbce',
                 debug=True,
+                dryrun=False,
                 print_metrics=['loss', 'acc'],
                 device='cuda',
                 ):
     # Prepare run
-    tb_writer = TBWriter(run_name, classification=True, debug=debug)
+    tb_writer = TBWriter(run_name, classification=True, debug=debug, dryrun=dryrun)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         print('Resuming from epoch: ', initial_epoch)
@@ -153,6 +154,7 @@ def train_model(run_name,
                             trainer,
                             classification=True,
                             debug=debug,
+                            dryrun=dryrun,
                             )
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -201,7 +203,7 @@ def train_model(run_name,
 
     tb_writer.close()
 
-    return
+    return trainer.state.metrics, validator.state.metrics
 
 
 def main(run_name,
@@ -248,6 +250,15 @@ def main(run_name,
                                                    )
     val_dataloader = prepare_data_classification(dataset_name, 'val', **dataset_kwargs)
 
+
+    # Decide loss
+    if train_dataloader.dataset.multilabel:
+        loss_name = 'wbce'
+        # REVIEW: enable choosing a different loss?
+    else:
+        loss_name = 'cross-entropy'
+
+
     # Create model
     model_kwargs = {
         'model_name': cnn_name,
@@ -273,7 +284,9 @@ def main(run_name,
     metadata = {
         'model_kwargs': model_kwargs,
         'opt_kwargs': opt_kwargs,
-        # TODO: add hparams here?
+        'hparams': {
+            'loss_name': loss_name,
+        },
     }
     save_metadata(metadata, run_name, classification=True, debug=debug)
 
@@ -289,13 +302,6 @@ def main(run_name,
         print_metrics = ['loss', 'acc', 'spec_covid', 'recall_covid']
     else:
         print_metrics = ['loss', 'acc']
-
-    # Decide loss
-    if train_dataloader.dataset.multilabel:
-        loss_name = 'wbce'
-        # REVIEW: enable choosing a different loss?
-    else:
-        loss_name = 'cross-entropy'
 
     # Train!
     train_model(run_name, compiled_model, train_dataloader, val_dataloader,

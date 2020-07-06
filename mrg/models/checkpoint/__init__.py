@@ -106,8 +106,12 @@ def attach_checkpoint_saver(run_name,
                             classification=True,
                             debug=True,
                             epoch_freq=1,
+                            dryrun=False,
                             ):
     """Attach a Checkpoint handler to an engine to persist to disk a CompiledModel."""
+    if dryrun:
+        return
+
     initial_epoch = compiled_model.get_current_epoch()
 
     folderpath = _get_checkpoint_folder(run_name, classification=classification, debug=debug,

@@ -22,6 +22,7 @@ from mrg.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
     load_compiled_model_classification,
+    save_metadata,
 )
 from mrg.tensorboard import TBWriter
 from mrg.utils import get_timestamp, duration_to_str
@@ -96,11 +97,12 @@ def train_model(run_name,
                 val_dataloader,
                 n_epochs=1,
                 debug=True,
-                print_metrics=['loss', 'word_acc'],
+                dryrun=False,
+                print_metrics=['loss', 'bleu'],
                 device='cuda',
                ):
     # Prepare run stuff
-    tb_writer = TBWriter(run_name, classification=False, debug=debug)
+    tb_writer = TBWriter(run_name, classification=False, debug=debug, dryrun=dryrun)
     initial_epoch = compiled_model.get_current_epoch()
 
     # Unwrap stuff
@@ -124,6 +126,7 @@ def train_model(run_name,
                             trainer,
                             classification=False,
                             debug=debug,
+                            dryrun=dryrun,
                            )
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -174,7 +177,7 @@ def train_model(run_name,
     # Close stuff
     tb_writer.close()
 
-    return
+    return trainer.state.metrics, validator.state.metrics
 
 
 def main(run_name,
@@ -196,6 +199,8 @@ def main(run_name,
 
     # Create run name
     run_name = f'{run_name}_lr{lr}'
+    if cnn_run_name:
+        run_name += '_precnn'
 
     print('Run: ', run_name)
 
@@ -242,9 +247,17 @@ def main(run_name,
     # Optimizer
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
+    # Save metadata
+    metadata = {
+        # TODO: cnn and decoder params
+        'hparams': {
+            'pretrained_cnn': cnn_run_name,
+        },
+    }
+    save_metadata(metadata, run_name, classification=False, debug=debug)
+
     # Compiled model
     compiled_model = CompiledModel(model, optimizer)
-
 
     # Train
     train_model(run_name, compiled_model, train_dataloader, val_dataloader,

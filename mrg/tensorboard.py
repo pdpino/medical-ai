@@ -20,11 +20,14 @@ def _get_log_dir(run_name, classification=True,
 class TBWriter:
     def __init__(self, run_name, classification=True,
                  ignore_metrics=IGNORE_METRICS,
+                 dryrun=False,
                  workspace_dir=utils.WORKSPACE_DIR, debug=True, **kwargs):
         self.log_dir = _get_log_dir(run_name, classification=classification,
                                     workspace_dir=workspace_dir, debug=debug)
 
-        self.writer = SummaryWriter(self.log_dir, **kwargs)
+        self.writer = SummaryWriter(self.log_dir,
+                                    write_to_disk=not dryrun,
+                                    **kwargs)
 
         self.ignore_regex = '|'.join(ignore_metrics)
         self.ignore_regex = re.compile(f'\A({self.ignore_regex})')

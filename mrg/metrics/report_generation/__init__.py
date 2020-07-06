@@ -1,9 +1,12 @@
 from ignite.metrics import RunningAverage
 
 from mrg.metrics.report_generation.word_accuracy import WordAccuracy
+from mrg.metrics.report_generation.bleu import Bleu
+from mrg.metrics.report_generation.rouge import RougeL
+from mrg.metrics.report_generation.cider import CiderD
 
 
-def _transform_words_indexes(outputs):
+def _transform_score_to_indexes(outputs):
     """Transforms the output to arrays of words indexes.
     
     Args:
@@ -22,5 +25,14 @@ def attach_metrics_report_generation(engine):
     loss = RunningAverage(output_transform=lambda x: x[0])
     loss.attach(engine, 'loss')
     
-    word_acc = WordAccuracy(output_transform=_transform_words_indexes)
+    word_acc = WordAccuracy(output_transform=_transform_score_to_indexes)
     word_acc.attach(engine, 'word_acc')
+
+    bleu = Bleu(output_transform=_transform_score_to_indexes)
+    bleu.attach(engine, 'bleu')
+
+    rouge = RougeL(output_transform=_transform_score_to_indexes)
+    rouge.attach(engine, 'rougeL')
+
+    cider = CiderD(output_transform=_transform_score_to_indexes)
+    cider.attach(engine, 'ciderD')
