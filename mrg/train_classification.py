@@ -12,7 +12,11 @@ from mrg.datasets import (
     AVAILABLE_CLASSIFICATION_DATASETS,
 )
 from mrg.losses import get_loss_function
-from mrg.metrics.classification import attach_metrics_classification
+from mrg.metrics import save_results
+from mrg.metrics.classification import (
+    attach_metrics_classification,
+    attach_metric_cm,
+)
 from mrg.models.classification import (
     init_empty_model,
     AVAILABLE_CLASSIFICATION_MODELS,
@@ -67,6 +71,31 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
         return batch_loss, outputs, labels
 
     return step_fn
+
+
+def evaluate_model(model,
+                   dataloader,
+                   loss_name='wbce',
+                   n_epochs=1,
+                   device='cuda'):
+    """Evaluate a classification model on a dataloader."""
+    loss = get_loss_function(loss_name)
+
+    labels = dataloader.dataset.labels
+    multilabel = dataloader.dataset.multilabel
+    
+    engine = Engine(get_step_fn(model,
+                                loss,
+                                training=False,
+                                multilabel=multilabel,
+                                device=device,
+                               ))
+    attach_metrics_classification(engine, labels, multilabel=multilabel)
+    attach_metric_cm(engine, labels, multilabel=multilabel)
+
+    engine.run(dataloader, n_epochs)
+    
+    return engine.state.metrics
 
 
 def train_model(run_name,
@@ -177,7 +206,7 @@ def train_model(run_name,
 
 def main(run_name,
          dataset_name,
-         cnn_name='resnet',
+         cnn_name='resnet-50',
          imagenet=True,
          freeze=False,
          max_samples=None,
@@ -187,6 +216,7 @@ def main(run_name,
          oversample=False,
          oversample_label=None,
          oversample_max_ratio=None,
+         post_evaluation=True,
          debug=True,
          multiple_gpu=False,
          device='cuda',
@@ -205,18 +235,18 @@ def main(run_name,
 
 
     # Load data
-    train_dataloader = prepare_data_classification(dataset_name,
-                                                   dataset_type='train',
-                                                   max_samples=max_samples,
-                                                   batch_size=batch_size,
+    dataset_kwargs = {
+        'max_samples': max_samples,
+        'batch_size': batch_size,
+    }
+
+    train_dataloader = prepare_data_classification(dataset_name, 'train',
                                                    oversample=oversample,
                                                    oversample_label=oversample_label,
                                                    oversample_max_ratio=oversample_max_ratio,
+                                                   **dataset_kwargs,
                                                    )
-    val_dataloader = prepare_data_classification(dataset_name,
-                                                 dataset_type='val',
-                                                 max_samples=max_samples,
-                                                 batch_size=batch_size)
+    val_dataloader = prepare_data_classification(dataset_name, 'val', **dataset_kwargs)
 
     # Create model
     model_kwargs = {
@@ -277,6 +307,21 @@ def main(run_name,
                 )
 
     print('Finished run: ', run_name)
+
+
+    if post_evaluation:
+        test_dataloader = prepare_data_classification(dataset_name, 'test', **dataset_kwargs)
+
+        train_metrics = evaluate_model(model, train_dataloader, loss_name=loss_name)
+        val_metrics = evaluate_model(model, val_dataloader, loss_name=loss_name)
+        test_metrics = evaluate_model(model, test_dataloader, loss_name=loss_name)
+
+        metrics = {
+            'train': train_metrics,
+            'val': val_metrics,
+            'test': test_metrics,
+        }
+        save_results(metrics, run_name, classification=True, debug=debug)
 
 
 def parse_args():

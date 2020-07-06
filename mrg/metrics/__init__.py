@@ -1,0 +1,43 @@
+import json
+import os
+import torch
+
+from mrg.utils.common import WORKSPACE_DIR
+
+class MetricsEncoder(json.JSONEncoder):
+    """Serializes metrics.
+    
+    ConfusionMatrix metric returns a torch.Tensor, which is not serializable
+        --> transform to list of lists.
+    """
+    def default(self, obj):
+        if isinstance(obj, torch.Tensor):
+            obj = obj.detach().numpy().tolist()
+        return obj
+
+
+def _get_results_folder(run_name, classification=True, debug=True, save_mode=False):
+    mode_folder = 'classification' if classification else 'report_generation'
+    debug_folder = 'debug' if debug else ''
+
+    folder = os.path.join(WORKSPACE_DIR, mode_folder, 'results', debug_folder)
+    folder = os.path.join(folder, run_name)
+
+    if save_mode:
+        os.makedirs(folder, exist_ok=True)
+    else:
+        assert os.path.isdir(folder), f'Run folder does not exist: {folder}'
+
+    return folder
+
+
+def save_results(metrics_dict, run_name, classification=True, debug=True):
+    folder = _get_results_folder(run_name, classification=classification, debug=debug,
+                                 save_mode=True)
+
+    filepath = os.path.join(folder, 'metrics.json')
+
+    with open(filepath, 'w') as f:
+        json.dump(metrics_dict, f, cls=MetricsEncoder)
+
+    print(f'Saved metrics to {filepath}')
