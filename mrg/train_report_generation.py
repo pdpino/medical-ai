@@ -201,6 +201,8 @@ def main(run_name,
     run_name = f'{run_name}_lr{lr}'
     if cnn_run_name:
         run_name += '_precnn'
+    else:
+        run_name += f'_{cnn_model_name}'
 
     print('Run: ', run_name)
 

@@ -9,10 +9,10 @@ from mrg.utils import PAD_IDX
 from mrg.utils.nlp_metrics import indexes_to_strings
 
 class Bleu(Metric):
-    """Computes BLEU metric."""
+    """Computes BLEU metric up to N."""
     def __init__(self, n=4, pad_idx=PAD_IDX, output_transform=lambda x: x, device=None):
         if pad_idx != 0:
-            # Otherwise, np.trim_zeros() function below gets ugly
+            # Otherwise, indexes_to_strings() function below gets ugly
             raise Exception('Bleu metric: pad idx must be 0!')
 
         self._n = n
@@ -40,5 +40,18 @@ class Bleu(Metric):
 
     @sync_all_reduce('scorer')
     def compute(self):
-        scores, _ = self.scorer.compute_score(verbose=0)
-        return np.mean(scores)
+        result = self.scorer.compute_score(verbose=0)
+
+        # NOTE: there is a bug in pycocoevalcap, returning different types
+        if isinstance(result, tuple):
+            # Scores are first calculated: returned as tuple (scores, scores_by_instance)
+            scores = result[0]
+        elif isinstance(result, list):
+            # Scores are cached, returned only scores
+            scores = result
+        else:
+            # would be an error
+            print(f'Warning: BleuScorer returned {type(result)}, {result}')
+            scores = [0.0] * self._n
+
+        return scores # np.mean(scores)
