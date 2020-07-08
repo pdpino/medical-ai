@@ -97,6 +97,7 @@ def train_model(run_name,
                 val_dataloader,
                 n_epochs=1,
                 debug=True,
+                save_model=True,
                 dryrun=False,
                 print_metrics=['loss', 'bleu'],
                 device='cuda',
@@ -126,7 +127,7 @@ def train_model(run_name,
                             trainer,
                             classification=False,
                             debug=debug,
-                            dryrun=dryrun,
+                            dryrun=dryrun or (not save_model),
                            )
 
     @trainer.on(Events.EPOCH_COMPLETED)
@@ -142,7 +143,6 @@ def train_model(run_name,
         
         # Save state
         compiled_model.save_current_epoch(epoch)
-        # run_state.save_state(epoch)
 
         # Common time
         wall_time = time.time()

@@ -19,10 +19,11 @@ class Densenet121CNN(nn.Module):
         # self.multilabel = multilabel 
 
         n_densenet_features = 1024
-        n_densenet_output_size = 16 # With input of 512
+        # TODO: calculate this size
+        output_size = 16 # With input of 512
 
         self.global_pool = nn.Sequential(
-            nn.MaxPool2d(n_densenet_output_size),
+            nn.MaxPool2d(output_size),
         )
 
         self.flatten = nn.Flatten()
@@ -37,12 +38,15 @@ class Densenet121CNN(nn.Module):
         else:
             self.prediction = linear
 
-        self.features_size = n_densenet_features * n_densenet_output_size * n_densenet_output_size
+        self.features_size = (n_densenet_features, output_size, output_size)
 
         
-    def forward(self, x):
+    def forward(self, x, features=False):
         x = self.base_cnn.features(x)
         
+        if features:
+            return x
+
         x = self.global_pool(x)
         x = self.flatten(x)
 
@@ -51,7 +55,3 @@ class Densenet121CNN(nn.Module):
         x = self.prediction(x) # n_samples, n_diseases
 
         return x, embedding
-
-
-    def features(self, x):
-        return self.base_cnn.features(x)

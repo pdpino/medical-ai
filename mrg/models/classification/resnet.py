@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
+# from mrg.utils.conv import calc_module_output_size
+
 class Resnet50CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False, multilabel=True,
                  pretrained_cnn=None, dropout=None):
@@ -20,11 +22,11 @@ class Resnet50CNN(nn.Module):
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
 
-        # TODO: calculate this size!
-        n_resnet_output_size = 16 # With input of 512
+        # TODO: calculate this size given input size!
+        output_size = 16 # With input of 512
 
         self.global_pool = nn.Sequential(
-            nn.MaxPool2d(n_resnet_output_size)
+            nn.MaxPool2d(output_size)
         )
 
         self.flatten = nn.Flatten()
@@ -46,15 +48,19 @@ class Resnet50CNN(nn.Module):
             # Cross entropy loss includes softmax
             self.prediction = linear
 
-        self.features_size = n_resnet_features * n_resnet_output_size * n_resnet_output_size
+
+        self.features_size = (n_resnet_features, output_size, output_size)
         
-    def forward(self, x):
+    def forward(self, x, features=False):
         # x shape: batch_size, 3, height, width
         # 3 as in RGB, heigth and width are usually 512 for CXR14
 
         x = self.features(x)
         # shape: batch_size, n_features, height = 16, width = 16
         
+        if features:
+            return x
+
         x = self.global_pool(x)
         # shape: batch_size, n_features, height = 1, width = 1
 

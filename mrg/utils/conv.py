@@ -25,7 +25,7 @@ def _calc_output_size(input_size, kernel_size, stride, dilation=0, padding=0):
 def calc_module_output_size(model, input_size):
     """Calculates output size of a model.
     
-    Considers only Conv2d and MaxPool2d layers.
+    Considers only Conv2d, MaxPool2d, AvgPool2d layers.
     Tested only with Sequential layers, deeper configurations may not work
     """
     last_channel_out = None
@@ -37,6 +37,11 @@ def calc_module_output_size(model, input_size):
                                      dilation=submodule.dilation,
                                      padding=submodule.padding,
                                      )
+        elif isinstance(submodule, nn.AvgPool2d):
+            size = _calc_output_size(size, submodule.kernel_size, submodule.stride,
+                                     padding=submodule.padding,
+                                     )
+                                     
 
         if isinstance(submodule, nn.Conv2d):
             last_channel_out = submodule.out_channels

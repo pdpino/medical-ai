@@ -65,7 +65,6 @@ class TransfusionCBRCNN(nn.Module):
         )
 
         out_channels, out_size = calc_module_output_size(self.conv, input_size)
-
         out_h = out_size[0].item()
         out_w = out_size[1].item()
 
@@ -88,14 +87,17 @@ class TransfusionCBRCNN(nn.Module):
         if pretrained_cnn is not None:
             self.load_state_dict(pretrained_cnn.state_dict())
 
-        self.features_size = out_h * out_w * out_channels
+        self.features_size = (out_channels, out_h, out_w)
 
 
-    def forward(self, x):
+    def forward(self, x, features=False):
         # x shape: batch_size, channels, height, width
 
         x = self.conv(x)
         # x shape: batch_size, out_channels, h2, w2
+
+        if features:
+            return x
 
         x = self.global_pool(x)
         # x shape: batch_size, out_channels
@@ -104,6 +106,3 @@ class TransfusionCBRCNN(nn.Module):
         # x shape: batch_size, n_labels
 
         return x,
-
-    def features(self, x):
-        return self.conv(x)
