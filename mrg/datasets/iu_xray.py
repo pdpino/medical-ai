@@ -17,7 +17,7 @@ from mrg.utils import (
     compute_vocab,
 )
 
-DATASET_DIR = os.environ['DATASET_DIR_IU_XRAY']
+DATASET_DIR = os.environ.get('DATASET_DIR_IU_XRAY')
 
 
 def _reports_iterator(reports):
@@ -37,7 +37,9 @@ class IUXRayDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None, sort_samples=True,
                  frontal_only=False,
                  vocab=None):
-        """Create a Dataset object."""
+        if DATASET_DIR is None:
+            raise Exception(f'DATASET_DIR_IU_XRAY not found in env variables')
+
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
         
@@ -64,9 +66,6 @@ class IUXRayDataset(Dataset):
             reports = reports[:max_samples]
 
         # Save amounts
-        self.n_reports = len(reports)
-        self.n_images = sum(len(report['images']) for report in reports)
-
         self._preprocess_reports(reports, sort_samples=sort_samples, vocab=vocab,
                                  frontal_only=frontal_only)
         
@@ -106,6 +105,8 @@ class IUXRayDataset(Dataset):
         else:
             self.word_to_idx = vocab
 
+        self.n_reports = len(reports)
+
         # Compute final reports array
         self.reports = []
         for report in reports:
@@ -130,3 +131,6 @@ class IUXRayDataset(Dataset):
 
         if sort_samples:
             self.reports = sorted(self.reports, key=lambda x:len(x['tokens_idxs']))
+
+        # Reports are repeated to match n_images
+        self.n_images = len(self.reports)

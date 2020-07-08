@@ -1,4 +1,5 @@
 # import torch
+import operator
 import numpy as np
 from ignite.metrics import RunningAverage, MetricsLambda
 
@@ -26,7 +27,7 @@ def _transform_score_to_indexes(outputs):
 def _attach_bleu(engine, up_to_n=4):
     bleu_up_to_n = Bleu(n=up_to_n, output_transform=_transform_score_to_indexes)
     for i in range(up_to_n):
-        bleu_n = MetricsLambda(lambda x: x[i], bleu_up_to_n)
+        bleu_n = MetricsLambda(operator.itemgetter(i), bleu_up_to_n)
         bleu_n.attach(engine, f'bleu{i+1}')
 
     bleu_avg = MetricsLambda(lambda x: np.mean(x), bleu_up_to_n)

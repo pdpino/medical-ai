@@ -4,7 +4,7 @@ from PIL import Image
 import os
 
 
-DATASET_DIR = os.environ['DATASET_DIR_COVID_KAGGLE']
+DATASET_DIR = os.environ.get('DATASET_DIR_COVID_KAGGLE')
 
 _FOLDERS = [
     'COVID-19',
@@ -22,6 +22,9 @@ def _get_default_image_transformation(image_size=512):
 
 class CovidKaggleDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None, **kwargs):
+        if DATASET_DIR is None:
+            raise Exception(f'DATASET_DIR_COVID_KAGGLE not found in env variables')
+
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
         

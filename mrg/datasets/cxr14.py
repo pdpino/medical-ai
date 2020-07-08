@@ -24,7 +24,7 @@ CXR14_DISEASES = [
     'Hernia',
 ]
 
-DATASET_DIR = os.environ['DATASET_DIR_CXR14']
+DATASET_DIR = os.environ.get('DATASET_DIR_CXR14')
 
 def _get_default_image_transformation(image_size=512):
     mean = 0.4980 # 0.50576189
@@ -37,6 +37,9 @@ def _get_default_image_transformation(image_size=512):
 class CXR14Dataset(Dataset):
 
     def __init__(self, dataset_type='train', labels=None, max_samples=None):
+        if DATASET_DIR is None:
+            raise Exception(f'DATASET_DIR_CXR14 not found in env variables')
+
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
         
