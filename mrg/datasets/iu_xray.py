@@ -26,12 +26,16 @@ def _reports_iterator(reports):
 
 
 def _get_default_image_transformation(image_size=512):
+    mean = 0.4822
+    sd = 0.0461
     return transforms.Compose([transforms.Resize((image_size, image_size)),
                                transforms.ToTensor(),
+                               transforms.Normalize([mean], [sd])
                               ])
 
 class IUXRayDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None, sort_samples=True,
+                 frontal_only=False,
                  vocab=None):
         """Create a Dataset object."""
         if dataset_type not in ['train', 'val', 'test']:
@@ -63,7 +67,8 @@ class IUXRayDataset(Dataset):
         self.n_reports = len(reports)
         self.n_images = sum(len(report['images']) for report in reports)
 
-        self._preprocess_reports(reports, sort_samples=sort_samples, vocab=vocab)
+        self._preprocess_reports(reports, sort_samples=sort_samples, vocab=vocab,
+                                 frontal_only=frontal_only)
         
     def size(self):
         return (self.n_images, self.n_reports)
@@ -93,15 +98,8 @@ class IUXRayDataset(Dataset):
     def get_vocab(self):
         return self.word_to_idx
 
-    def _preprocess_reports(self, reports, sort_samples=True, vocab=None):
-        # Save a name_to_idx dict
-        # self.name_to_idx = {}
-
-        # for index, report in enumerate(reports):
-        #     name = report['filename']
-
-        #     self.name_to_idx[name] = index
-
+    def _preprocess_reports(self, reports, sort_samples=True, vocab=None,
+                            frontal_only=False):
         if vocab is None:
             # Compute word_to_idx dictionary
             self.word_to_idx = compute_vocab(_reports_iterator(reports))
@@ -119,6 +117,12 @@ class IUXRayDataset(Dataset):
             ]
 
             for image in report['images']:
+                if frontal_only and 'frontal' not in image['side']:
+                    continue
+
+                if image['broken']:
+                    continue
+
                 self.reports.append({
                     'tokens_idxs': torch.tensor(tokens_idxs + [END_IDX]),
                     'image_name': image['id'],
