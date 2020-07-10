@@ -64,25 +64,14 @@ class TransfusionCBRCNN(nn.Module):
             *_conv_config(name, in_ch=n_channels),
         )
 
-        out_channels, out_size = calc_module_output_size(self.conv, input_size)
-        out_h = out_size[0].item()
-        out_w = out_size[1].item()
+        out_channels, (out_h, out_w) = calc_module_output_size(self.conv, input_size)
 
         self.global_pool = nn.Sequential(
             nn.AvgPool2d((out_h, out_w)),
             nn.Flatten(),
         )
 
-        linear = nn.Linear(out_channels, len(self.labels))
-
-        if multilabel:
-            self.fc = nn.Sequential(
-                linear,
-                nn.Sigmoid(),
-            )
-        else:
-            self.fc = linear
-
+        self.fc = nn.Linear(out_channels, len(self.labels))
 
         if pretrained_cnn is not None:
             self.load_state_dict(pretrained_cnn.state_dict())

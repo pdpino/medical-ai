@@ -5,8 +5,8 @@ from torchvision import models
 # from mrg.utils.conv import calc_module_output_size
 
 class Resnet50CNN(nn.Module):
-    def __init__(self, labels, imagenet=True, freeze=False, multilabel=True,
-                 pretrained_cnn=None, dropout=None):
+    def __init__(self, labels, imagenet=True, freeze=False,
+                 pretrained_cnn=None, dropout=None, **kwargs):
         """Resnet-50."""
         super().__init__()
 
@@ -16,7 +16,6 @@ class Resnet50CNN(nn.Module):
             self.base_cnn.load_state_dict(pretrained_cnn.state_dict())
         
         self.labels = list(labels)
-        self.multilabel = multilabel
 
         if freeze:
             for param in self.base_cnn.parameters():
@@ -26,31 +25,21 @@ class Resnet50CNN(nn.Module):
         output_size = 16 # With input of 512
 
         self.global_pool = nn.Sequential(
-            nn.MaxPool2d(output_size)
+            # nn.MaxPool2d(output_size),
+            nn.AdaptiveMaxPool2d((1, 1)),
+            nn.Flatten(),
         )
-
-        self.flatten = nn.Flatten()
 
         self.dropout = nn.Dropout(dropout) if dropout else None
 
         n_diseases = len(labels)
         n_resnet_features = 2048
 
-        linear = nn.Linear(n_resnet_features, n_diseases)
-
-        if multilabel:
-            # Custom losses do not include sigmoid on the calculation
-            self.prediction = nn.Sequential(
-                linear,
-                nn.Sigmoid(),
-            )
-        else:
-            # Cross entropy loss includes softmax
-            self.prediction = linear
-
+        self.prediction = nn.Linear(n_resnet_features, n_diseases)
 
         self.features_size = (n_resnet_features, output_size, output_size)
-        
+
+
     def forward(self, x, features=False):
         # x shape: batch_size, 3, height, width
         # 3 as in RGB, heigth and width are usually 512 for CXR14
@@ -62,9 +51,6 @@ class Resnet50CNN(nn.Module):
             return x
 
         x = self.global_pool(x)
-        # shape: batch_size, n_features, height = 1, width = 1
-
-        x = self.flatten(x)
         # shape: batch_size, n_features
         
         if self.dropout:

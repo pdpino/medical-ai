@@ -46,4 +46,4 @@ def calc_module_output_size(model, input_size):
         if isinstance(submodule, nn.Conv2d):
             last_channel_out = submodule.out_channels
 
-    return last_channel_out, size
+    return last_channel_out, tuple(size.numpy().tolist())

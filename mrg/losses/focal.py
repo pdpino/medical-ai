@@ -14,6 +14,7 @@ class FocalLoss(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, output, target):
+        output = torch.sigmoid(output) # REVIEW
         output = output.clamp(min=self.epsilon, max=1-self.epsilon)
         target = target.float()
 

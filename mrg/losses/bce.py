@@ -13,6 +13,7 @@ class WeigthedBCELoss(nn.Module):
         If a multi-label array is given, the BCE is summed/averaged across labels.
         Note that the BP and BN weights are calculated by batch, not in the whole dataset.
         """
+        output = torch.sigmoid(output)
         output = output.clamp(min=self.epsilon, max=1-self.epsilon)
         target = target.float()
 
@@ -40,6 +41,7 @@ class WeigthedBCEByDiseaseLoss(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, output, target):
+        output = torch.sigmoid(output)
         output = output.clamp(min=self.epsilon, max=1-self.epsilon)
         target = target.float()
 

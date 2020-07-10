@@ -68,6 +68,10 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
             loss.backward()
             optimizer.step()
 
+        if multilabel:
+            # NOTE: multilabel metrics assume output is sigmoided
+            outputs = torch.sigmoid(outputs)
+
         return batch_loss, outputs, labels
 
     return step_fn
@@ -263,7 +267,6 @@ def main(run_name,
     model_kwargs = {
         'model_name': cnn_name,
         'labels': train_dataloader.dataset.labels,
-        'multilabel': train_dataloader.dataset.multilabel,
         'imagenet': imagenet,
         'freeze': freeze,
     }

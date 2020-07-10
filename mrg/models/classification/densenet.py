@@ -3,8 +3,8 @@ import torch.nn as nn
 from torchvision import models
 
 class Densenet121CNN(nn.Module):
-    def __init__(self, labels, imagenet=True, freeze=False, multilabel=True,
-                 pretrained_cnn=None):
+    def __init__(self, labels, imagenet=True, freeze=False,
+                 pretrained_cnn=None, **kwargs):
         super().__init__()
         self.base_cnn = models.densenet121(pretrained=imagenet)
         
@@ -16,27 +16,19 @@ class Densenet121CNN(nn.Module):
             self.base_cnn.load_state_dict(pretrained_cnn.state_dict())
 
         self.labels = list(labels)
-        # self.multilabel = multilabel 
 
         n_densenet_features = 1024
         # TODO: calculate this size
         output_size = 16 # With input of 512
 
         self.global_pool = nn.Sequential(
-            nn.MaxPool2d(output_size),
+            # nn.MaxPool2d(output_size),
+            nn.AdaptiveMaxPool2d((1, 1)),
+            nn.Flatten(),
         )
 
-        self.flatten = nn.Flatten()
 
-        linear = nn.Linear(n_densenet_features, len(self.labels))
-
-        if multilabel:
-            self.prediction = nn.Sequential(
-                linear,
-                nn.Sigmoid()
-            )
-        else:
-            self.prediction = linear
+        self.prediction = nn.Linear(n_densenet_features, len(self.labels))
 
         self.features_size = (n_densenet_features, output_size, output_size)
 
