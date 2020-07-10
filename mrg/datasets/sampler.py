@@ -5,7 +5,7 @@ class OneLabelUnbalancedSampler(Sampler):
     def __init__(self, dataset, label=0, max_ratio=None):
         """Oversamples samples that are less represented, considering a specific label.
         
-        Is normally used to oversample under-represented classes.
+        Used to oversample one under-represented class.
         Tries to oversample the given `label`, by a factor that implies that
             n_positive_cases == n_negative_cases, or `max_ratio`.
         The dataset must implement the method `dataset.get_labels_presence_for(label)`,

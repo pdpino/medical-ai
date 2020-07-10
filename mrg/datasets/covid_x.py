@@ -72,6 +72,8 @@ class CovidXDataset(Dataset):
             self._metadata_df['image_name'].isin(selected_images)
         ]
 
+        self._metadata_df.reset_index(inplace=True)
+
         
     def size(self):
         return len(self._metadata_df), len(self.labels)
