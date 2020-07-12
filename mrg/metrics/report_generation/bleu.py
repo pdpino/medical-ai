@@ -5,7 +5,7 @@ from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 from pycocoevalcap.bleu import bleu_scorer
 
-from mrg.utils import PAD_IDX
+from mrg.utils.nlp import PAD_IDX
 from mrg.utils.nlp_metrics import indexes_to_strings
 
 class Bleu(Metric):

@@ -2,7 +2,7 @@ import torch
 from ignite.metrics import Metric
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
-from mrg.utils import PAD_IDX
+from mrg.utils.nlp import PAD_IDX
 
 class WordAccuracy(Metric):
     """Computes accuracy over the words predicted, ignoring padding."""

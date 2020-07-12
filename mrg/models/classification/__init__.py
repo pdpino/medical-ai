@@ -1,5 +1,3 @@
-import torch
-
 from mrg.models.classification import (
     resnet,
     densenet,

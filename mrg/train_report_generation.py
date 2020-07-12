@@ -12,12 +12,16 @@ from ignite.handlers import Timer, Checkpoint, DiskSaver
 
 from mrg.datasets.iu_xray import IUXRayDataset
 from mrg.metrics.report_generation import attach_metrics_report_generation
-from mrg.models.report_generation.cnn_to_seq import CNN2Seq
-from mrg.models.report_generation.decoder_lstm import LSTMDecoder
 from mrg.models.classification import (
     AVAILABLE_CLASSIFICATION_MODELS,
     init_empty_model,
 )
+from mrg.models.report_generation import (
+    is_decoder_hierarchical,
+    create_decoder,
+    AVAILABLE_DECODERS,
+)
+from mrg.models.report_generation.cnn_to_seq import CNN2Seq
 from mrg.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
@@ -25,70 +29,15 @@ from mrg.models.checkpoint import (
     save_metadata,
 )
 from mrg.tensorboard import TBWriter
+from mrg.training.report_generation.flat import (
+    create_flat_dataloader,
+    get_step_fn_flat,
+)
+from mrg.training.report_generation.hierarchical import (
+    create_hierarchical_dataloader,
+    get_step_fn_hierarchical,
+)
 from mrg.utils import get_timestamp, duration_to_str
-
-
-def create_pad_dataloader(dataset, batch_size=128, shuffle=False, **kwargs):
-    """Creates a dataloader from a images-report dataset.
-    
-    Pads the output sequence.
-    """
-    def collate_fn(batch_tuples):
-        images = []
-        batch_seq_out = []
-        for image, seq_out in batch_tuples:
-            images.append(image)
-            batch_seq_out.append(seq_out)
-
-        images = torch.stack(images)
-        batch_seq_out = pad_sequence(batch_seq_out, batch_first=True)
-        return images, batch_seq_out
-
-    dataloader = DataLoader(dataset, batch_size, collate_fn=collate_fn,
-                            shuffle=shuffle, **kwargs)
-    return dataloader
-
-
-def get_step_fn(model, optimizer=None, training=True, device='cuda'):
-    """Creates a step function for an Engine."""
-    loss_fn = nn.CrossEntropyLoss()
-
-    def step_fn(engine, data_batch):
-        # Images
-        images = data_batch[0].to(device)
-        # shape: batch_size, 3, height, width
-
-        # Reports, as word ids
-        reports = data_batch[1].to(device).long() # shape: batch_size, max_sentence_len
-        _, max_sentence_len = reports.size()
-        
-        # Enable training
-        model.train(training)
-        torch.set_grad_enabled(training) # enable recording gradients
-
-        # zero the parameter gradients
-        if training:
-            optimizer.zero_grad()
-
-        # Pass thru the model
-        output_tuple = model(images, max_sentence_len, reports)
-
-        generated_words = output_tuple[0]
-        _, _, vocab_size = generated_words.size()
-        # shape: batch_size, n_sentences, vocab_size
-
-        # Compute classification loss
-        loss = loss_fn(generated_words.view(-1, vocab_size), reports.view(-1))
-        
-        batch_loss = loss.item()
-
-        if training:
-            loss.backward()
-            optimizer.step()
-
-        return batch_loss, generated_words, reports
-
-    return step_fn
 
 
 def train_model(run_name,
@@ -96,6 +45,7 @@ def train_model(run_name,
                 train_dataloader,
                 val_dataloader,
                 n_epochs=1,
+                hierarchical=False,
                 debug=True,
                 save_model=True,
                 dryrun=False,
@@ -109,13 +59,20 @@ def train_model(run_name,
     # Unwrap stuff
     model, optimizer = compiled_model.get_model_optimizer()
 
+    # Flat vs hierarchical step_fn
+    if hierarchical:
+        get_step_fn = get_step_fn_hierarchical
+    else:
+        get_step_fn = get_step_fn_flat
+
+
     # Create validator engine
     validator = Engine(get_step_fn(model, training=False, device=device))
-    attach_metrics_report_generation(validator)
+    attach_metrics_report_generation(validator, hierarchical=hierarchical)
     
     # Create trainer engine
     trainer = Engine(get_step_fn(model, optimizer=optimizer, training=True, device=device))
-    attach_metrics_report_generation(trainer)
+    attach_metrics_report_generation(trainer, hierarchical=hierarchical)
     
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
@@ -181,6 +138,7 @@ def train_model(run_name,
 
 
 def main(run_name,
+         decoder_name='lstm',
          batch_size=15,
          teacher_forcing=True,
          embedding_size=100,
@@ -206,6 +164,14 @@ def main(run_name,
 
     print('Run: ', run_name)
 
+    # Decide hierarchical
+    hierarchical = is_decoder_hierarchical(decoder_name)
+    if hierarchical:
+        create_dataloader = create_hierarchical_dataloader
+    else:
+        create_dataloader = create_flat_dataloader
+
+
     # Load data
     train_dataset = IUXRayDataset(dataset_type='train', max_samples=max_samples)
     val_dataset = IUXRayDataset(dataset_type='val',
@@ -213,8 +179,8 @@ def main(run_name,
                                 max_samples=max_samples,
                                 )
 
-    train_dataloader = create_pad_dataloader(train_dataset, batch_size=batch_size)
-    val_dataloader = create_pad_dataloader(val_dataset, batch_size=batch_size)
+    train_dataloader = create_dataloader(train_dataset, batch_size=batch_size)
+    val_dataloader = create_dataloader(val_dataset, batch_size=batch_size)
 
 
     # Create CNN
@@ -233,11 +199,15 @@ def main(run_name,
                                ).to(device)
 
     # Create decoder
-    decoder = LSTMDecoder(len(train_dataset.word_to_idx),
-                          embedding_size,
-                          hidden_size,
-                          teacher_forcing=teacher_forcing,
-                          ).to(device)
+    decoder_kwargs = {
+        'decoder_name': decoder_name,
+        'vocab_size': len(train_dataset.word_to_idx),
+        'embedding_size': embedding_size,
+        'hidden_size': hidden_size,
+        'features_size': cnn.features_size,
+        'teacher_forcing': teacher_forcing,
+    }
+    decoder = create_decoder(**decoder_kwargs).to(device)
 
     # Full model
     model = CNN2Seq(cnn, decoder).to(device)
@@ -251,7 +221,8 @@ def main(run_name,
 
     # Save metadata
     metadata = {
-        # TODO: cnn and decoder params
+        # TODO: add cnn params
+        'decoder_kwargs': decoder_kwargs,
         'hparams': {
             'pretrained_cnn': cnn_run_name,
         },
@@ -262,8 +233,14 @@ def main(run_name,
     compiled_model = CompiledModel(model, optimizer)
 
     # Train
-    train_model(run_name, compiled_model, train_dataloader, val_dataloader,
-                n_epochs=n_epochs, device=device, debug=debug)
+    train_model(run_name,
+                compiled_model,
+                train_dataloader,
+                val_dataloader,
+                hierarchical=hierarchical,
+                n_epochs=n_epochs,
+                device=device,
+                debug=debug)
 
 
     print(f'Finished run: {run_name}')
@@ -274,6 +251,8 @@ def parse_args():
 
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
+    parser.add_argument('-dec', '--decoder', type=str, required=True,
+                        choices=AVAILABLE_DECODERS, help='Choose Decoder')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-6,
                         help='Learning rate')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
@@ -321,6 +300,7 @@ if __name__ == '__main__':
     start_time = time.time()
 
     main(run_name,
+         decoder_name=args.decoder,
          batch_size=args.batch_size,
          teacher_forcing=not args.no_teacher_forcing,
          embedding_size=args.embedding_size,

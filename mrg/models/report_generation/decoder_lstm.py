@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import numpy as np
 
-from mrg.utils import PAD_IDX, START_IDX
+from mrg.utils.nlp import PAD_IDX, START_IDX
 
 
 class LSTMDecoder(nn.Module):
@@ -12,6 +12,7 @@ class LSTMDecoder(nn.Module):
         super().__init__()
 
         self.hidden_size = hidden_size
+        self.teacher_forcing = teacher_forcing
         self.start_idx = torch.tensor(START_IDX)
 
         self.features_fc = nn.Sequential(
@@ -22,8 +23,6 @@ class LSTMDecoder(nn.Module):
         self.embeddings_table = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
         self.lstm_cell = nn.LSTMCell(embedding_size, hidden_size)
         self.W_vocab = nn.Linear(hidden_size, vocab_size)
-        
-        self.teacher_forcing = teacher_forcing
 
     def forward(self, features, max_sentence_length, reports=None):
         # features shape: batch_size, n_features, height, width

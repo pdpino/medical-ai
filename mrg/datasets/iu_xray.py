@@ -5,14 +5,7 @@ from PIL import Image
 import os
 import json
 
-from mrg.utils import (
-    PAD_TOKEN,
-    PAD_IDX,
-    END_TOKEN,
-    END_IDX,
-    START_TOKEN,
-    START_IDX,
-    UNKNOWN_TOKEN,
+from mrg.utils.nlp import (
     UNKNOWN_IDX,
     compute_vocab,
 )
@@ -125,7 +118,7 @@ class IUXRayDataset(Dataset):
                     continue
 
                 self.reports.append({
-                    'tokens_idxs': torch.tensor(tokens_idxs + [END_IDX]),
+                    'tokens_idxs': tokens_idxs,
                     'image_name': image['id'],
                 })
 

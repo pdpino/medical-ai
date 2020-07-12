@@ -1,53 +1,8 @@
 import torch
 from torch import nn
 
-from mrg.utils import PAD_IDX, START_IDX
-
-
-class Attention(nn.Module):
-    def __init__(self, features_size, hidden_size):
-        super().__init__()
-
-        n_features, height, width = features_size
-
-        SOME_SIZE = 100
-        
-        self.visual_fc = nn.Linear(n_features, SOME_SIZE)
-        self.state_fc = nn.Linear(hidden_size, SOME_SIZE)
-
-        self.last_fc = nn.Linear(SOME_SIZE, 1)
-        self.softmax = nn.Sequential(
-            nn.Flatten(start_dim=1, end_dim=-1),
-            nn.Softmax(dim=-1),
-        )
-
-    def forward(self, features, h_state):
-        # features shape: batch_size, n_features, height, width
-        # h_state shape: batch_size, hidden_size
-        
-        features_reshape = features.permute(0, 2, 3, 1)
-        features_out = self.visual_fc(features_reshape)
-        # shape: batch_size, height, width, SOME_SIZE
-
-        h_state_out = self.state_fc(h_state)
-        # shape: batch_size, SOME_SIZE
-        
-        out = features_out + h_state_out.unsqueeze(1).unsqueeze(1)
-        # shape: batch_size, height, width, SOME_SIZE
-        
-        out = self.last_fc(out)
-        out = out.squeeze(-1)
-        batch_size, height, width = out.size()
-        # shape: batch_size, height, width, 1
-
-        scores = self.softmax(out).view(batch_size, height, width)
-        # shape: batch_size, height, width
-
-        weigthed_features = features * scores.unsqueeze(1)
-        weigthed_features = weigthed_features.sum(dim=-1).sum(dim=-1)
-        # shape: batch_size, n_features
-
-        return weigthed_features, scores
+from mrg.utils.nlp import PAD_IDX, START_IDX
+from mrg.models.report_generation.att_2layer import AttentionTwoLayers
 
 
 class LSTMAttDecoder(nn.Module):
@@ -57,15 +12,14 @@ class LSTMAttDecoder(nn.Module):
         super().__init__()
 
         self.hidden_size = hidden_size
+        self.teacher_forcing = teacher_forcing
         self.start_idx = torch.tensor(START_IDX)
 
         self.embeddings_table = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
         self.lstm_cell = nn.LSTMCell(embedding_size, hidden_size)
         self.W_vocab = nn.Linear(hidden_size, vocab_size)
-        
-        self.teacher_forcing = teacher_forcing
 
-        self.attention = Attention(features_size, hidden_size)
+        self.attention = AttentionTwoLayers(features_size, hidden_size)
         self.att_to_state = nn.Linear(features_size[0], hidden_size)
 
 
