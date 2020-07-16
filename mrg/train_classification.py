@@ -37,7 +37,7 @@ def _choose_print_metrics(dataset_name, additional=None):
     if dataset_name == 'cxr14':
         print_metrics = ['loss', 'acc', 'hamming']
     elif 'covid' in dataset_name:
-        print_metrics = ['loss', 'acc', 'spec_covid', 'recall_covid']
+        print_metrics = ['loss', 'acc', 'prec_covid', 'recall_covid']
     else:
         print_metrics = ['loss', 'acc']
 
@@ -97,11 +97,12 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
 def evaluate_model(model,
                    dataloader,
                    loss_name='wbce',
+                   loss_kwargs={},
                    n_epochs=1,
                    device='cuda'):
     """Evaluate a classification model on a dataloader."""
     print(f'Evaluating model in {dataloader.dataset.dataset_type}...')
-    loss = get_loss_function(loss_name)
+    loss = get_loss_function(loss_name, **loss_kwargs)
 
     labels = dataloader.dataset.labels
     multilabel = dataloader.dataset.multilabel
@@ -126,6 +127,7 @@ def train_model(run_name,
                 val_dataloader,
                 n_epochs=1,
                 loss_name='wbce',
+                loss_kwargs={},
                 debug=True,
                 dryrun=False,
                 print_metrics=['loss', 'acc'],
@@ -146,8 +148,10 @@ def train_model(run_name,
     multilabel = train_dataloader.dataset.multilabel
 
     # Prepare loss
-    loss = get_loss_function(loss_name)
-    print('Using loss: ', loss_name)
+    if loss_name == 'focal':
+        loss_kwargs['multilabel'] = multilabel
+    loss = get_loss_function(loss_name, **loss_kwargs)
+    print('Using loss: ', loss_name, loss_kwargs)
 
     # Create validator engine
     validator = Engine(get_step_fn(model,
@@ -236,12 +240,14 @@ def run_post_evaluation(run_name,
                         val_dataloader,
                         test_dataloader,
                         loss_name,
+                        loss_kwargs={},
                         debug=True,
                         device='cuda',
                         ):
     """Evaluates a model on train, val and test."""
     kwargs = {
         'loss_name': loss_name,
+        'loss_kwargs': loss_kwargs,
         'device': device,
     }
 
@@ -293,6 +299,7 @@ def resume_training(run_name,
     # Select metadata
     loss_name = metadata['hparams']['loss_name']
     dataset_name = metadata['dataset_kwargs']['dataset_name']
+    loss_kwargs = metadata['hparams'].get('loss_kwargs', {})
 
     # Load model
     compiled_model = load_compiled_model_classification(run_name,
@@ -304,6 +311,7 @@ def resume_training(run_name,
     train_model(run_name, compiled_model, train_dataloader, val_dataloader,
                 n_epochs=n_epochs,
                 loss_name=loss_name,
+                loss_kwargs=loss_kwargs,
                 print_metrics=_choose_print_metrics(dataset_name, print_metrics),
                 debug=debug,
                 device=device,
@@ -321,6 +329,7 @@ def resume_training(run_name,
                             val_dataloader,
                             test_dataloader,
                             loss_name,
+                            loss_kwargs=loss_kwargs,
                             debug=debug,
                             device=device)
 
@@ -332,6 +341,7 @@ def train_from_scratch(run_name,
                        freeze=False,
                        max_samples=None,
                        loss_name=None,
+                       loss_kwargs={},
                        print_metrics=None,
                        lr=0.000001,
                        labels=None,
@@ -370,6 +380,9 @@ def train_from_scratch(run_name,
             run_name += f'-{augment_label}'
     if loss_name:
         run_name += f'_{loss_name}'
+        if loss_name == 'focal':
+            _kwargs_str = '-'.join(f'{k[0]}={v}' for k, v in loss_kwargs.items())
+            run_name += f'-{_kwargs_str}' if _kwargs_str else ''
     if labels and dataset_name == 'cxr14':
         # labels only works in CXR-14, for now
         labels_str = '_'.join(labels)
@@ -401,7 +414,7 @@ def train_from_scratch(run_name,
     val_dataloader = prepare_data_classification(dataset_type='val', **dataset_kwargs)
 
 
-    # Decide loss
+    # Set default loss
     if not loss_name:
         if train_dataloader.dataset.multilabel:
             loss_name = 'wbce'
@@ -438,6 +451,7 @@ def train_from_scratch(run_name,
         'opt_kwargs': opt_kwargs,
         'hparams': {
             'loss_name': loss_name,
+            'loss_kwargs': loss_kwargs,
             'batch_size': batch_size,
         },
         'dataset_kwargs': dataset_kwargs,
@@ -453,6 +467,7 @@ def train_from_scratch(run_name,
     train_model(run_name, compiled_model, train_dataloader, val_dataloader,
                 n_epochs=n_epochs,
                 loss_name=loss_name,
+                loss_kwargs=loss_kwargs,
                 print_metrics=_choose_print_metrics(dataset_name, print_metrics),
                 debug=debug,
                 device=device,
@@ -469,6 +484,7 @@ def train_from_scratch(run_name,
                             val_dataloader,
                             test_dataloader,
                             loss_name,
+                            loss_kwargs=loss_kwargs,
                             debug=debug,
                             device=device)
 
@@ -490,9 +506,6 @@ def parse_args():
                         help='If present, freeze base cnn parameters (only train FC layers)')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
-    parser.add_argument('-l', '--loss-name', type=str, default=None,
-                        choices=AVAILABLE_LOSSES,
-                        help='Loss to use')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-6,
                         help='Learning rate')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
@@ -509,6 +522,14 @@ def parse_args():
                         help='If is a non-debugging run')
     parser.add_argument('--cpu', action='store_true',
                         help='Use CPU only')
+
+    loss_group = parser.add_argument_group('Loss params')
+    loss_group.add_argument('-l', '--loss-name', type=str, default=None,
+                            choices=AVAILABLE_LOSSES,
+                            help='Loss to use')
+    loss_group.add_argument('--focal-alpha', type=float, default=0.75, help='Focal alpha param')
+    loss_group.add_argument('--focal-gamma', type=float, default=2, help='Focal gamma param')
+
 
     aug_group = parser.add_argument_group('Data-augmentation params')
     aug_group.add_argument('--augment', action='store_true',
@@ -542,6 +563,15 @@ def parse_args():
         if args.dataset is None: parser.error('A dataset must be selected')
         if args.model is None: parser.error('A model must be selected')
 
+
+    # Build loss params
+    if args.loss_name == 'focal':
+        args.loss_kwargs = {
+            'alpha': args.focal_alpha,
+            'gamma': args.focal_gamma,
+        }
+    else:
+        args.loss_kwargs = {}
 
     # Build augment params
     if args.augment:
@@ -598,6 +628,7 @@ if __name__ == '__main__':
             freeze=args.freeze,
             max_samples=args.max_samples,
             loss_name=args.loss_name,
+            loss_kwargs=args.loss_kwargs,
             print_metrics=args.print_metrics,
             labels=args.labels,
             lr=args.learning_rate,
