@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn.functional import softmax
 
 class FocalLoss(nn.Module):
     def __init__(self, alpha=0.75, gamma=2, epsilon=1e-5):
@@ -14,7 +15,8 @@ class FocalLoss(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, output, target):
-        output = torch.sigmoid(output) # REVIEW
+        output = torch.sigmoid(output) # TODO: handle multilabel=False
+
         output = output.clamp(min=self.epsilon, max=1-self.epsilon)
         target = target.float()
 

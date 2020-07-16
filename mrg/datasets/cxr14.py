@@ -26,7 +26,7 @@ CXR14_DISEASES = [
 
 DATASET_DIR = os.environ.get('DATASET_DIR_CXR14')
 
-def _get_default_image_transformation(image_size=512):
+def _get_default_image_transformation(image_size=(512, 512)):
     mean = 0.4980 # 0.50576189
     sd = 0.0458
     return transforms.Compose([transforms.Resize(image_size),
@@ -45,7 +45,8 @@ class CXR14Dataset(Dataset):
         
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
-        self.transform = _get_default_image_transformation()
+        self.image_size = (512, 512)
+        self.transform = _get_default_image_transformation(self.image_size)
         
         self.image_dir = os.path.join(DATASET_DIR, 'images')
 
@@ -69,11 +70,12 @@ class CXR14Dataset(Dataset):
             
             not_found_diseases = list(set(self.labels) - set(CXR14_DISEASES))
             if not_found_diseases:
-                print(f'Diseases not found: {not_found_diseases}(ignoring)')
-            
+                print(f'Diseases not found: {not_found_diseases}(ignoring)')            
 
         self.n_diseases = len(self.labels)
         self.multilabel = True
+
+        assert self.n_diseases > 0, 'No diseases selected!'
         
         # Filter labels DataFrame
         columns = ['FileName'] + self.labels
@@ -133,7 +135,7 @@ class CXR14Dataset(Dataset):
 
         image = self.transform(image)
 
-        return image, labels, bboxes, bbox_valid
+        return image, labels, bboxes, bbox_valid, image_name
     
     def precompute_metadata(self):
         self.precomputed = []
@@ -159,6 +161,8 @@ class CXR14Dataset(Dataset):
         # Get bboxes
         bboxes = torch.zeros(self.n_diseases, 4) # 4: x, y, w, h
         bbox_valid = torch.zeros(self.n_diseases)
+
+        return image_name, labels, bboxes, bbox_valid # DEBUG: loads faster
 
         rows = self.bbox_index.loc[self.bbox_index['Image Index']==image_name]
         for _, row in rows.iterrows():

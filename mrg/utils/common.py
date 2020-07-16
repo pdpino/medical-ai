@@ -49,3 +49,11 @@ def write_list_to_txt(arr, filepath, sep='\n'):
     with open(filepath, 'w') as f:
         for line in arr:
             f.write(line + sep)
+
+
+def parse_str_or_int(s):
+    """Parses as int if possible, else str."""
+    try:
+        return int(s)
+    except:
+        return s

@@ -12,10 +12,10 @@ _FOLDERS = [
     'NORMAL',
 ]
 
-def _get_default_image_transformation(image_size=512):
+def _get_default_image_transformation(image_size=(512, 512)):
     mean = [0.4872, 0.4875, 0.4876]
     sd = [0.0352, 0.0352, 0.0352]
-    return transforms.Compose([transforms.Resize((image_size, image_size)),
+    return transforms.Compose([transforms.Resize(image_size),
                                transforms.ToTensor(),
                                transforms.Normalize(mean, sd)
                               ])
@@ -28,9 +28,13 @@ class CovidKaggleDataset(Dataset):
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
         
+        if kwargs.get('labels', None) is not None:
+            print('Labels selection in CovidKaggle dataset is not implemented yet, ignoring')
+
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
-        self.transform = _get_default_image_transformation()
+        self.image_size = (512, 512)
+        self.transform = _get_default_image_transformation(self.image_size)
 
         self.labels = ['covid', 'pneumonia', 'normal']
         self.multilabel = False

@@ -5,6 +5,7 @@ import json
 
 import torch
 from torch import optim
+from torch import nn
 from ignite.engine import Events
 from ignite.handlers import Checkpoint, DiskSaver
 
@@ -72,7 +73,11 @@ def save_metadata(data, run_name, classification=True, debug=True):
     return
 
 
-def load_compiled_model_classification(run_name, debug=True, device='cuda'):
+def load_compiled_model_classification(run_name,
+                                       debug=True,
+                                       device='cuda',
+                                       multiple_gpu=False,
+                                       ):
     """Load a compiled model.
     
     NOTE: only works for classification models for now, missing: init_empty_model()
@@ -83,11 +88,14 @@ def load_compiled_model_classification(run_name, debug=True, device='cuda'):
     # Load metadata
     metadata = _load_meta(folder)
 
-    # Create empty model and 
+    # Create empty model and optimizer
     model = init_empty_model(**metadata['model_kwargs']).to(device)
+    if multiple_gpu:
+        # TODO: use DistributedDataParallel instead
+        model = nn.DataParallel(model)
     optimizer = optim.Adam(model.parameters(), **metadata['opt_kwargs'])
 
-    compiled_model = CompiledModel(model, optimizer)
+    compiled_model = CompiledModel(model, optimizer, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)

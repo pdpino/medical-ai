@@ -4,6 +4,7 @@ from mrg.datasets.cxr14 import CXR14Dataset
 from mrg.datasets.covid_kaggle import CovidKaggleDataset
 from mrg.datasets.covid_x import CovidXDataset
 from mrg.datasets.sampler import OneLabelUnbalancedSampler
+from mrg.datasets.augmentation import Augmentator
 
 _DATASET_DEF = {
   'cxr14': CXR14Dataset,
@@ -15,6 +16,7 @@ AVAILABLE_CLASSIFICATION_DATASETS = list(_DATASET_DEF)
 
 def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labels=None,
                                 max_samples=None,
+                                augment=False, augment_label=None, augment_kwargs={},
                                 oversample=False, oversample_label=0, oversample_max_ratio=None,
                                 batch_size=10, shuffle=False):
     print(f'Loading {dataset_type} dataset...')
@@ -25,6 +27,9 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labe
     dataset = DatasetClass(dataset_type=dataset_type,
                            labels=labels,
                            max_samples=max_samples)
+
+    if augment:
+        dataset = Augmentator(dataset, label=augment_label, **augment_kwargs)
 
     if oversample:
         sampler = OneLabelUnbalancedSampler(dataset,

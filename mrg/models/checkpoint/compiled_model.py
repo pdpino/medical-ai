@@ -18,9 +18,10 @@ class SmartDict:
 
 class CompiledModel:
     """Handles a model and optimizer together."""
-    def __init__(self, model, optimizer, epoch=0):
+    def __init__(self, model, optimizer, metadata=None, epoch=0):
         self.model = model
         self.optimizer = optimizer
+        self.metadata = metadata # NOTE: is not persisted here, use save_metadata()
 
         self.state = SmartDict()
         self.save_current_epoch(epoch)

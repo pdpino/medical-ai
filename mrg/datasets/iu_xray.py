@@ -18,10 +18,10 @@ def _reports_iterator(reports):
         yield report['clean_text'].split()
 
 
-def _get_default_image_transformation(image_size=512):
+def _get_default_image_transformation(image_size=(512, 512)):
     mean = 0.4822
     sd = 0.0461
-    return transforms.Compose([transforms.Resize((image_size, image_size)),
+    return transforms.Compose([transforms.Resize(image_size),
                                transforms.ToTensor(),
                                transforms.Normalize([mean], [sd])
                               ])
@@ -38,7 +38,8 @@ class IUXRayDataset(Dataset):
         
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
-        self.transform = _get_default_image_transformation()
+        self.image_size = (512, 512)
+        self.transform = _get_default_image_transformation(self.image_size)
         
         self.images_dir = os.path.join(DATASET_DIR, 'images')
         self.reports_dir = os.path.join(DATASET_DIR, 'reports')

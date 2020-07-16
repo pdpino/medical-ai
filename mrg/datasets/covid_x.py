@@ -8,10 +8,10 @@ import pandas as pd
 DATASET_DIR = os.environ.get('DATASET_DIR_COVID_X')
 
 
-def _get_default_image_transformation(image_size=512):
+def _get_default_image_transformation(image_size=(512, 512)):
     mean = [0.4919, 0.4920, 0.4920]
     sd = [0.0467, 0.0467, 0.0467]
-    return transforms.Compose([transforms.Resize((image_size, image_size)),
+    return transforms.Compose([transforms.Resize(image_size),
                                transforms.ToTensor(),
                                transforms.Normalize(mean, sd)
                               ])
@@ -24,9 +24,13 @@ class CovidXDataset(Dataset):
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val or test')
 
+        if kwargs.get('labels', None) is not None:
+            print('Labels selection in CovidX dataset is not implemented yet, ignoring')
+
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
-        self.transform = _get_default_image_transformation()
+        self.image_size = (512, 512)
+        self.transform = _get_default_image_transformation(self.image_size)
 
         self.multilabel = False
 

@@ -40,7 +40,6 @@ class Densenet121CNN(nn.Module):
             return x
 
         x = self.global_pool(x)
-        x = self.flatten(x)
 
         embedding = x
         

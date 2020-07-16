@@ -34,7 +34,12 @@ class OneLabelUnbalancedSampler(Sampler):
         if ratio < 1:
             OVERSAMPLE_CLASS = 0
             UNDERSAMPLE_CLASS = 1
+            ratio = positives // negatives if negatives > 0 else 1
 
+        # If ratio is still 0, means positive ~~ negatives
+        # --> don't oversample --> set ratio = 1
+        if ratio < 1:
+            ratio = 1
 
         # Set a maximum ratio for oversampling
         # note that it only affects ratio > 1 (i.e. oversampling positive samples)
@@ -44,10 +49,10 @@ class OneLabelUnbalancedSampler(Sampler):
         # Resample indexes
         self.resampled_indexes = []
         
-        for idx, label in labels_presence_by_idx:
-            if label == UNDERSAMPLE_CLASS:
+        for idx, presence in labels_presence_by_idx:
+            if presence == UNDERSAMPLE_CLASS:
                 self.resampled_indexes.append(idx)
-            elif label == OVERSAMPLE_CLASS:
+            elif presence == OVERSAMPLE_CLASS:
                 for _ in range(ratio):
                     self.resampled_indexes.append(idx)
 
@@ -56,7 +61,14 @@ class OneLabelUnbalancedSampler(Sampler):
         
         # Print info    
         label_name = dataset.labels[label] if isinstance(label, int) else label
-        print(f'\tOversampling {label_name} with ratio: {ratio}, total {len(self.resampled_indexes)} samples (original {total_samples})')
+        stats = {
+            'ratio': ratio,
+            'positives': positives,
+            'negatives': negatives,
+            'new-total': len(self.resampled_indexes),
+            'original': total_samples,
+        }
+        print(f'\tOversampling {label_name}:', ' '.join(f"{k}={v}" for k, v in stats.items()))
 
     
     def __len__(self):

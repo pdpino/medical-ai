@@ -11,6 +11,7 @@ from ignite.engine import Engine, Events
 from ignite.handlers import Timer, Checkpoint, DiskSaver
 
 from mrg.datasets.iu_xray import IUXRayDataset
+from mrg.metrics import save_results
 from mrg.metrics.report_generation import attach_metrics_report_generation
 from mrg.models.classification import (
     AVAILABLE_CLASSIFICATION_MODELS,
@@ -38,6 +39,25 @@ from mrg.training.report_generation.hierarchical import (
     get_step_fn_hierarchical,
 )
 from mrg.utils import get_timestamp, duration_to_str
+
+
+def evaluate_model(model,
+                   dataloader,
+                   n_epochs=1,
+                   hierarchical=False,
+                   device='cuda'):
+    """Evaluate a report-generation model on a dataloader."""
+    if hierarchical:
+        get_step_fn = get_step_fn_hierarchical
+    else:
+        get_step_fn = get_step_fn_flat
+
+    engine = Engine(get_step_fn(model, training=False, device=device))
+    attach_metrics_report_generation(engine, hierarchical=hierarchical)
+
+    engine.run(dataloader, n_epochs)
+    
+    return engine.state.metrics
 
 
 def train_model(run_name,
@@ -152,11 +172,12 @@ def main(run_name,
          max_samples=None,
          debug=True,
          multiple_gpu=False,
+         post_evaluation=True,
          device='cuda',
          ):
 
     # Create run name
-    run_name = f'{run_name}_lr{lr}'
+    run_name = f'{run_name}_{decoder_name}_lr{lr}'
     if cnn_run_name:
         run_name += '_precnn'
     else:
@@ -190,13 +211,16 @@ def main(run_name,
                                                           debug=debug,
                                                           device=device)
         cnn = compiled_cnn.model
+        cnn_kwargs = compiled_model.metadata.get('model_kwargs', {})
     else:
         # Create new
-        cnn = init_empty_model(cnn_model_name,
-                               labels=[],
-                               imagenet=cnn_imagenet,
-                               freeze=cnn_freeze,
-                               ).to(device)
+        cnn_kwargs = {
+            'model_name': cnn_model_name,
+            'labels': [], # headless
+            'imagenet': cnn_imagenet,
+            'freeze': cnn_freeze,
+        }
+        cnn = init_empty_model(**cnn_kwargs).to(device)
 
     # Create decoder
     decoder_kwargs = {
@@ -217,12 +241,16 @@ def main(run_name,
         model = nn.DataParallel(model)
 
     # Optimizer
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    opt_kwargs = {
+        'lr': lr,
+    }
+    optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
     # Save metadata
     metadata = {
-        # TODO: add cnn params
+        'cnn_kwargs': cnn_kwargs,
         'decoder_kwargs': decoder_kwargs,
+        'opt_kwargs': opt_kwargs,
         'hparams': {
             'pretrained_cnn': cnn_run_name,
         },
@@ -230,7 +258,7 @@ def main(run_name,
     save_metadata(metadata, run_name, classification=False, debug=debug)
 
     # Compiled model
-    compiled_model = CompiledModel(model, optimizer)
+    compiled_model = CompiledModel(model, optimizer, metadata)
 
     # Train
     train_model(run_name,
@@ -244,6 +272,29 @@ def main(run_name,
 
 
     print(f'Finished run: {run_name}')
+
+
+    if post_evaluation:
+        test_dataset = IUXRayDataset(dataset_type='test',
+                                     vocab=train_dataset.get_vocab(),
+                                     max_samples=max_samples,
+                                    )
+        test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
+
+        kwargs = {
+            'hierarchical': hierarchical,
+            'device': device
+        }
+        train_metrics = evaluate_model(model, train_dataloader, **kwargs)
+        val_metrics = evaluate_model(model, val_dataloader, **kwargs)
+        test_metrics = evaluate_model(model, test_dataloader, **kwargs)
+
+        metrics = {
+            'train': train_metrics,
+            'val': val_metrics,
+            'test': test_metrics,
+        }
+        save_results(metrics, run_name, classification=False, debug=debug)
 
 
 def parse_args():

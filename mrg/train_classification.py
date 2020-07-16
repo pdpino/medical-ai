@@ -1,5 +1,6 @@
 import time
 import argparse
+import os
 
 import torch
 from torch import nn
@@ -11,7 +12,7 @@ from mrg.datasets import (
     prepare_data_classification,
     AVAILABLE_CLASSIFICATION_DATASETS,
 )
-from mrg.losses import get_loss_function
+from mrg.losses import get_loss_function, AVAILABLE_LOSSES
 from mrg.metrics import save_results
 from mrg.metrics.classification import (
     attach_metrics_classification,
@@ -27,7 +28,7 @@ from mrg.models.checkpoint import (
     save_metadata,
 )
 from mrg.tensorboard import TBWriter
-from mrg.utils import get_timestamp, duration_to_str
+from mrg.utils import get_timestamp, duration_to_str, parse_str_or_int
 
 
 def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, device='cuda'):
@@ -122,12 +123,13 @@ def train_model(run_name,
     # Unwrap stuff
     model, optimizer = compiled_model.get_model_optimizer()
     
-    # Prepare loss
-    loss = get_loss_function(loss_name)
-    
-    # Classification labels
+    # Classification description
     labels = train_dataloader.dataset.labels
     multilabel = train_dataloader.dataset.multilabel
+
+    # Prepare loss
+    loss = get_loss_function(loss_name)
+    print('Using loss: ', loss_name)
 
     # Create validator engine
     validator = Engine(get_step_fn(model,
@@ -216,12 +218,17 @@ def main(run_name,
          imagenet=True,
          freeze=False,
          max_samples=None,
-         lr = 0.000001,
+         loss_name=None,
+         lr=0.000001,
+         labels=None,
          batch_size=10,
          n_epochs=10,
          oversample=False,
          oversample_label=None,
          oversample_max_ratio=None,
+         augment=False,
+         augment_label=None,
+         augment_kwargs={},
          post_evaluation=True,
          debug=True,
          multiple_gpu=False,
@@ -236,31 +243,54 @@ def main(run_name,
         run_name += '_frz'
     if oversample:
         run_name += '_os'
+        if oversample_max_ratio is not None:
+            run_name += f'-max{oversample_max_ratio}'
+    if augment:
+        run_name += '_aug'
+        if augment_label is not None:
+            run_name += f'-{augment_label}'
+    if loss_name:
+        run_name += f'_{loss_name}'
+    if labels and dataset_name == 'cxr14':
+        # labels only works in CXR-14, for now
+        labels_str = '_'.join(labels)
+        run_name += f'_{labels_str}'
+
 
     print('Run: ', run_name)
 
 
     # Load data
     dataset_kwargs = {
+        'labels': labels,
         'max_samples': max_samples,
         'batch_size': batch_size,
     }
+    dataset_train_kwargs = {
+        'oversample': oversample,
+        'oversample_label': oversample_label,
+        'oversample_max_ratio': oversample_max_ratio,
+        'augment': augment,
+        'augment_label': augment_label,
+        'augment_kwargs': augment_kwargs,
+    }
 
     train_dataloader = prepare_data_classification(dataset_name, 'train',
-                                                   oversample=oversample,
-                                                   oversample_label=oversample_label,
-                                                   oversample_max_ratio=oversample_max_ratio,
+                                                   **dataset_train_kwargs,
                                                    **dataset_kwargs,
                                                    )
     val_dataloader = prepare_data_classification(dataset_name, 'val', **dataset_kwargs)
 
 
     # Decide loss
-    if train_dataloader.dataset.multilabel:
-        loss_name = 'wbce'
-        # REVIEW: enable choosing a different loss?
+    if not loss_name:
+        if train_dataloader.dataset.multilabel:
+            loss_name = 'wbce'
+        else:
+            loss_name = 'cross-entropy'
     else:
-        loss_name = 'cross-entropy'
+        # TODO: ensure correct loss functions are used for both cases
+        pass
 
 
     # Create model
@@ -289,13 +319,16 @@ def main(run_name,
         'opt_kwargs': opt_kwargs,
         'hparams': {
             'loss_name': loss_name,
+            'batch_size': batch_size,
         },
+        'dataset_kwargs': dataset_kwargs,
+        'dataset_train_kwargs': dataset_train_kwargs,
     }
     save_metadata(metadata, run_name, classification=True, debug=debug)
 
 
     # Create compiled_model
-    compiled_model = CompiledModel(model, optimizer)
+    compiled_model = CompiledModel(model, optimizer, metadata)
 
 
     # Print metrics (hardcoded)
@@ -321,9 +354,14 @@ def main(run_name,
     if post_evaluation:
         test_dataloader = prepare_data_classification(dataset_name, 'test', **dataset_kwargs)
 
-        train_metrics = evaluate_model(model, train_dataloader, loss_name=loss_name)
-        val_metrics = evaluate_model(model, val_dataloader, loss_name=loss_name)
-        test_metrics = evaluate_model(model, test_dataloader, loss_name=loss_name)
+        kwargs = {
+            'loss_name': loss_name,
+            'device': device,
+        }
+
+        train_metrics = evaluate_model(model, train_dataloader, **kwargs)
+        val_metrics = evaluate_model(model, val_dataloader, **kwargs)
+        test_metrics = evaluate_model(model, test_dataloader, **kwargs)
 
         metrics = {
             'train': train_metrics,
@@ -349,30 +387,74 @@ def parse_args():
                         help='If present, freeze base cnn parameters (only train FC layers)')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
+    parser.add_argument('-l', '--loss-name', type=str, default=None,
+                        choices=AVAILABLE_LOSSES,
+                        help='Loss to use')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-6,
                         help='Learning rate')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
-    parser.add_argument('-os', '--oversample', default=None,
-                        help='Oversample samples with a given label')
-    parser.add_argument('--os-max-ratio', default=None,
-                        help='Max ratio ')
+    parser.add_argument('--labels', type=str, nargs='*', default=None,
+                        help='Subset of labels')
     parser.add_argument('--multiple-gpu', action='store_true',
                         help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--cpu', action='store_true',
+                        help='Use CPU only')
+
+    aug_group = parser.add_argument_group('Data-augmentation params')
+    aug_group.add_argument('-os', '--oversample', default=None,
+                        help='Oversample samples with a given label present (str or int)')
+    aug_group.add_argument('--os-max-ratio', type=int, default=None,
+                        help='Max ratio to oversample by')
+
+    aug_group.add_argument('--augment', action='store_true',
+                        help='If present, augment dataset')
+    aug_group.add_argument('--augment-label', default=None,
+                        help='Augment only samples with a given label present (str or int)')
+    aug_group.add_argument('--aug-crop', type=float, default=0.8,
+                        help='Augment samples by cropping a random fraction')
+    aug_group.add_argument('--aug-translate', type=float, default=0.1,
+                        help='Augment samples by translating a random fraction')
+    aug_group.add_argument('--aug-rotation', type=int, default=15,
+                        help='Augment samples by rotating a random amount of degrees')
+    aug_group.add_argument('--aug-contrast', type=float, default=0.5,
+                        help='Augment samples by changing the contrast randomly')
+    aug_group.add_argument('--aug-brightness', type=float, default=0.5,
+                        help='Augment samples by changing the brightness randomly')
 
     args = parser.parse_args()
+
+    if args.augment:
+        args.augment_kwargs = {
+            'crop': args.aug_crop,
+            'translate': args.aug_translate,
+            'rotation': args.aug_rotation,
+            'contrast': args.aug_contrast,
+            'brightness': args.aug_brightness,
+        }
+    else:
+        args.augment_kwargs = {}
+
+    if args.augment_label is not None:
+        args.augment_label = parse_str_or_int(args.augment_label)
+
+    if args.oversample is not None:
+        args.oversample = parse_str_or_int(args.oversample)
 
     return args
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
     args = parse_args()
+
+    device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
+
+    _CUDA_AVAIL = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+    print('Using device: ', device, _CUDA_AVAIL)
 
     # TODO: once model resuming is implemented, enable names other than timestamp
     run_name = get_timestamp()
@@ -385,12 +467,17 @@ if __name__ == '__main__':
          imagenet=not args.no_imagenet,
          freeze=args.freeze,
          max_samples=args.max_samples,
+         loss_name=args.loss_name,
+         labels=args.labels,
          lr=args.learning_rate,
          batch_size=args.batch_size,
          n_epochs=args.epochs,
          oversample=args.oversample is not None,
          oversample_label=args.oversample,
          oversample_max_ratio=args.os_max_ratio,
+         augment=args.augment,
+         augment_label=args.augment_label,
+         augment_kwargs=args.augment_kwargs,
          debug=not args.no_debug,
          multiple_gpu=args.multiple_gpu,
          device=device,
