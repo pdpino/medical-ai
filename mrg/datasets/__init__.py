@@ -19,7 +19,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labe
                                 augment=False, augment_label=None, augment_kwargs={},
                                 oversample=False, oversample_label=0, oversample_max_ratio=None,
                                 batch_size=10, shuffle=False):
-    print(f'Loading {dataset_type} dataset...')
+    print(f'Loading {dataset_name}/{dataset_type} dataset...')
 
     assert dataset_name in _DATASET_DEF, f'Dataset not found: {dataset_name}'
     DatasetClass = _DATASET_DEF[dataset_name]

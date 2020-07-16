@@ -1,8 +1,6 @@
+import random
 from torch.utils.data import Dataset
 from torchvision import transforms
-
-# DEBUG
-dummy = lambda x: x
 
 class Augmentator(Dataset):
     """Augmentates a classification dataset.
@@ -19,12 +17,12 @@ class Augmentator(Dataset):
         if label is None:
             # Augment samples from all labels
             iterator = [(idx, True) for idx in range(len(self.dataset))]
-            print('\tAugmenting all samples')
+            _augmented_samples = 'all samples'
         else:
             # Only augment samples from a specific label
             label_name = dataset.labels[label] if isinstance(label, int) else label
             iterator = dataset.get_labels_presence_for(label)
-            print(f'\tAugmenting samples only from label {label_name}')
+            _augmented_samples = f'samples only from label {label_name}'
 
 
         # Define augmentation methods
@@ -66,6 +64,16 @@ class Augmentator(Dataset):
 
             for aug_method in self._aug_fns.keys():
                 self.indices.append((idx, aug_method))
+
+        random.shuffle(self.indices)
+
+        # Print stats
+        stats = {
+            'new-total': len(self.indices),
+            'original': len(self.dataset),
+        }
+        stats_str = ' '.join(f'{k}={v}' for k, v in stats.items())
+        print(f'\tAugmenting {_augmented_samples}: ', stats_str)
 
     def __getattr__(self, name):
         return getattr(self.dataset, name)

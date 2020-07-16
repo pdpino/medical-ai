@@ -98,15 +98,6 @@ def train_model(run_name,
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, step=Events.EPOCH_COMPLETED)
 
-    # Attach checkpoint
-    attach_checkpoint_saver(run_name,
-                            compiled_model,
-                            trainer,
-                            classification=False,
-                            debug=debug,
-                            dryrun=dryrun or (not save_model),
-                           )
-
     @trainer.on(Events.EPOCH_COMPLETED)
     def tb_write_metrics(trainer):
         # Run on evaluation
@@ -139,6 +130,15 @@ def train_model(run_name,
 
         print_str += f' {duration_to_str(timer._elapsed())}'
         print(print_str)
+
+    # Attach checkpoint
+    attach_checkpoint_saver(run_name,
+                            compiled_model,
+                            trainer,
+                            classification=False,
+                            debug=debug,
+                            dryrun=dryrun or (not save_model),
+                           )
 
     # Train!
     print('-' * 50)

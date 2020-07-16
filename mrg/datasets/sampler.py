@@ -23,7 +23,7 @@ class OneLabelUnbalancedSampler(Sampler):
         labels_presence_by_idx = dataset.get_labels_presence_for(label)
 
         # Compute oversampling ratio
-        positives = sum(label for idx, label in labels_presence_by_idx)
+        positives = sum(presence for idx, presence in labels_presence_by_idx)
         negatives = total_samples - positives
         ratio = negatives // positives if positives > 0 else 1
 

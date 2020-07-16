@@ -60,6 +60,13 @@ def _load_meta(folder):
     return data
 
 
+def load_metadata(run_name, classification=True, debug=True):
+    """Public wrapper to call _load_meta()."""
+    folder = _get_checkpoint_folder(run_name, classification=True, debug=debug, save_mode=False)
+
+    return _load_meta(folder)    
+
+
 def save_metadata(data, run_name, classification=True, debug=True):
     """Saves run metadata to file."""
     folder = _get_checkpoint_folder(run_name, classification=classification, debug=debug,

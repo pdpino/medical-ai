@@ -26,9 +26,25 @@ from mrg.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
     save_metadata,
+    load_metadata,
+    load_compiled_model_classification,
 )
 from mrg.tensorboard import TBWriter
 from mrg.utils import get_timestamp, duration_to_str, parse_str_or_int
+
+
+def _choose_print_metrics(dataset_name, additional=None):
+    if dataset_name == 'cxr14':
+        print_metrics = ['loss', 'acc', 'hamming']
+    elif 'covid' in dataset_name:
+        print_metrics = ['loss', 'acc', 'spec_covid', 'recall_covid']
+    else:
+        print_metrics = ['loss', 'acc']
+
+    if additional is not None:
+        print_metrics += [m for m in additional if m not in print_metrics]
+
+    return print_metrics
 
 
 def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, device='cuda'):
@@ -115,6 +131,7 @@ def train_model(run_name,
                 device='cuda',
                 ):
     # Prepare run
+    print('Training run: ', run_name)
     tb_writer = TBWriter(run_name, classification=True, debug=debug, dryrun=dryrun)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
@@ -154,15 +171,6 @@ def train_model(run_name,
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, step=Events.EPOCH_COMPLETED)
 
-    # Attach checkpoint
-    attach_checkpoint_saver(run_name,
-                            compiled_model,
-                            trainer,
-                            classification=True,
-                            debug=debug,
-                            dryrun=dryrun,
-                            )
-
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_metrics(trainer):
         # Run on evaluation
@@ -196,6 +204,15 @@ def train_model(run_name,
         print_str += f' {duration_to_str(timer._elapsed())}'
         print(print_str)
 
+    # Attach checkpoint
+    attach_checkpoint_saver(run_name,
+                            compiled_model,
+                            trainer,
+                            classification=True,
+                            debug=debug,
+                            dryrun=dryrun,
+                            )
+
     # Train!
     print('-' * 50)
     print('Training...')
@@ -212,28 +229,125 @@ def train_model(run_name,
     return trainer.state.metrics, validator.state.metrics
 
 
-def main(run_name,
-         dataset_name,
-         cnn_name='resnet-50',
-         imagenet=True,
-         freeze=False,
-         max_samples=None,
-         loss_name=None,
-         lr=0.000001,
-         labels=None,
-         batch_size=10,
-         n_epochs=10,
-         oversample=False,
-         oversample_label=None,
-         oversample_max_ratio=None,
-         augment=False,
-         augment_label=None,
-         augment_kwargs={},
-         post_evaluation=True,
-         debug=True,
-         multiple_gpu=False,
-         device='cuda',
-         ):
+def run_post_evaluation(run_name,
+                        model,
+                        train_dataloader,
+                        val_dataloader,
+                        test_dataloader,
+                        loss_name,
+                        debug=True,
+                        device='cuda',
+                        ):
+    """Evaluates a model on train, val and test."""
+    kwargs = {
+        'loss_name': loss_name,
+        'device': device,
+    }
+
+    train_metrics = evaluate_model(model, train_dataloader, **kwargs)
+    val_metrics = evaluate_model(model, val_dataloader, **kwargs)
+    test_metrics = evaluate_model(model, test_dataloader, **kwargs)
+
+    metrics = {
+        'train': train_metrics,
+        'val': val_metrics,
+        'test': test_metrics,
+    }
+    save_results(metrics, run_name, classification=True, debug=debug)
+
+
+def resume_training(run_name,
+                    max_samples=None,
+                    n_epochs=10,
+                    post_evaluation=True,
+                    print_metrics=None,
+                    debug=True,
+                    multiple_gpu=False,
+                    device='cuda',
+                    ):
+    """Resume training from a previous run."""
+    # Load metadata (contains all configuration)
+    metadata = load_metadata(run_name, classification=True, debug=debug)
+
+    # Override max-samples value
+    metadata['dataset_kwargs']['max_samples'] = max_samples
+
+
+    # HACK(backward compatibility): dataset_name may not be saved in metadata
+    # --> find it in run_name
+    if 'dataset_name' not in metadata['dataset_kwargs']:
+        for d in AVAILABLE_CLASSIFICATION_DATASETS:
+            if d in run_name:
+                dataset_name = d
+                break
+        metadata['dataset_kwargs']['dataset_name'] = dataset_name
+
+    # Load data
+    train_dataloader = prepare_data_classification(dataset_type='train',
+                                                   **metadata['dataset_train_kwargs'],
+                                                   **metadata['dataset_kwargs'],
+                                                   )
+    val_dataloader = prepare_data_classification(dataset_type='val', **metadata['dataset_kwargs'])
+
+    # Select metadata
+    loss_name = metadata['hparams']['loss_name']
+    dataset_name = metadata['dataset_kwargs']['dataset_name']
+
+    # Load model
+    compiled_model = load_compiled_model_classification(run_name,
+                                                        debug=debug,
+                                                        device=device,
+                                                        multiple_gpu=multiple_gpu)
+
+    # Train
+    train_model(run_name, compiled_model, train_dataloader, val_dataloader,
+                n_epochs=n_epochs,
+                loss_name=loss_name,
+                print_metrics=_choose_print_metrics(dataset_name, print_metrics),
+                debug=debug,
+                device=device,
+                )
+
+    print('Finished run: ', run_name)
+
+    if post_evaluation:
+        test_dataloader = prepare_data_classification(dataset_type='test',
+                                                      **metadata['dataset_kwargs'])
+
+        run_post_evaluation(run_name,
+                            compiled_model.model,
+                            train_dataloader,
+                            val_dataloader,
+                            test_dataloader,
+                            loss_name,
+                            debug=debug,
+                            device=device)
+
+
+def train_from_scratch(run_name,
+                       dataset_name,
+                       cnn_name='resnet-50',
+                       imagenet=True,
+                       freeze=False,
+                       max_samples=None,
+                       loss_name=None,
+                       print_metrics=None,
+                       lr=0.000001,
+                       labels=None,
+                       batch_size=10,
+                       n_epochs=10,
+                       oversample=False,
+                       oversample_label=None,
+                       oversample_max_ratio=None,
+                       augment=False,
+                       augment_label=None,
+                       augment_kwargs={},
+                       post_evaluation=True,
+                       debug=True,
+                       multiple_gpu=False,
+                       device='cuda',
+                       ):
+    """Train a model from scratch."""
     # Create run name
     run_name = f'{run_name}_{dataset_name}_{cnn_name}_lr{lr}'
 
@@ -257,11 +371,9 @@ def main(run_name,
         run_name += f'_{labels_str}'
 
 
-    print('Run: ', run_name)
-
-
     # Load data
     dataset_kwargs = {
+        'dataset_name': dataset_name,
         'labels': labels,
         'max_samples': max_samples,
         'batch_size': batch_size,
@@ -275,11 +387,11 @@ def main(run_name,
         'augment_kwargs': augment_kwargs,
     }
 
-    train_dataloader = prepare_data_classification(dataset_name, 'train',
+    train_dataloader = prepare_data_classification(dataset_type='train',
                                                    **dataset_train_kwargs,
                                                    **dataset_kwargs,
                                                    )
-    val_dataloader = prepare_data_classification(dataset_name, 'val', **dataset_kwargs)
+    val_dataloader = prepare_data_classification(dataset_type='val', **dataset_kwargs)
 
 
     # Decide loss
@@ -330,55 +442,39 @@ def main(run_name,
     # Create compiled_model
     compiled_model = CompiledModel(model, optimizer, metadata)
 
-
-    # Print metrics (hardcoded)
-    if dataset_name == 'cxr14':
-        print_metrics = ['loss', 'acc', 'hamming']
-    elif 'covid' in dataset_name:
-        print_metrics = ['loss', 'acc', 'spec_covid', 'recall_covid']
-    else:
-        print_metrics = ['loss', 'acc']
-
     # Train!
     train_model(run_name, compiled_model, train_dataloader, val_dataloader,
                 n_epochs=n_epochs,
                 loss_name=loss_name,
-                print_metrics=print_metrics,
+                print_metrics=_choose_print_metrics(dataset_name, print_metrics),
                 debug=debug,
                 device=device,
                 )
 
     print('Finished run: ', run_name)
 
-
     if post_evaluation:
-        test_dataloader = prepare_data_classification(dataset_name, 'test', **dataset_kwargs)
+        test_dataloader = prepare_data_classification(dataset_type='test', **dataset_kwargs)
 
-        kwargs = {
-            'loss_name': loss_name,
-            'device': device,
-        }
-
-        train_metrics = evaluate_model(model, train_dataloader, **kwargs)
-        val_metrics = evaluate_model(model, val_dataloader, **kwargs)
-        test_metrics = evaluate_model(model, test_dataloader, **kwargs)
-
-        metrics = {
-            'train': train_metrics,
-            'val': val_metrics,
-            'test': test_metrics,
-        }
-        save_results(metrics, run_name, classification=True, debug=debug)
+        run_post_evaluation(run_name,
+                            compiled_model.model,
+                            train_dataloader,
+                            val_dataloader,
+                            test_dataloader,
+                            loss_name,
+                            debug=debug,
+                            device=device)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    # parser.add_argument('--name', type=str, default=None)
-    parser.add_argument('-d', '--dataset', type=str, default=None, required=True,
+    parser.add_argument('--resume', type=str, default=None,
+                        help='If present, resume a previous run')
+    parser.add_argument('-d', '--dataset', type=str, default=None,
                         choices=AVAILABLE_CLASSIFICATION_DATASETS,
                         help='Choose dataset to train on')
-    parser.add_argument('-m', '--model', type=str, default=None, required=True,
+    parser.add_argument('-m', '--model', type=str, default=None,
                         choices=AVAILABLE_CLASSIFICATION_MODELS,
                         help='Choose base CNN to use')
     parser.add_argument('-noig', '--no-imagenet', action='store_true',
@@ -398,6 +494,8 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--labels', type=str, nargs='*', default=None,
                         help='Subset of labels')
+    parser.add_argument('--print-metrics', type=str, nargs='*', default=None,
+                        help='Additional metrics to print to stdout')
     parser.add_argument('--multiple-gpu', action='store_true',
                         help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
@@ -428,6 +526,13 @@ def parse_args():
 
     args = parser.parse_args()
 
+    # If training from scratch, require dataset and model
+    if not args.resume:
+        if args.dataset is None: parser.error('A dataset must be selected')
+        if args.model is None: parser.error('A model must be selected')
+
+
+    # Build augment params
     if args.augment:
         args.augment_kwargs = {
             'crop': args.aug_crop,
@@ -439,11 +544,14 @@ def parse_args():
     else:
         args.augment_kwargs = {}
 
+    # Enable passing str or int for augment/oversample labels
     if args.augment_label is not None:
         args.augment_label = parse_str_or_int(args.augment_label)
-
     if args.oversample is not None:
         args.oversample = parse_str_or_int(args.oversample)
+
+    # Shortcuts
+    args.debug = not args.no_debug
 
     return args
 
@@ -456,32 +564,42 @@ if __name__ == '__main__':
     _CUDA_AVAIL = os.environ.get('CUDA_VISIBLE_DEVICES', '')
     print('Using device: ', device, _CUDA_AVAIL)
 
-    # TODO: once model resuming is implemented, enable names other than timestamp
-    run_name = get_timestamp()
 
     start_time = time.time()
 
-    main(run_name,
-         args.dataset,
-         cnn_name=args.model,
-         imagenet=not args.no_imagenet,
-         freeze=args.freeze,
-         max_samples=args.max_samples,
-         loss_name=args.loss_name,
-         labels=args.labels,
-         lr=args.learning_rate,
-         batch_size=args.batch_size,
-         n_epochs=args.epochs,
-         oversample=args.oversample is not None,
-         oversample_label=args.oversample,
-         oversample_max_ratio=args.os_max_ratio,
-         augment=args.augment,
-         augment_label=args.augment_label,
-         augment_kwargs=args.augment_kwargs,
-         debug=not args.no_debug,
-         multiple_gpu=args.multiple_gpu,
-         device=device,
-         )
+    if args.resume:
+        resume_training(args.resume,
+                        max_samples=args.max_samples,
+                        n_epochs=args.epochs,
+                        print_metrics=args.print_metrics,
+                        debug=args.debug,
+                        multiple_gpu=args.multiple_gpu,
+                        device=device)
+    else:
+        run_name = get_timestamp()
+
+        train_from_scratch(run_name,
+            args.dataset,
+            cnn_name=args.model,
+            imagenet=not args.no_imagenet,
+            freeze=args.freeze,
+            max_samples=args.max_samples,
+            loss_name=args.loss_name,
+            print_metrics=args.print_metrics,
+            labels=args.labels,
+            lr=args.learning_rate,
+            batch_size=args.batch_size,
+            n_epochs=args.epochs,
+            oversample=args.oversample is not None,
+            oversample_label=args.oversample,
+            oversample_max_ratio=args.os_max_ratio,
+            augment=args.augment,
+            augment_label=args.augment_label,
+            augment_kwargs=args.augment_kwargs,
+            debug=args.debug,
+            multiple_gpu=args.multiple_gpu,
+            device=device,
+            )
 
     total_time = time.time() - start_time
     print(f'Total time: {duration_to_str(total_time)}')
