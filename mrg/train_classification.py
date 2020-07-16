@@ -100,6 +100,7 @@ def evaluate_model(model,
                    n_epochs=1,
                    device='cuda'):
     """Evaluate a classification model on a dataloader."""
+    print(f'Evaluating model in {dataloader.dataset.dataset_type}...')
     loss = get_loss_function(loss_name)
 
     labels = dataloader.dataset.labels
@@ -339,6 +340,8 @@ def train_from_scratch(run_name,
                        oversample=False,
                        oversample_label=None,
                        oversample_max_ratio=None,
+                       undersample=False,
+                       undersample_label=None,
                        augment=False,
                        augment_label=None,
                        augment_kwargs={},
@@ -359,6 +362,8 @@ def train_from_scratch(run_name,
         run_name += '_os'
         if oversample_max_ratio is not None:
             run_name += f'-max{oversample_max_ratio}'
+    elif undersample:
+        run_name += '_us'
     if augment:
         run_name += '_aug'
         if augment_label is not None:
@@ -385,6 +390,8 @@ def train_from_scratch(run_name,
         'augment': augment,
         'augment_label': augment_label,
         'augment_kwargs': augment_kwargs,
+        'undersample': undersample,
+        'undersample_label': undersample_label,
     }
 
     train_dataloader = prepare_data_classification(dataset_type='train',
@@ -504,15 +511,10 @@ def parse_args():
                         help='Use CPU only')
 
     aug_group = parser.add_argument_group('Data-augmentation params')
-    aug_group.add_argument('-os', '--oversample', default=None,
-                        help='Oversample samples with a given label present (str or int)')
-    aug_group.add_argument('--os-max-ratio', type=int, default=None,
-                        help='Max ratio to oversample by')
-
     aug_group.add_argument('--augment', action='store_true',
                         help='If present, augment dataset')
     aug_group.add_argument('--augment-label', default=None,
-                        help='Augment only samples with a given label present (str or int)')
+                        help='Augment only samples with a given label present (str/int)')
     aug_group.add_argument('--aug-crop', type=float, default=0.8,
                         help='Augment samples by cropping a random fraction')
     aug_group.add_argument('--aug-translate', type=float, default=0.1,
@@ -523,6 +525,15 @@ def parse_args():
                         help='Augment samples by changing the contrast randomly')
     aug_group.add_argument('--aug-brightness', type=float, default=0.5,
                         help='Augment samples by changing the brightness randomly')
+
+    aug_group.add_argument('-os', '--oversample', default=None,
+                        help='Oversample samples with a given label present (str/int)')
+    aug_group.add_argument('--os-max-ratio', type=int, default=None,
+                        help='Max ratio to oversample by')
+
+    aug_group.add_argument('-us', '--undersample', default=None,
+                        help='Undersample from the majority class with a given label (str/int)')
+
 
     args = parser.parse_args()
 
@@ -549,6 +560,8 @@ def parse_args():
         args.augment_label = parse_str_or_int(args.augment_label)
     if args.oversample is not None:
         args.oversample = parse_str_or_int(args.oversample)
+    if args.undersample is not None:
+        args.undersample = parse_str_or_int(args.undersample)
 
     # Shortcuts
     args.debug = not args.no_debug
@@ -596,6 +609,8 @@ if __name__ == '__main__':
             augment=args.augment,
             augment_label=args.augment_label,
             augment_kwargs=args.augment_kwargs,
+            undersample=args.undersample is not None,
+            undersample_label=args.undersample,
             debug=args.debug,
             multiple_gpu=args.multiple_gpu,
             device=device,
