@@ -1,3 +1,5 @@
+import torch
+
 # Common tokens
 PAD_TOKEN = 'PAD'
 PAD_IDX = 0
@@ -27,3 +29,16 @@ def compute_vocab(reports_iterator):
                 word_to_idx[token] = len(word_to_idx)
 
     return word_to_idx
+
+
+class ReportReader:
+    """Translates idx to words for generated reports."""
+
+    def __init__(self, vocab):
+        self._idx_to_word = {v: k for k, v in vocab.items()}
+
+    def idx_to_text(self, report):
+        if isinstance(report, torch.Tensor):
+            report = report.view(-1).tolist()
+
+        return ' '.join([self._idx_to_word[int(g)] for g in report])

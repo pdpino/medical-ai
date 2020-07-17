@@ -154,7 +154,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, device='cuda'
             optimizer.zero_grad()
 
         # Pass thru the model
-        output_tuple = model(images, 0, reports)
+        output_tuple = model(images, reports)
 
         # Calculate word loss
         generated_words = output_tuple[0]

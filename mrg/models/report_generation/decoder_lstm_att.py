@@ -1,8 +1,9 @@
+from itertools import count
 import torch
 from torch import nn
 
-from mrg.utils.nlp import PAD_IDX, START_IDX
 from mrg.models.report_generation.att_2layer import AttentionTwoLayers
+from mrg.utils.nlp import PAD_IDX, START_IDX, END_IDX
 
 
 class LSTMAttDecoder(nn.Module):
@@ -23,18 +24,19 @@ class LSTMAttDecoder(nn.Module):
         self.att_to_state = nn.Linear(features_size[0], hidden_size)
 
 
-    def forward(self, image_features, max_sentence_length, reports=None):
+    def forward(self, image_features, reports=None, free=False, max_words=10000):
         batch_size = image_features.size()[0]
             # image_features shape: batch_size, n_features, height, width
 
         device = image_features.device
 
         # Build initial state
+        initial_c_state = torch.zeros(batch_size, self.hidden_size).to(device)
         initial_h_state = torch.zeros(batch_size, self.hidden_size).to(device)
         att_features, att_scores = self.attention(image_features, initial_h_state)
             # att_features shape: batch_size, n_features
             # att_scores features: batch_size, height, width
-        initial_c_state = self.att_to_state(att_features)
+        initial_h_state = self.att_to_state(att_features)
             # shape: batch_size, hidden_size
 
         state = (initial_h_state, initial_c_state)
@@ -45,13 +47,26 @@ class LSTMAttDecoder(nn.Module):
             # shape: batch_size, embedding_size
 
         # Decide teacher forcing
-        teacher_forcing = self.teacher_forcing and self.training and reports is not None
+        teacher_forcing = self.teacher_forcing \
+            and self.training \
+            and reports is not None \
+            and not free
         
+        # Set iteration maximum
+        if free:
+            words_iterator = range(max_words) if max_words else count()
+            should_stop = torch.tensor(False).to(device).repeat(batch_size)
+        else:
+            assert reports is not None, 'Cant pass free=False and reports=None'
+            actual_max_len = reports.size()[-1]
+            words_iterator = range(actual_max_len)
+            should_stop = None
+
         # Generate word by word
         seq_out = []
         scores_out = []
 
-        for word_i in range(max_sentence_length):
+        for word_i in words_iterator:
             # Pass thru LSTM
             state = self.lstm_cell(input_t, state)
             h_t, c_t = state
@@ -63,9 +78,18 @@ class LSTMAttDecoder(nn.Module):
 
             # Pass state thru attention
             att_features, att_scores = self.attention(image_features, h_t)
-            c_state = self.att_to_state(att_features)
-            state = (h_t, c_state)
+            h_t = self.att_to_state(att_features)
+            state = (h_t, c_t)
             scores_out.append(att_scores)
+
+            # Decide if should stop
+            # Remember if each element in the batch has outputted the END token
+            if free:
+                is_end_prediction = prediction_t.argmax(dim=-1) == END_IDX # shape: batch_size
+                should_stop |= is_end_prediction
+
+                if should_stop.all():
+                    break
 
             # Get input for next word
             if teacher_forcing:

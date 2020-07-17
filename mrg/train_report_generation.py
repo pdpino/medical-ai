@@ -60,6 +60,31 @@ def evaluate_model(model,
     return engine.state.metrics
 
 
+def evaluate_and_save(run_name,
+                      model,
+                      train_dataloader,
+                      val_dataloader,
+                      test_dataloader,
+                      hierarchical=False,
+                      debug=True,
+                      device='cuda',
+                      ):
+    kwargs = {
+        'hierarchical': hierarchical,
+        'device': device
+    }
+    train_metrics = evaluate_model(model, train_dataloader, **kwargs)
+    val_metrics = evaluate_model(model, val_dataloader, **kwargs)
+    test_metrics = evaluate_model(model, test_dataloader, **kwargs)
+
+    metrics = {
+        'train': train_metrics,
+        'val': val_metrics,
+        'test': test_metrics,
+    }
+    save_results(metrics, run_name, classification=False, debug=debug)
+
+
 def train_model(run_name,
                 compiled_model,
                 train_dataloader,
@@ -73,6 +98,7 @@ def train_model(run_name,
                 device='cuda',
                ):
     # Prepare run stuff
+    print('Run: ', run_name)
     tb_writer = TBWriter(run_name, classification=False, debug=debug, dryrun=dryrun)
     initial_epoch = compiled_model.get_current_epoch()
 
@@ -175,15 +201,13 @@ def main(run_name,
          post_evaluation=True,
          device='cuda',
          ):
-
+    """Train a model from scratch."""
     # Create run name
     run_name = f'{run_name}_{decoder_name}_lr{lr}'
     if cnn_run_name:
         run_name += '_precnn'
     else:
         run_name += f'_{cnn_model_name}'
-
-    print('Run: ', run_name)
 
     # Decide hierarchical
     hierarchical = is_decoder_hierarchical(decoder_name)
@@ -251,6 +275,7 @@ def main(run_name,
         'cnn_kwargs': cnn_kwargs,
         'decoder_kwargs': decoder_kwargs,
         'opt_kwargs': opt_kwargs,
+        'vocab': train_dataset.get_vocab(),
         'hparams': {
             'pretrained_cnn': cnn_run_name,
         },
@@ -281,20 +306,15 @@ def main(run_name,
                                     )
         test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
 
-        kwargs = {
-            'hierarchical': hierarchical,
-            'device': device
-        }
-        train_metrics = evaluate_model(model, train_dataloader, **kwargs)
-        val_metrics = evaluate_model(model, val_dataloader, **kwargs)
-        test_metrics = evaluate_model(model, test_dataloader, **kwargs)
-
-        metrics = {
-            'train': train_metrics,
-            'val': val_metrics,
-            'test': test_metrics,
-        }
-        save_results(metrics, run_name, classification=False, debug=debug)
+        evaluate_and_save(run_name,
+                          compiled_model.model,
+                          train_dataloader,
+                          val_dataloader,
+                          test_dataloader,
+                          hierarchical=hierarchical,
+                          debug=debug,
+                          device=device,
+                          )
 
 
 def parse_args():
@@ -304,7 +324,7 @@ def parse_args():
                         help='Max samples to load (debugging)')
     parser.add_argument('-dec', '--decoder', type=str, required=True,
                         choices=AVAILABLE_DECODERS, help='Choose Decoder')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-6,
+    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0001,
                         help='Learning rate')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
                         help='Batch size')

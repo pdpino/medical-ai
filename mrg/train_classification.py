@@ -381,7 +381,7 @@ def train_from_scratch(run_name,
     if loss_name:
         run_name += f'_{loss_name}'
         if loss_name == 'focal':
-            _kwargs_str = '-'.join(f'{k[0]}={v}' for k, v in loss_kwargs.items())
+            _kwargs_str = '-'.join(f'{k[0]}{v}' for k, v in loss_kwargs.items())
             run_name += f'-{_kwargs_str}' if _kwargs_str else ''
     if labels and dataset_name == 'cxr14':
         # labels only works in CXR-14, for now

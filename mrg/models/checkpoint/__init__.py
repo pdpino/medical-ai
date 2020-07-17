@@ -10,6 +10,8 @@ from ignite.engine import Events
 from ignite.handlers import Checkpoint, DiskSaver
 
 from mrg.models.classification import init_empty_model
+from mrg.models.report_generation import create_decoder
+from mrg.models.report_generation.cnn_to_seq import CNN2Seq
 from mrg.models.checkpoint.compiled_model import CompiledModel
 from mrg.utils.common import WORKSPACE_DIR
 
@@ -113,6 +115,43 @@ def load_compiled_model_classification(run_name,
 
     return compiled_model
 
+
+def load_compiled_model_report_generation(run_name, debug=True, device='cuda'):
+    """Loads a report-generation CNN2Seq model."""
+    # Folder contains all pertaining files
+    folder = _get_checkpoint_folder(run_name, classification=False, debug=debug,
+                                    save_mode=False)
+
+    # Load metadata
+    metadata = _load_meta(folder)
+    hparams = metadata.get('hparams', {})
+    
+    # Create CNN
+    cnn_kwargs = metadata.get('cnn_kwargs', None)
+    assert cnn_kwargs, 'CNN kwargs are not present in metadata'
+    cnn = init_empty_model(**cnn_kwargs)
+    
+    # Create Decoder
+    decoder = create_decoder(**metadata['decoder_kwargs'])
+    
+    # Create CNN2Seq model and optimizer
+    model = CNN2Seq(cnn, decoder).to(device)
+    
+    # Create optimizer
+    opt_kwargs = metadata['opt_kwargs']
+    optimizer = optim.Adam(model.parameters(), **opt_kwargs)
+
+    # Compiled model
+    compiled_model = CompiledModel(model, optimizer, metadata)
+
+    # Filepath for the latest checkpoint
+    filepath = _get_latest_filepath(folder)
+
+    # Actually load data
+    checkpoint = torch.load(filepath, map_location=device)
+    Checkpoint.load_objects(compiled_model.to_save_checkpoint(), checkpoint)
+
+    return compiled_model
 
 
 def attach_checkpoint_saver(run_name,

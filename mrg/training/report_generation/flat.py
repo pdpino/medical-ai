@@ -36,8 +36,8 @@ def get_step_fn_flat(model, optimizer=None, training=True, device='cuda'):
         # shape: batch_size, 3, height, width
 
         # Reports, as word ids
-        reports = data_batch[1].to(device).long() # shape: batch_size, max_sentence_len
-        _, max_sentence_len = reports.size()
+        reports = data_batch[1].to(device).long()
+        # shape: batch_size, max_sentence_len
         
         # Enable training
         model.train(training)
@@ -48,7 +48,7 @@ def get_step_fn_flat(model, optimizer=None, training=True, device='cuda'):
             optimizer.zero_grad()
 
         # Pass thru the model
-        output_tuple = model(images, max_sentence_len, reports)
+        output_tuple = model(images, reports)
 
         generated_words = output_tuple[0]
         _, _, vocab_size = generated_words.size()
