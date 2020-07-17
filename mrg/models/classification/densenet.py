@@ -23,6 +23,10 @@ class Densenet121CNN(nn.Module):
             output_size = 16
         elif image_size == (256, 256):
             output_size = 8
+        else:
+            # FIXME: should throw a warning??
+            print(f'WARNING: invalid image size passed to Densenet: {image_size}, using 512')
+            output_size = 16
 
         self.global_pool = nn.Sequential(
             nn.AdaptiveMaxPool2d((1, 1)),

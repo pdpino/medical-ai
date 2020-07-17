@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
+from torch.utils.data.dataset import Subset
 from torch.nn.utils.rnn import pad_sequence
 
 from ignite.engine import Engine, Events
@@ -49,7 +50,10 @@ def evaluate_model(model,
                    hierarchical=False,
                    device='cuda'):
     """Evaluate a report-generation model on a dataloader."""
-    print(f'Evaluating model in {dataloader.dataset.dataset_type}...')
+    dataset = dataloader.dataset
+    if isinstance(dataset, Subset): dataset = dataset.dataset
+    print(f'Evaluating model in {dataset.dataset_type}...')
+
     if hierarchical:
         get_step_fn = get_step_fn_hierarchical
     else:

@@ -234,16 +234,17 @@ def train_model(run_name,
     return trainer.state.metrics, validator.state.metrics
 
 
-def run_post_evaluation(run_name,
-                        model,
-                        train_dataloader,
-                        val_dataloader,
-                        test_dataloader,
-                        loss_name,
-                        loss_kwargs={},
-                        debug=True,
-                        device='cuda',
-                        ):
+def evaluate_and_save(run_name,
+                      model,
+                      train_dataloader,
+                      val_dataloader,
+                      test_dataloader,
+                      loss_name,
+                      loss_kwargs={},
+                      suffix='',
+                      debug=True,
+                      device='cuda',
+                      ):
     """Evaluates a model on train, val and test."""
     kwargs = {
         'loss_name': loss_name,
@@ -260,7 +261,7 @@ def run_post_evaluation(run_name,
         'val': val_metrics,
         'test': test_metrics,
     }
-    save_results(metrics, run_name, classification=True, debug=debug)
+    save_results(metrics, run_name, classification=True, debug=debug, suffix=suffix)
 
 
 def resume_training(run_name,
@@ -323,15 +324,15 @@ def resume_training(run_name,
         test_dataloader = prepare_data_classification(dataset_type='test',
                                                       **metadata['dataset_kwargs'])
 
-        run_post_evaluation(run_name,
-                            compiled_model.model,
-                            train_dataloader,
-                            val_dataloader,
-                            test_dataloader,
-                            loss_name,
-                            loss_kwargs=loss_kwargs,
-                            debug=debug,
-                            device=device)
+        evaluate_and_save(run_name,
+                          compiled_model.model,
+                          train_dataloader,
+                          val_dataloader,
+                          test_dataloader,
+                          loss_name,
+                          loss_kwargs=loss_kwargs,
+                          debug=debug,
+                          device=device)
 
 
 def train_from_scratch(run_name,
@@ -483,15 +484,15 @@ def train_from_scratch(run_name,
     if post_evaluation:
         test_dataloader = prepare_data_classification(dataset_type='test', **dataset_kwargs)
 
-        run_post_evaluation(run_name,
-                            compiled_model.model,
-                            train_dataloader,
-                            val_dataloader,
-                            test_dataloader,
-                            loss_name,
-                            loss_kwargs=loss_kwargs,
-                            debug=debug,
-                            device=device)
+        evaluate_and_save(run_name,
+                          compiled_model.model,
+                          train_dataloader,
+                          val_dataloader,
+                          test_dataloader,
+                          loss_name,
+                          loss_kwargs=loss_kwargs,
+                          debug=debug,
+                          device=device)
 
 
 def parse_args():
