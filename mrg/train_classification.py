@@ -340,6 +340,7 @@ def train_from_scratch(run_name,
                        imagenet=True,
                        freeze=False,
                        max_samples=None,
+                       image_size=512,
                        loss_name=None,
                        loss_kwargs={},
                        print_metrics=None,
@@ -387,6 +388,8 @@ def train_from_scratch(run_name,
         # labels only works in CXR-14, for now
         labels_str = '_'.join(labels)
         run_name += f'_{labels_str}'
+    if image_size != 512:
+        run_name += f'_size{image_size}'
 
 
     # Load data
@@ -395,6 +398,7 @@ def train_from_scratch(run_name,
         'labels': labels,
         'max_samples': max_samples,
         'batch_size': batch_size,
+        'image_size': (image_size, image_size),
     }
     dataset_train_kwargs = {
         'oversample': oversample,
@@ -431,6 +435,7 @@ def train_from_scratch(run_name,
         'labels': train_dataloader.dataset.labels,
         'imagenet': imagenet,
         'freeze': freeze,
+        'image_size': train_dataloader.dataset.image_size,
     }
     model = init_empty_model(**model_kwargs).to(device)
 
@@ -512,6 +517,8 @@ def parse_args():
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
+    parser.add_argument('--image-size', type=int, default=512,
+                        help='Image size in pixels')
     parser.add_argument('--labels', type=str, nargs='*', default=None,
                         help='Subset of labels')
     parser.add_argument('--print-metrics', type=str, nargs='*', default=None,
@@ -627,6 +634,7 @@ if __name__ == '__main__':
             imagenet=not args.no_imagenet,
             freeze=args.freeze,
             max_samples=args.max_samples,
+            image_size=args.image_size,
             loss_name=args.loss_name,
             loss_kwargs=args.loss_kwargs,
             print_metrics=args.print_metrics,

@@ -6,7 +6,7 @@ from torchvision import models
 
 class Resnet50CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, dropout=None, **kwargs):
+                 pretrained_cnn=None, dropout=None, image_size=(512, 512), **kwargs):
         """Resnet-50."""
         super().__init__()
 
@@ -22,7 +22,10 @@ class Resnet50CNN(nn.Module):
                 param.requires_grad = False
 
         # TODO: calculate this size given input size!
-        output_size = 16 # With input of 512
+        if image_size == (512, 512):
+            output_size = 16
+        elif image_size == (256, 256):
+            output_size = 8
 
         self.global_pool = nn.Sequential(
             # nn.MaxPool2d(output_size),

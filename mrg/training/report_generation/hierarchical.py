@@ -33,10 +33,13 @@ def _split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX):
     try:
         sentences = torch.split(report, split_sizes)
     except:
+        # DEBUG: catch case where this fails
+        print('FAILED HERE:')
         print(report)
         print(split_sizes)
         print(end_positions)
         print(end_counts)
+        # return dummy result
         return pad_sequence([torch.tensor(3), torch.tensor(4)], batch_first=True)
     
     return pad_sequence(sentences, batch_first=True)

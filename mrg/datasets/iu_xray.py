@@ -28,7 +28,7 @@ def _get_default_image_transformation(image_size=(512, 512)):
 
 class IUXRayDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None, sort_samples=True,
-                 frontal_only=False,
+                 frontal_only=False, image_size=(512, 512),
                  vocab=None):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_IU_XRAY not found in env variables')
@@ -38,7 +38,7 @@ class IUXRayDataset(Dataset):
         
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
-        self.image_size = (512, 512)
+        self.image_size = image_size
         self.transform = _get_default_image_transformation(self.image_size)
         
         self.images_dir = os.path.join(DATASET_DIR, 'images')
@@ -64,10 +64,10 @@ class IUXRayDataset(Dataset):
                                  frontal_only=frontal_only)
         
     def size(self):
-        return (self.n_images, self.n_reports)
+        return (self.n_images, self.n_unique_reports)
 
     def __len__(self):
-        return self.n_reports
+        return len(self.reports)
 
     def __getitem__(self, idx):
         report = self.reports[idx]
@@ -99,7 +99,7 @@ class IUXRayDataset(Dataset):
         else:
             self.word_to_idx = vocab
 
-        self.n_reports = len(reports)
+        self.n_unique_reports = len(reports)
 
         # Compute final reports array
         self.reports = []

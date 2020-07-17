@@ -31,6 +31,20 @@ def compute_vocab(reports_iterator):
     return word_to_idx
 
 
+def count_sentences(report):
+    """Counts the amount of sentences in a report."""
+    if isinstance(report, torch.Tensor):
+        report = report.detach().tolist()
+    
+    n_sentences = report.count(END_OF_SENTENCE_IDX)
+
+    if report[-1] != END_OF_SENTENCE_IDX:
+        n_sentences += 1
+    
+    return n_sentences
+
+
+
 class ReportReader:
     """Translates idx to words for generated reports."""
 

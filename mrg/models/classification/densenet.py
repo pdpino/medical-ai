@@ -4,7 +4,7 @@ from torchvision import models
 
 class Densenet121CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, **kwargs):
+                 pretrained_cnn=None, image_size=(512, 512), **kwargs):
         super().__init__()
         self.base_cnn = models.densenet121(pretrained=imagenet)
         
@@ -19,10 +19,12 @@ class Densenet121CNN(nn.Module):
 
         n_densenet_features = 1024
         # TODO: calculate this size
-        output_size = 16 # With input of 512
+        if image_size == (512, 512):
+            output_size = 16
+        elif image_size == (256, 256):
+            output_size = 8
 
         self.global_pool = nn.Sequential(
-            # nn.MaxPool2d(output_size),
             nn.AdaptiveMaxPool2d((1, 1)),
             nn.Flatten(),
         )

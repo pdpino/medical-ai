@@ -6,7 +6,7 @@ from mrg.utils.conv import calc_module_output_size
 
 class MobileNetV2CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, input_size=(512, 512), **kwargs):
+                 pretrained_cnn=None, image_size=(512, 512), **kwargs):
         """VGG-19.
         
         The head is the original one (except from the last layer).
@@ -30,7 +30,7 @@ class MobileNetV2CNN(nn.Module):
         )
 
         # n_features = 1280
-        n_features, (out_h, out_w) = calc_module_output_size(self.base_cnn.features, input_size)
+        n_features, (out_h, out_w) = calc_module_output_size(self.base_cnn.features, image_size)
 
         self.prediction = nn.Linear(n_features, len(labels))
 

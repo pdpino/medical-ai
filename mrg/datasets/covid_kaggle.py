@@ -21,7 +21,7 @@ def _get_default_image_transformation(image_size=(512, 512)):
                               ])
 
 class CovidKaggleDataset(Dataset):
-    def __init__(self, dataset_type='train', max_samples=None, **kwargs):
+    def __init__(self, dataset_type='train', max_samples=None, image_size=(512, 512), **kwargs):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_COVID_KAGGLE not found in env variables')
 
@@ -33,7 +33,7 @@ class CovidKaggleDataset(Dataset):
 
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
-        self.image_size = (512, 512)
+        self.image_size = image_size
         self.transform = _get_default_image_transformation(self.image_size)
 
         self.labels = ['covid', 'pneumonia', 'normal']

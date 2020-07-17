@@ -68,6 +68,7 @@ def evaluate_and_save(run_name,
                       hierarchical=False,
                       debug=True,
                       device='cuda',
+                      suffix='',
                       ):
     kwargs = {
         'hierarchical': hierarchical,
@@ -82,7 +83,7 @@ def evaluate_and_save(run_name,
         'val': val_metrics,
         'test': test_metrics,
     }
-    save_results(metrics, run_name, classification=False, debug=debug)
+    save_results(metrics, run_name, classification=False, debug=debug, suffix=suffix)
 
 
 def train_model(run_name,

@@ -6,7 +6,7 @@ from mrg.utils.conv import calc_module_output_size
 
 class VGG19CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, input_size=(512, 512), **kwargs):
+                 pretrained_cnn=None, image_size=(512, 512), **kwargs):
         """VGG-19.
         
         The head is the original one (except from the last layer).
@@ -30,7 +30,7 @@ class VGG19CNN(nn.Module):
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
 
-        n_features, (out_h, out_w) = calc_module_output_size(self.base_cnn, input_size)
+        n_features, (out_h, out_w) = calc_module_output_size(self.base_cnn, image_size)
         self.features_size = (n_features, out_h, out_w)
 
 

@@ -35,8 +35,8 @@ def _get_default_image_transformation(image_size=(512, 512)):
                               ])
 
 class CXR14Dataset(Dataset):
-
-    def __init__(self, dataset_type='train', labels=None, max_samples=None):
+    def __init__(self, dataset_type='train', labels=None, max_samples=None,
+                 image_size=(512, 512)):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_CXR14 not found in env variables')
 
@@ -45,7 +45,7 @@ class CXR14Dataset(Dataset):
         
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
-        self.image_size = (512, 512)
+        self.image_size = image_size
         self.transform = _get_default_image_transformation(self.image_size)
         
         self.image_dir = os.path.join(DATASET_DIR, 'images')

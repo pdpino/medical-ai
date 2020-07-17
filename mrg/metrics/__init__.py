@@ -31,11 +31,16 @@ def _get_results_folder(run_name, classification=True, debug=True, save_mode=Fal
     return folder
 
 
-def save_results(metrics_dict, run_name, classification=True, debug=True):
+def save_results(metrics_dict, run_name, classification=True, debug=True,
+                 suffix=''):
     folder = _get_results_folder(run_name, classification=classification, debug=debug,
                                  save_mode=True)
 
-    filepath = os.path.join(folder, 'metrics.json')
+    filename = 'metrics'
+    if suffix:
+        filename += f'-{suffix}'
+
+    filepath = os.path.join(folder, f'{filename}.json')
 
     with open(filepath, 'w') as f:
         json.dump(metrics_dict, f, cls=MetricsEncoder)
