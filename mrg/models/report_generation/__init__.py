@@ -1,18 +1,19 @@
 from mrg.models.report_generation.decoder_lstm import LSTMDecoder
 from mrg.models.report_generation.decoder_lstm_att import LSTMAttDecoder
-from mrg.models.report_generation.decoder_h_lstm_att import HierarchicalLSTMAttDecoder
+from mrg.models.report_generation.decoder_h_lstm_att import h_lstm_wrapper
 
 _MODELS_DEF = {
     'lstm': LSTMDecoder,
     'lstm-att': LSTMAttDecoder,
-    'h-lstm-att': HierarchicalLSTMAttDecoder,
+    'h-lstm': h_lstm_wrapper(attention=False),
+    'h-lstm-att': h_lstm_wrapper(attention=True),
 }
 
 AVAILABLE_DECODERS = list(_MODELS_DEF)
 
 
 def is_decoder_hierarchical(decoder_name):
-    return decoder_name == 'h-lstm-att'
+    return 'h-lstm' in decoder_name
 
 
 def create_decoder(decoder_name, **kwargs):

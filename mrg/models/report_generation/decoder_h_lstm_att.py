@@ -3,12 +3,21 @@ import torch
 from torch import nn
 
 from mrg.models.report_generation.att_2layer import AttentionTwoLayers
+from mrg.models.report_generation.att_no_att import NoAttention
 from mrg.utils.nlp import PAD_IDX, START_IDX, END_OF_SENTENCE_IDX, END_IDX
+
+
+def h_lstm_wrapper(attention=True):
+    def constructor(*args, **kwargs):
+        return HierarchicalLSTMAttDecoder(*args, attention=attention, **kwargs)
+    return constructor
 
 
 class HierarchicalLSTMAttDecoder(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
-                 features_size, teacher_forcing=True, stop_threshold=0.5):
+                 features_size, teacher_forcing=True, stop_threshold=0.5,
+                 attention=True,
+                 ):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -18,8 +27,14 @@ class HierarchicalLSTMAttDecoder(nn.Module):
 
         n_features, height, width = features_size
 
+        # Attention input
+        self._use_attention = attention
+        if attention:
+            self.attention_layer = AttentionTwoLayers(features_size, hidden_size)
+        else:
+            self.attention_layer = NoAttention(reduction='mean')
+
         # Sentence LSTM
-        self.attention = AttentionTwoLayers(features_size, hidden_size)
         self.sentence_lstm = nn.LSTMCell(n_features, hidden_size)
         self.stop_control = nn.Sequential(
             nn.Linear(hidden_size, 1),
@@ -42,9 +57,9 @@ class HierarchicalLSTMAttDecoder(nn.Module):
         state = (initial_h_state, initial_c_state)
 
         # Build initial input
-        att_features, att_scores = self.attention(features, initial_h_state)
+        att_features, att_scores = self.attention_layer(features, initial_h_state)
             # att_features shape: batch_size, n_features
-            # att_scores features: batch_size, height, width
+            # att_scores features: batch_size, height, width (or None)
         sentence_input_t = att_features
 
         # Decide teacher forcing
@@ -97,9 +112,10 @@ class HierarchicalLSTMAttDecoder(nn.Module):
                     break
 
             # Get next input
-            att_features, att_scores = self.attention(features, initial_h_state)
+            att_features, att_scores = self.attention_layer(features, initial_h_state)
             sentence_input_t = att_features
-            scores_out.append(att_scores)
+
+            if self._use_attention: scores_out.append(att_scores)
 
         seq_out = torch.stack(seq_out, dim=1)
         # shape: batch_size, n_sentences, max_n_words, vocab_size
@@ -107,8 +123,11 @@ class HierarchicalLSTMAttDecoder(nn.Module):
         stops_out = torch.stack(stops_out, dim=1)
         # shape: batch_size, n_sentences
         
-        scores_out = torch.stack(scores_out, dim=1)
-        # shape: batch_size, n_sentences, height, width
+        if self._use_attention and len(scores_out) > 0:
+            scores_out = torch.stack(scores_out, dim=1)
+        else:
+            scores_out = None
+        # shape: batch_size, n_sentences, height, width (or None)
 
         return seq_out, stops_out, scores_out
     
