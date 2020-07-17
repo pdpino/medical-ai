@@ -27,7 +27,9 @@ from mrg.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
     load_compiled_model_classification,
+    load_compiled_model_report_generation,
     save_metadata,
+    load_metadata,
 )
 from mrg.tensorboard import TBWriter
 from mrg.training.report_generation.flat import (
@@ -47,6 +49,7 @@ def evaluate_model(model,
                    hierarchical=False,
                    device='cuda'):
     """Evaluate a report-generation model on a dataloader."""
+    print(f'Evaluating model in {dataloader.dataset.dataset_type}...')
     if hierarchical:
         get_step_fn = get_step_fn_hierarchical
     else:
@@ -102,6 +105,8 @@ def train_model(run_name,
     print('Run: ', run_name)
     tb_writer = TBWriter(run_name, classification=False, debug=debug, dryrun=dryrun)
     initial_epoch = compiled_model.get_current_epoch()
+    if initial_epoch > 0:
+        print(f'Resuming from epoch {initial_epoch}')
 
     # Unwrap stuff
     model, optimizer = compiled_model.get_model_optimizer()
@@ -184,24 +189,88 @@ def train_model(run_name,
     return trainer.state.metrics, validator.state.metrics
 
 
-def main(run_name,
-         decoder_name='lstm',
-         batch_size=15,
-         teacher_forcing=True,
-         embedding_size=100,
-         hidden_size=100,
-         lr=0.0001,
-         n_epochs=10,
-         cnn_run_name=None,
-         cnn_model_name='resnet-50',
-         cnn_imagenet=True,
-         cnn_freeze=False,
-         max_samples=None,
-         debug=True,
-         multiple_gpu=False,
-         post_evaluation=True,
-         device='cuda',
-         ):
+def resume_training(run_name,
+                    n_epochs=10,
+                    max_samples=None,
+                    debug=True,
+                    multiple_gpu=False,
+                    post_evaluation=True,
+                    device='cuda',
+                    ):
+    """Resume training."""
+    # Load metadata (contains all configuration)
+    metadata = load_metadata(run_name, classification=False, debug=debug)
+
+    # Decide hierarchical
+    decoder_name = metadata['decoder_kwargs']['decoder_name']
+    hierarchical = is_decoder_hierarchical(decoder_name)
+    if hierarchical:
+        create_dataloader = create_hierarchical_dataloader
+    else:
+        create_dataloader = create_flat_dataloader
+
+
+    # Load data
+    vocab = metadata['vocab']
+    train_dataset = IUXRayDataset(dataset_type='train', vocab=vocab, max_samples=max_samples)
+    val_dataset = IUXRayDataset(dataset_type='val', vocab=vocab, max_samples=max_samples)
+
+    batch_size = metadata['hparams'].get('batch_size', 24) # backward compatibility
+    train_dataloader = create_dataloader(train_dataset, batch_size=batch_size)
+    val_dataloader = create_dataloader(val_dataset, batch_size=batch_size)
+
+    # Load model
+    compiled_model = load_compiled_model_report_generation(run_name,
+                                                        debug=debug,
+                                                        device=device,
+                                                        multiple_gpu=multiple_gpu)
+
+    # Train
+    train_model(run_name,
+                compiled_model,
+                train_dataloader,
+                val_dataloader,
+                hierarchical=hierarchical,
+                n_epochs=n_epochs,
+                device=device,
+                debug=debug)
+
+    print(f'Finished training: {run_name}')
+
+
+    if post_evaluation:
+        test_dataset = IUXRayDataset(dataset_type='test', vocab=vocab, max_samples=max_samples)
+        test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
+
+        evaluate_and_save(run_name,
+                          compiled_model.model,
+                          train_dataloader,
+                          val_dataloader,
+                          test_dataloader,
+                          hierarchical=hierarchical,
+                          debug=debug,
+                          device=device,
+                          )
+
+
+def train_from_scratch(run_name,
+                       decoder_name='lstm',
+                       batch_size=15,
+                       teacher_forcing=True,
+                       embedding_size=100,
+                       hidden_size=100,
+                       lr=0.0001,
+                       n_epochs=10,
+                       cnn_run_name=None,
+                       cnn_model_name='resnet-50',
+                       cnn_imagenet=True,
+                       cnn_freeze=False,
+                       max_samples=None,
+                       debug=True,
+                       multiple_gpu=False,
+                       post_evaluation=True,
+                       device='cuda',
+                       ):
     """Train a model from scratch."""
     # Create run name
     run_name = f'{run_name}_{decoder_name}_lr{lr}'
@@ -279,6 +348,7 @@ def main(run_name,
         'vocab': train_dataset.get_vocab(),
         'hparams': {
             'pretrained_cnn': cnn_run_name,
+            'batch_size': batch_size,
         },
     }
     save_metadata(metadata, run_name, classification=False, debug=debug)
@@ -323,7 +393,9 @@ def parse_args():
 
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
-    parser.add_argument('-dec', '--decoder', type=str, required=True,
+    parser.add_argument('--resume', type=str, default=None,
+                        help='Resume from a previous run')
+    parser.add_argument('-dec', '--decoder', type=str,
                         choices=AVAILABLE_DECODERS, help='Choose Decoder')
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.0001,
                         help='Learning rate')
@@ -355,8 +427,11 @@ def parse_args():
 
     args = parser.parse_args()
 
-    if args.cnn is None and args.cnn_pretrained is None:
-        raise Exception('Must choose one of cnn or cnn_pretrained')
+    if not args.resume:
+        if not args.decoder:
+            parser.error('Must choose a decoder')
+        if args.cnn is None and args.cnn_pretrained is None:
+            parser.error('Must choose one of cnn or cnn_pretrained')
 
     return args
 
@@ -371,23 +446,32 @@ if __name__ == '__main__':
 
     start_time = time.time()
 
-    main(run_name,
-         decoder_name=args.decoder,
-         batch_size=args.batch_size,
-         teacher_forcing=not args.no_teacher_forcing,
-         embedding_size=args.embedding_size,
-         hidden_size=args.hidden_size,
-         lr=args.learning_rate,
-         n_epochs=args.epochs,
-         cnn_run_name=args.cnn_pretrained,
-         cnn_model_name=args.cnn,
-         cnn_imagenet=not args.no_imagenet,
-         cnn_freeze=args.freeze,
-         max_samples=args.max_samples,
-         debug=not args.no_debug,
-         multiple_gpu=args.multiple_gpu,
-         device=device,
-         )
+    if args.resume:
+        resume_training(args.resume,
+                        n_epochs=args.epochs,
+                        max_samples=args.max_samples,
+                        debug=not args.no_debug,
+                        multiple_gpu=args.multiple_gpu,
+                        device=device,
+                        )
+    else:
+        train_from_scratch(run_name,
+                           decoder_name=args.decoder,
+                           batch_size=args.batch_size,
+                           teacher_forcing=not args.no_teacher_forcing,
+                           embedding_size=args.embedding_size,
+                           hidden_size=args.hidden_size,
+                           lr=args.learning_rate,
+                           n_epochs=args.epochs,
+                           cnn_run_name=args.cnn_pretrained,
+                           cnn_model_name=args.cnn,
+                           cnn_imagenet=not args.no_imagenet,
+                           cnn_freeze=args.freeze,
+                           max_samples=args.max_samples,
+                           debug=not args.no_debug,
+                           multiple_gpu=args.multiple_gpu,
+                           device=device,
+                           )
 
     total_time = time.time() - start_time
     print(f'Total time: {duration_to_str(total_time)}')

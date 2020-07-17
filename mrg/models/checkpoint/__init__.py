@@ -64,7 +64,10 @@ def _load_meta(folder):
 
 def load_metadata(run_name, classification=True, debug=True):
     """Public wrapper to call _load_meta()."""
-    folder = _get_checkpoint_folder(run_name, classification=True, debug=debug, save_mode=False)
+    folder = _get_checkpoint_folder(run_name,
+                                    classification=classification,
+                                    debug=debug,
+                                    save_mode=False)
 
     return _load_meta(folder)    
 
@@ -87,10 +90,7 @@ def load_compiled_model_classification(run_name,
                                        device='cuda',
                                        multiple_gpu=False,
                                        ):
-    """Load a compiled model.
-    
-    NOTE: only works for classification models for now, missing: init_empty_model()
-    """
+    """Load a compiled classification model."""
     # Folder contains all pertaining files
     folder = _get_checkpoint_folder(run_name, classification=True, debug=debug, save_mode=False)
 
@@ -116,7 +116,11 @@ def load_compiled_model_classification(run_name,
     return compiled_model
 
 
-def load_compiled_model_report_generation(run_name, debug=True, device='cuda'):
+def load_compiled_model_report_generation(run_name,
+                                          debug=True,
+                                          device='cuda',
+                                          multiple_gpu=False,
+                                          ):
     """Loads a report-generation CNN2Seq model."""
     # Folder contains all pertaining files
     folder = _get_checkpoint_folder(run_name, classification=False, debug=debug,
@@ -136,7 +140,10 @@ def load_compiled_model_report_generation(run_name, debug=True, device='cuda'):
     
     # Create CNN2Seq model and optimizer
     model = CNN2Seq(cnn, decoder).to(device)
-    
+    if multiple_gpu:
+        # TODO: use DistributedDataParallel instead
+        model = nn.DataParallel(model)
+
     # Create optimizer
     opt_kwargs = metadata['opt_kwargs']
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
