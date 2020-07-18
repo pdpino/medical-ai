@@ -4,6 +4,7 @@ log/
 logs/
 runs/
 nohup.out
+pdpino-models/
 
 
 # Python env
@@ -11,3 +12,7 @@ nohup.out
 **/__pycache__
 **/*.egg-info
 pyenv/
+
+
+# Course project file
+main.py
