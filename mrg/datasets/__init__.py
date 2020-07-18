@@ -4,6 +4,8 @@ from torch.utils.data import DataLoader, Subset
 from mrg.datasets.cxr14 import CXR14Dataset
 from mrg.datasets.covid_kaggle import CovidKaggleDataset
 from mrg.datasets.covid_x import CovidXDataset
+from mrg.datasets.covid_actual import CovidActualDataset
+from mrg.datasets.covid_fig1 import CovidFig1Dataset
 
 from mrg.datasets.sampler import OneLabelUnbalancedSampler
 from mrg.datasets.undersampler import OneLabelUnderSampler
@@ -15,6 +17,8 @@ _DATASET_DEF = {
   'cxr14': CXR14Dataset,
   'covid-kaggle': CovidKaggleDataset,
   'covid-x': CovidXDataset,
+  'covid-actual': CovidActualDataset,
+  'covid-fig1': CovidFig1Dataset,
 }
 
 AVAILABLE_CLASSIFICATION_DATASETS = list(_DATASET_DEF)
