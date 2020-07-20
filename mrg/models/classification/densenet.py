@@ -19,6 +19,7 @@ class Densenet121CNN(nn.Module):
 
         n_densenet_features = 1024
         # TODO: calculate this size
+        image_size = tuple(image_size)
         if image_size == (512, 512):
             output_size = 16
         elif image_size == (256, 256):

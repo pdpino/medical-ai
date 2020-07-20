@@ -45,8 +45,9 @@ def run_evaluation(run_name,
     test_dataloader = prepare_data_classification(dataset_type='test', **dataset_kwargs)
 
     # Load stuff from metadata
-    loss_name = metadata['hparams']['loss_name']
-    loss_kwargs = metadata['hparams'].get('loss_kwargs', {})
+    hparams = metadata.get('hparams')
+    loss_name = hparams.get('loss_name', 'cross-entropy')
+    loss_kwargs = hparams.get('loss_kwargs', {})
 
     # Load model
     compiled_model = load_compiled_model_classification(run_name,

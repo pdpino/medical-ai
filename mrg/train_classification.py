@@ -26,7 +26,7 @@ from mrg.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
     save_metadata,
-    load_metadata,
+    # load_metadata,
     load_compiled_model_classification,
 )
 from mrg.tensorboard import TBWriter
@@ -101,6 +101,9 @@ def evaluate_model(model,
                    n_epochs=1,
                    device='cuda'):
     """Evaluate a classification model on a dataloader."""
+    if dataloader is None:
+        return {}
+
     print(f'Evaluating model in {dataloader.dataset.dataset_type}...')
     loss = get_loss_function(loss_name, **loss_kwargs)
 
@@ -267,6 +270,8 @@ def evaluate_and_save(run_name,
 def resume_training(run_name,
                     max_samples=None,
                     n_epochs=10,
+                    lr=None,
+                    batch_size=None,
                     post_evaluation=True,
                     print_metrics=None,
                     debug=True,
@@ -274,39 +279,50 @@ def resume_training(run_name,
                     device='cuda',
                     ):
     """Resume training from a previous run."""
-    # Load metadata (contains all configuration)
-    metadata = load_metadata(run_name, classification=True, debug=debug)
+    # Load model
+    compiled_model = load_compiled_model_classification(run_name,
+                                                        debug=debug,
+                                                        device=device,
+                                                        multiple_gpu=multiple_gpu)
 
-    # Override max-samples value
-    metadata['dataset_kwargs']['max_samples'] = max_samples
+
+    # Metadata (contains all configuration)
+    metadata = compiled_model.metadata
+    dataset_kwargs = metadata['dataset_kwargs']
+
+    # Override values
+    dataset_kwargs['max_samples'] = max_samples
+    if batch_size is not None:
+        dataset_kwargs['batch_size'] = batch_size
 
 
     # HACK(backward compatibility): dataset_name may not be saved in metadata
     # --> find it in run_name
-    if 'dataset_name' not in metadata['dataset_kwargs']:
+    if 'dataset_name' not in dataset_kwargs:
         for d in AVAILABLE_CLASSIFICATION_DATASETS:
             if d in run_name:
                 dataset_name = d
                 break
-        metadata['dataset_kwargs']['dataset_name'] = dataset_name
+        dataset_kwargs['dataset_name'] = dataset_name
 
     # Load data
     train_dataloader = prepare_data_classification(dataset_type='train',
                                                    **metadata['dataset_train_kwargs'],
-                                                   **metadata['dataset_kwargs'],
+                                                   **dataset_kwargs,
                                                    )
-    val_dataloader = prepare_data_classification(dataset_type='val', **metadata['dataset_kwargs'])
+    val_dataloader = prepare_data_classification(dataset_type='val', **dataset_kwargs)
 
     # Select metadata
     loss_name = metadata['hparams']['loss_name']
     dataset_name = metadata['dataset_kwargs']['dataset_name']
     loss_kwargs = metadata['hparams'].get('loss_kwargs', {})
 
-    # Load model
-    compiled_model = load_compiled_model_classification(run_name,
-                                                        debug=debug,
-                                                        device=device,
-                                                        multiple_gpu=multiple_gpu)
+    # Override previous LR
+    if lr is not None:
+        old_lr = metadata['opt_kwargs']['lr']
+        print(f'Changing learning rate to {lr}, was {old_lr}')
+        for param_group in compiled_model.optimizer.param_groups:
+            param_group['lr'] = lr
 
     # Train
     train_model(run_name, compiled_model, train_dataloader, val_dataloader,
@@ -318,7 +334,7 @@ def resume_training(run_name,
                 device=device,
                 )
 
-    print('Finished run: ', run_name)
+    print('Finished training: ', run_name)
 
     if post_evaluation:
         test_dataloader = prepare_data_classification(dataset_type='test',
@@ -345,9 +361,9 @@ def train_from_scratch(run_name,
                        loss_name=None,
                        loss_kwargs={},
                        print_metrics=None,
-                       lr=0.000001,
+                       lr=None,
                        labels=None,
-                       batch_size=10,
+                       batch_size=None,
                        n_epochs=10,
                        oversample=False,
                        oversample_label=None,
@@ -363,6 +379,10 @@ def train_from_scratch(run_name,
                        device='cuda',
                        ):
     """Train a model from scratch."""
+    # Default values
+    lr = lr or 1e-6
+    batch_size = batch_size or 10
+
     # Create run name
     run_name = f'{run_name}_{dataset_name}_{cnn_name}_lr{lr}'
 
@@ -391,6 +411,8 @@ def train_from_scratch(run_name,
         run_name += f'_{labels_str}'
     if image_size != 512:
         run_name += f'_size{image_size}'
+    if n_epochs == 0:
+        run_name += '_e0'
 
 
     # Load data
@@ -479,7 +501,7 @@ def train_from_scratch(run_name,
                 device=device,
                 )
 
-    print('Finished run: ', run_name)
+    print('Finished training: ', run_name)
 
     if post_evaluation:
         test_dataloader = prepare_data_classification(dataset_type='test', **dataset_kwargs)
@@ -512,9 +534,9 @@ def parse_args():
                         help='If present, freeze base cnn parameters (only train FC layers)')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-6,
+    parser.add_argument('-lr', '--learning-rate', type=float, default=None,
                         help='Learning rate')
-    parser.add_argument('-bs', '--batch_size', type=int, default=10,
+    parser.add_argument('-bs', '--batch_size', type=int, default=None,
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
@@ -528,6 +550,8 @@ def parse_args():
                         help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--no-eval', action='store_true',
+                        help='If present, dont run post-evaluation')
     parser.add_argument('--cpu', action='store_true',
                         help='Use CPU only')
 
@@ -603,6 +627,7 @@ def parse_args():
 
     # Shortcuts
     args.debug = not args.no_debug
+    args.post_evaluation = not args.no_eval
 
     return args
 
@@ -622,7 +647,10 @@ if __name__ == '__main__':
         resume_training(args.resume,
                         max_samples=args.max_samples,
                         n_epochs=args.epochs,
+                        lr=args.learning_rate,
+                        batch_size=args.batch_size,
                         print_metrics=args.print_metrics,
+                        post_evaluation=args.post_evaluation,
                         debug=args.debug,
                         multiple_gpu=args.multiple_gpu,
                         device=device)
@@ -651,6 +679,7 @@ if __name__ == '__main__':
             augment_kwargs=args.augment_kwargs,
             undersample=args.undersample is not None,
             undersample_label=args.undersample,
+            post_evaluation=args.post_evaluation,
             debug=args.debug,
             multiple_gpu=args.multiple_gpu,
             device=device,

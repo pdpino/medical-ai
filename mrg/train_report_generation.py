@@ -102,7 +102,7 @@ def train_model(run_name,
                 debug=True,
                 save_model=True,
                 dryrun=False,
-                print_metrics=['loss', 'bleu'],
+                print_metrics=['loss', 'bleu', 'ciderD'],
                 device='cuda',
                ):
     # Prepare run stuff
@@ -202,8 +202,14 @@ def resume_training(run_name,
                     device='cuda',
                     ):
     """Resume training."""
+    # Load model
+    compiled_model = load_compiled_model_report_generation(run_name,
+                                                           debug=debug,
+                                                           device=device,
+                                                           multiple_gpu=multiple_gpu)
+
     # Load metadata (contains all configuration)
-    metadata = load_metadata(run_name, classification=False, debug=debug)
+    metadata = compiled_model.metadata
 
     # Decide hierarchical
     decoder_name = metadata['decoder_kwargs']['decoder_name']
@@ -216,18 +222,18 @@ def resume_training(run_name,
 
     # Load data
     vocab = metadata['vocab']
-    train_dataset = IUXRayDataset(dataset_type='train', vocab=vocab, max_samples=max_samples)
-    val_dataset = IUXRayDataset(dataset_type='val', vocab=vocab, max_samples=max_samples)
+    image_size = metadata.get('image_size', (512, 512))
+    dataset_kwargs = {
+        'vocab': vocab,
+        'image_size': image_size,
+        'max_samples': max_samples,
+    }
+    train_dataset = IUXRayDataset(dataset_type='train', **dataset_kwargs)
+    val_dataset = IUXRayDataset(dataset_type='val', **dataset_kwargs)
 
     batch_size = metadata['hparams'].get('batch_size', 24) # backward compatibility
     train_dataloader = create_dataloader(train_dataset, batch_size=batch_size)
     val_dataloader = create_dataloader(val_dataset, batch_size=batch_size)
-
-    # Load model
-    compiled_model = load_compiled_model_report_generation(run_name,
-                                                        debug=debug,
-                                                        device=device,
-                                                        multiple_gpu=multiple_gpu)
 
     # Train
     train_model(run_name,
@@ -243,7 +249,7 @@ def resume_training(run_name,
 
 
     if post_evaluation:
-        test_dataset = IUXRayDataset(dataset_type='test', vocab=vocab, max_samples=max_samples)
+        test_dataset = IUXRayDataset(dataset_type='test', **dataset_kwargs)
         test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
 
         evaluate_and_save(run_name,
@@ -270,6 +276,7 @@ def train_from_scratch(run_name,
                        cnn_imagenet=True,
                        cnn_freeze=False,
                        max_samples=None,
+                       image_size=512,
                        debug=True,
                        multiple_gpu=False,
                        post_evaluation=True,
@@ -282,6 +289,8 @@ def train_from_scratch(run_name,
         run_name += '_precnn'
     else:
         run_name += f'_{cnn_model_name}'
+    if image_size != 512:
+        run_name += f'_size{image_size}'
 
     # Decide hierarchical
     hierarchical = is_decoder_hierarchical(decoder_name)
@@ -290,10 +299,14 @@ def train_from_scratch(run_name,
     else:
         create_dataloader = create_flat_dataloader
 
-
     # Load data
-    train_dataset = IUXRayDataset(dataset_type='train', max_samples=max_samples)
+    image_size = (image_size, image_size)
+    train_dataset = IUXRayDataset(dataset_type='train',
+                                  max_samples=max_samples,
+                                  image_size=image_size,
+                                  )
     val_dataset = IUXRayDataset(dataset_type='val',
+                                image_size=image_size,
                                 vocab=train_dataset.get_vocab(),
                                 max_samples=max_samples,
                                 )
@@ -307,9 +320,12 @@ def train_from_scratch(run_name,
         # Load pretrained
         compiled_cnn = load_compiled_model_classification(cnn_run_name,
                                                           debug=debug,
-                                                          device=device)
+                                                          device=device,
+                                                          multiple_gpu=False,
+                                                          # gpus are handled in CNN2Seq!
+                                                          )
         cnn = compiled_cnn.model
-        cnn_kwargs = compiled_model.metadata.get('model_kwargs', {})
+        cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
     else:
         # Create new
         cnn_kwargs = {
@@ -317,6 +333,7 @@ def train_from_scratch(run_name,
             'labels': [], # headless
             'imagenet': cnn_imagenet,
             'freeze': cnn_freeze,
+            'image_size': image_size,
         }
         cnn = init_empty_model(**cnn_kwargs).to(device)
 
@@ -350,6 +367,7 @@ def train_from_scratch(run_name,
         'decoder_kwargs': decoder_kwargs,
         'opt_kwargs': opt_kwargs,
         'vocab': train_dataset.get_vocab(),
+        'image_size': image_size,
         'hparams': {
             'pretrained_cnn': cnn_run_name,
             'batch_size': batch_size,
@@ -378,6 +396,7 @@ def train_from_scratch(run_name,
         test_dataset = IUXRayDataset(dataset_type='test',
                                      vocab=train_dataset.get_vocab(),
                                      max_samples=max_samples,
+                                     image_size=image_size,
                                     )
         test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
 
@@ -411,6 +430,8 @@ def parse_args():
                         help='Embedding size of the decoder')
     parser.add_argument('-hs', '--hidden-size', type=int, default=100,
                         help='Hidden size of the decoder')
+    parser.add_argument('--image-size', type=int, default=512,
+                        help='Input image sizes')
     parser.add_argument('-notf', '--no-teacher-forcing', action='store_true',
                         help='If present, does not use teacher forcing')
     parser.add_argument('--multiple-gpu', action='store_true',
@@ -467,6 +488,7 @@ if __name__ == '__main__':
                            hidden_size=args.hidden_size,
                            lr=args.learning_rate,
                            n_epochs=args.epochs,
+                           image_size=args.image_size,
                            cnn_run_name=args.cnn_pretrained,
                            cnn_model_name=args.cnn,
                            cnn_imagenet=not args.no_imagenet,
