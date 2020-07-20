@@ -69,9 +69,7 @@ def evaluate_model(model,
 
 def evaluate_and_save(run_name,
                       model,
-                      train_dataloader,
-                      val_dataloader,
-                      test_dataloader,
+                      dataloaders,
                       hierarchical=False,
                       debug=True,
                       device='cuda',
@@ -81,15 +79,15 @@ def evaluate_and_save(run_name,
         'hierarchical': hierarchical,
         'device': device
     }
-    train_metrics = evaluate_model(model, train_dataloader, **kwargs)
-    val_metrics = evaluate_model(model, val_dataloader, **kwargs)
-    test_metrics = evaluate_model(model, test_dataloader, **kwargs)
 
-    metrics = {
-        'train': train_metrics,
-        'val': val_metrics,
-        'test': test_metrics,
-    }
+    metrics = {}
+
+    for dataloader in dataloaders:
+        if dataloader is None:
+            continue
+        name = dataloader.dataset.dataset_type
+        metrics[name] = evaluate_model(model, dataloader, **kwargs)
+
     save_results(metrics, run_name, classification=False, debug=debug, suffix=suffix)
 
 
@@ -252,11 +250,15 @@ def resume_training(run_name,
         test_dataset = IUXRayDataset(dataset_type='test', **dataset_kwargs)
         test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
 
+        dataloaders = [
+            train_dataloader,
+            val_dataloader,
+            test_dataloader,
+        ]
+
         evaluate_and_save(run_name,
                           compiled_model.model,
-                          train_dataloader,
-                          val_dataloader,
-                          test_dataloader,
+                          dataloaders,
                           hierarchical=hierarchical,
                           debug=debug,
                           device=device,
@@ -400,11 +402,15 @@ def train_from_scratch(run_name,
                                     )
         test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
 
+        dataloaders = [
+            train_dataloader,
+            val_dataloader,
+            test_dataloader,
+        ]
+
         evaluate_and_save(run_name,
                           compiled_model.model,
-                          train_dataloader,
-                          val_dataloader,
-                          test_dataloader,
+                          dataloaders,
                           hierarchical=hierarchical,
                           debug=debug,
                           device=device,

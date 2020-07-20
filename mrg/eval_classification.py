@@ -8,16 +8,14 @@ from mrg.datasets import (
     prepare_data_classification,
     AVAILABLE_CLASSIFICATION_DATASETS,
 )
-from mrg.models.checkpoint import (
-    load_metadata,
-    load_compiled_model_classification,
-)
+from mrg.models.checkpoint import load_compiled_model_classification
 from mrg.train_classification import evaluate_and_save
 from mrg.utils import get_timestamp, duration_to_str
 
 
 def run_evaluation(run_name,
                    dataset_name,
+                   eval_in=['train', 'val', 'test'],
                    max_samples=None,
                    batch_size=10,
                    n_epochs=1,
@@ -28,8 +26,14 @@ def run_evaluation(run_name,
                    device='cuda',
                    ):
     """Evaluate a model."""
-    # Load metadata (contains all configuration)
-    metadata = load_metadata(run_name, classification=True, debug=debug)
+    # Load model
+    compiled_model = load_compiled_model_classification(run_name,
+                                                        debug=debug,
+                                                        device=device,
+                                                        multiple_gpu=multiple_gpu)
+
+    # Metadata (contains all configuration)
+    metadata = compiled_model.metadata
 
     # Load data
     dataset_kwargs = {
@@ -40,27 +44,20 @@ def run_evaluation(run_name,
         'image_size': (image_size, image_size),
     }
 
-    train_dataloader = prepare_data_classification(dataset_type='train', **dataset_kwargs)
-    val_dataloader = prepare_data_classification(dataset_type='val', **dataset_kwargs)
-    test_dataloader = prepare_data_classification(dataset_type='test', **dataset_kwargs)
+    dataloaders = [
+        prepare_data_classification(dataset_type=dataset_type, **dataset_kwargs)
+        for dataset_type in eval_in
+    ]
 
     # Load stuff from metadata
     hparams = metadata.get('hparams')
     loss_name = hparams.get('loss_name', 'cross-entropy')
     loss_kwargs = hparams.get('loss_kwargs', {})
 
-    # Load model
-    compiled_model = load_compiled_model_classification(run_name,
-                                                        debug=debug,
-                                                        device=device,
-                                                        multiple_gpu=multiple_gpu)
-
     # Evaluate
     evaluate_and_save(run_name,
                       compiled_model.model,
-                      train_dataloader,
-                      val_dataloader,
-                      test_dataloader,
+                      dataloaders,
                       loss_name,
                       loss_kwargs=loss_kwargs,
                       suffix=dataset_name,
@@ -76,6 +73,8 @@ def parse_args():
     parser.add_argument('-d', '--dataset', type=str, default=None, required=True,
                         choices=AVAILABLE_CLASSIFICATION_DATASETS,
                         help='Choose dataset to evaluate on')
+    parser.add_argument('--eval-in', nargs='*', default=['train', 'val', 'test'],
+                        help='Eval in datasets')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
@@ -110,6 +109,7 @@ if __name__ == '__main__':
 
     run_evaluation(args.run_name,
                    args.dataset,
+                   eval_in=args.eval_in,
                    max_samples=args.max_samples,
                    batch_size=args.batch_size,
                    n_epochs=args.epochs,

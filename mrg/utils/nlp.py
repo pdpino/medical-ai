@@ -1,4 +1,5 @@
 import torch
+from torch.nn.utils.rnn import pad_sequence
 
 # Common tokens
 PAD_TOKEN = 'PAD'
@@ -43,6 +44,39 @@ def count_sentences(report):
     
     return n_sentences
 
+
+def split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX):
+    """Splits a report into sentences and pads them.
+    
+    Args:
+        report -- list of shape (n_words)
+        end_of_sentence_idx -- int indicating idx of the end-of-sentence token
+    Returns:
+        report (tensor) of shape (n_sentences, n_words)
+    """
+    if not isinstance(report, list):
+        raise Exception(f'Report should be list, got: {type(report)}')
+
+    # Last sentence must end with a dot
+    if report[-1] != END_OF_SENTENCE_IDX:
+        report = report + [END_OF_SENTENCE_IDX]
+
+    report = torch.tensor(report)
+
+    # Index positions of end-of-sentence tokens
+    end_positions = (report == end_of_sentence_idx).nonzero().view(-1)
+
+    # Transform it to count of items
+    end_counts = end_positions + 1
+    
+    # Calculate sentence sizes, by subtracting index positions to the one before
+    shifted_counts = torch.cat((torch.zeros(1).long(), end_counts), dim=0)[:-1]
+    split_sizes = (end_counts - shifted_counts).tolist()
+    
+    # Split into sentences
+    sentences = torch.split(report, split_sizes)
+    
+    return pad_sequence(sentences, batch_first=True)
 
 
 class ReportReader:

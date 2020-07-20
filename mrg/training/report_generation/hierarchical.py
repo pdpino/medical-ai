@@ -5,44 +5,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.nn.functional import pad
 import numpy as np
 
-from mrg.utils.nlp import END_IDX, END_OF_SENTENCE_IDX
-
-def _split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX):
-    """Splits a report into sentences and pads them.
-    
-    Args:
-        report -- tensor or list of shape (n_words)
-        end_of_sentence_idx -- int indicating idx of the end-of-sentence token
-    Returns:
-        report (tensor) of shape (n_sentences, n_words)
-    """
-    if not isinstance(report, torch.Tensor):
-        report = torch.tensor(report)
-
-    # Index positions of end-of-sentence tokens
-    end_positions = (report == end_of_sentence_idx).nonzero().view(-1)
-
-    # Transform it to count of items
-    end_counts = end_positions + 1
-    
-    # Calculate sentence sizes, by subtracting index positions to the one before
-    shifted_counts = torch.cat((torch.zeros(1).long(), end_counts), dim=0)[:-1]
-    split_sizes = (end_counts - shifted_counts).tolist()
-    
-    # Split into sentences
-    try:
-        sentences = torch.split(report, split_sizes)
-    except:
-        # DEBUG: catch case where this fails
-        print('FAILED HERE:')
-        print(report)
-        print(split_sizes)
-        print(end_positions)
-        print(end_counts)
-        # return dummy result
-        return pad_sequence([torch.tensor(3), torch.tensor(4)], batch_first=True)
-    
-    return pad_sequence(sentences, batch_first=True)
+from mrg.utils.nlp import END_IDX, END_OF_SENTENCE_IDX, split_sentences_and_pad
 
 
 def create_hierarchical_dataloader(dataset, **kwargs):
@@ -59,11 +22,7 @@ def create_hierarchical_dataloader(dataset, **kwargs):
         for image, seq_out in batch_tuples:
             images.append(image)
 
-            # Last sentence must end with a dot
-            if seq_out[-1] != END_OF_SENTENCE_IDX:
-                seq_out.append(END_OF_SENTENCE_IDX)
-
-            report = _split_sentences_and_pad(seq_out)
+            report = split_sentences_and_pad(seq_out)
             max_sentence_len = max(max_sentence_len, report.size()[-1])
 
             reports.append(report)

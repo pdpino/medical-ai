@@ -239,9 +239,7 @@ def train_model(run_name,
 
 def evaluate_and_save(run_name,
                       model,
-                      train_dataloader,
-                      val_dataloader,
-                      test_dataloader,
+                      dataloaders,
                       loss_name,
                       loss_kwargs={},
                       suffix='',
@@ -255,15 +253,14 @@ def evaluate_and_save(run_name,
         'device': device,
     }
 
-    train_metrics = evaluate_model(model, train_dataloader, **kwargs)
-    val_metrics = evaluate_model(model, val_dataloader, **kwargs)
-    test_metrics = evaluate_model(model, test_dataloader, **kwargs)
+    metrics = {}
 
-    metrics = {
-        'train': train_metrics,
-        'val': val_metrics,
-        'test': test_metrics,
-    }
+    for dataloader in dataloaders:
+        if dataloader is None:
+            continue
+        name = dataloader.dataset.dataset_type
+        metrics[name] = evaluate_model(model, dataloader, **kwargs)
+
     save_results(metrics, run_name, classification=True, debug=debug, suffix=suffix)
 
 
@@ -340,11 +337,15 @@ def resume_training(run_name,
         test_dataloader = prepare_data_classification(dataset_type='test',
                                                       **metadata['dataset_kwargs'])
 
+        dataloaders = [
+            train_dataloader,
+            val_dataloader,
+            test_dataloader,
+        ]
+
         evaluate_and_save(run_name,
                           compiled_model.model,
-                          train_dataloader,
-                          val_dataloader,
-                          test_dataloader,
+                          dataloaders,
                           loss_name,
                           loss_kwargs=loss_kwargs,
                           debug=debug,
@@ -506,11 +507,15 @@ def train_from_scratch(run_name,
     if post_evaluation:
         test_dataloader = prepare_data_classification(dataset_type='test', **dataset_kwargs)
 
+        dataloaders = [
+            train_dataloader,
+            val_dataloader,
+            test_dataloader,
+        ]
+
         evaluate_and_save(run_name,
                           compiled_model.model,
-                          train_dataloader,
-                          val_dataloader,
-                          test_dataloader,
+                          dataloaders,
                           loss_name,
                           loss_kwargs=loss_kwargs,
                           debug=debug,

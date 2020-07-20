@@ -42,6 +42,14 @@ def save_results(metrics_dict, run_name, classification=True, debug=True,
 
     filepath = os.path.join(folder, f'{filename}.json')
 
+    if os.path.isfile(filepath):
+        with open(filepath, 'r') as f:
+            old_dict = json.load(f)
+        metrics_dict = {
+            **old_dict,
+            **metrics_dict
+        }
+
     with open(filepath, 'w') as f:
         json.dump(metrics_dict, f, cls=MetricsEncoder)
 
