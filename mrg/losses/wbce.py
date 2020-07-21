@@ -10,7 +10,7 @@ class WeigthedBCELoss(nn.Module):
     def forward(self, output, target):
         """Computes weighted binary cross entropy loss.
         
-        If a multi-label array is given, the BCE is summed/averaged across labels.
+        If a multi-label array is given, the BCE is averaged across labels.
         Note that the BP and BN weights are calculated by batch, not in the whole dataset.
         """
         output = torch.sigmoid(output)
@@ -31,7 +31,7 @@ class WeigthedBCELoss(nn.Module):
 
         loss = -BP * target * torch.log(output) - BN * (1 - target) * torch.log(1 - output)
 
-        return torch.sum(loss)
+        return torch.mean(loss)
 
 
 class WeigthedBCEByDiseaseLoss(nn.Module):
@@ -63,4 +63,4 @@ class WeigthedBCEByDiseaseLoss(nn.Module):
         
         loss = -BP * target * torch.log(output) - BN * (1 - target) * torch.log(1 - output)
 
-        return torch.sum(loss)
+        return torch.mean(loss)

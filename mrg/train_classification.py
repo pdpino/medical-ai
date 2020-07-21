@@ -641,9 +641,8 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
 
-    _CUDA_AVAIL = os.environ.get('CUDA_VISIBLE_DEVICES', '')
-    print('Using device: ', device, _CUDA_AVAIL)
-
+    _CUDA_VISIBLE = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+    print(f'Using device={device} visible={_CUDA_VISIBLE} multiple={args.multiple_gpu}')
 
     start_time = time.time()
 

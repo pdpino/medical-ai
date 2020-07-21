@@ -1,5 +1,6 @@
 import time
 import argparse
+import os
 
 import torch
 from torch import nn
@@ -467,11 +468,13 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
     args = parse_args()
 
-    # TODO: once model resuming is implemented, enable names other than timestamp
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    _CUDA_VISIBLE = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+    print(f'Using device={device} visible={_CUDA_VISIBLE} multiple={args.multiple_gpu}')
+
     run_name = get_timestamp()
 
     start_time = time.time()
