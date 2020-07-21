@@ -2,11 +2,9 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
-from mrg.utils.conv import calc_module_output_size
-
 class VGG19CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, image_size=(512, 512), **kwargs):
+                 pretrained_cnn=None, **kwargs):
         """VGG-19.
         
         The head is the original one (except from the last layer).
@@ -30,8 +28,7 @@ class VGG19CNN(nn.Module):
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
 
-        n_features, (out_h, out_w) = calc_module_output_size(self.base_cnn, image_size)
-        self.features_size = (n_features, out_h, out_w)
+        self.features_size = 512
 
 
     def forward(self, x, features=False):

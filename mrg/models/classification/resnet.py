@@ -2,11 +2,9 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
-# from mrg.utils.conv import calc_module_output_size
-
 class Resnet50CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, dropout=None, image_size=(512, 512), **kwargs):
+                 pretrained_cnn=None, dropout=None, **kwargs):
         """Resnet-50."""
         super().__init__()
 
@@ -21,14 +19,7 @@ class Resnet50CNN(nn.Module):
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
 
-        # TODO: calculate this size given input size!
-        if image_size == (512, 512):
-            output_size = 16
-        elif image_size == (256, 256):
-            output_size = 8
-
         self.global_pool = nn.Sequential(
-            # nn.MaxPool2d(output_size),
             nn.AdaptiveMaxPool2d((1, 1)),
             nn.Flatten(),
         )
@@ -36,11 +27,11 @@ class Resnet50CNN(nn.Module):
         self.dropout = nn.Dropout(dropout) if dropout else None
 
         n_diseases = len(labels)
-        n_resnet_features = 2048
 
-        self.prediction = nn.Linear(n_resnet_features, n_diseases)
+        self.features_size = 2048
 
-        self.features_size = (n_resnet_features, output_size, output_size)
+        self.prediction = nn.Linear(self.features_size, n_diseases)
+
 
 
     def forward(self, x, features=False):

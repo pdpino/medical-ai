@@ -9,7 +9,7 @@ from mrg.utils.nlp import PAD_IDX, START_IDX, END_IDX
 class LSTMAttDecoder(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size,
-                 teacher_forcing=True):
+                 teacher_forcing=True, **kwargs):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -21,7 +21,7 @@ class LSTMAttDecoder(nn.Module):
         self.W_vocab = nn.Linear(hidden_size, vocab_size)
 
         self.attention = AttentionTwoLayers(features_size, hidden_size)
-        self.att_to_state = nn.Linear(features_size[0], hidden_size)
+        self.att_to_state = nn.Linear(features_size, hidden_size)
 
 
     def forward(self, image_features, reports=None, free=False, max_words=10000):

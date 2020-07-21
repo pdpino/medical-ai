@@ -2,11 +2,9 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
-from mrg.utils.conv import calc_module_output_size
-
 class MobileNetV2CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, image_size=(512, 512), **kwargs):
+                 pretrained_cnn=None, **kwargs):
         """VGG-19.
         
         The head is the original one (except from the last layer).
@@ -29,12 +27,9 @@ class MobileNetV2CNN(nn.Module):
             nn.Flatten(),
         )
 
-        # n_features = 1280
-        n_features, (out_h, out_w) = calc_module_output_size(self.base_cnn.features, image_size)
+        self.features_size = 1280
+        self.prediction = nn.Linear(self.features_size, len(labels))
 
-        self.prediction = nn.Linear(n_features, len(labels))
-
-        self.features_size = (n_features, out_h, out_w)
 
 
     def forward(self, x, features=False):

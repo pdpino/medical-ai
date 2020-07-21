@@ -5,9 +5,7 @@ class AttentionTwoLayers(nn.Module):
     def __init__(self, features_size, lstm_size, internal_size=100):
         super().__init__()
 
-        n_features, height, width = features_size
-        
-        self.visual_fc = nn.Linear(n_features, internal_size)
+        self.visual_fc = nn.Linear(features_size, internal_size)
         self.state_fc = nn.Linear(lstm_size, internal_size)
 
         self.last_fc = nn.Sequential(

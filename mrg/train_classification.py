@@ -459,7 +459,6 @@ def train_from_scratch(run_name,
         'labels': train_dataloader.dataset.labels,
         'imagenet': imagenet,
         'freeze': freeze,
-        'image_size': train_dataloader.dataset.image_size,
     }
     model = init_empty_model(**model_kwargs).to(device)
 

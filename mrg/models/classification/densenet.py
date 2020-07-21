@@ -4,7 +4,7 @@ from torchvision import models
 
 class Densenet121CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, image_size=(512, 512), **kwargs):
+                 pretrained_cnn=None, **kwargs):
         super().__init__()
         self.base_cnn = models.densenet121(pretrained=imagenet)
         
@@ -17,28 +17,13 @@ class Densenet121CNN(nn.Module):
 
         self.labels = list(labels)
 
-        n_densenet_features = 1024
-        # TODO: calculate this size
-        image_size = tuple(image_size)
-        if image_size == (512, 512):
-            output_size = 16
-        elif image_size == (256, 256):
-            output_size = 8
-        else:
-            # FIXME: should throw a warning??
-            print(f'WARNING: invalid image size passed to Densenet: {image_size}, using 512')
-            output_size = 16
-
         self.global_pool = nn.Sequential(
             nn.AdaptiveMaxPool2d((1, 1)),
             nn.Flatten(),
         )
 
-
-        self.prediction = nn.Linear(n_densenet_features, len(self.labels))
-
-        self.features_size = (n_densenet_features, output_size, output_size)
-
+        self.features_size = 1024
+        self.prediction = nn.Linear(self.features_size, len(self.labels))
         
     def forward(self, x, features=False):
         x = self.base_cnn.features(x)

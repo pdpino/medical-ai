@@ -9,7 +9,7 @@ from mrg.utils.nlp import PAD_IDX, START_IDX, END_IDX
 class LSTMDecoder(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size,
-                 teacher_forcing=True):
+                 teacher_forcing=True, **kwargs):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -17,8 +17,9 @@ class LSTMDecoder(nn.Module):
         self.start_idx = torch.tensor(START_IDX)
 
         self.features_fc = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(np.prod(features_size), hidden_size),
+            nn.Linear(features_size, hidden_size),
         )
 
         self.embeddings_table = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)

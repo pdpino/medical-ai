@@ -20,6 +20,13 @@ def create_decoder(decoder_name, **kwargs):
     if decoder_name not in _MODELS_DEF:
         raise Exception(f'Decoder not found: {decoder_name}')
 
+    # NOTE: for backward compatibility
+    if 'features_size' in kwargs:
+        features_size = kwargs['features_size']
+        if isinstance(features_size, (tuple, list)):
+            kwargs['features_size'] = features_size[0]
+            kwargs['image_size'] = features_size[1:]
+
     ModelClass = _MODELS_DEF[decoder_name]
     model = ModelClass(**kwargs)
 

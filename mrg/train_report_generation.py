@@ -335,7 +335,6 @@ def train_from_scratch(run_name,
             'labels': [], # headless
             'imagenet': cnn_imagenet,
             'freeze': cnn_freeze,
-            'image_size': image_size,
         }
         cnn = init_empty_model(**cnn_kwargs).to(device)
 

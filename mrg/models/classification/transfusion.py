@@ -54,7 +54,7 @@ class TransfusionCBRCNN(nn.Module):
     Paper: Transfusion: Understanding Transfer Learning for medical imaging
     """
     def __init__(self, labels, multilabel=True, pretrained_cnn=None,
-                 n_channels=3, image_size=(512, 512), name='tall', **kwargs):
+                 n_channels=3, name='tall', **kwargs):
         super().__init__()
 
         self.labels = list(labels)
@@ -64,10 +64,12 @@ class TransfusionCBRCNN(nn.Module):
             *_conv_config(name, in_ch=n_channels),
         )
 
-        out_channels, (out_h, out_w) = calc_module_output_size(self.conv, image_size)
+        # NOTE: height and width passed are dummy, only number of channels is relevant
+        out_channels, _ = calc_module_output_size(self.conv, (512, 512))
+        self.features_size = out_channels
 
         self.global_pool = nn.Sequential(
-            nn.AvgPool2d((out_h, out_w)),
+            nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
         )
 
@@ -76,7 +78,6 @@ class TransfusionCBRCNN(nn.Module):
         if pretrained_cnn is not None:
             self.load_state_dict(pretrained_cnn.state_dict())
 
-        self.features_size = (out_channels, out_h, out_w)
 
 
     def forward(self, x, features=False):
