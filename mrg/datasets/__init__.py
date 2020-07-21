@@ -7,9 +7,9 @@ from mrg.datasets.covid_x import CovidXDataset
 from mrg.datasets.covid_actual import CovidActualDataset
 from mrg.datasets.covid_fig1 import CovidFig1Dataset
 
-from mrg.datasets.sampler import OneLabelUnbalancedSampler
-from mrg.datasets.undersampler import OneLabelUnderSampler
-from mrg.datasets.augmentation import Augmentator
+from mrg.datasets.tools.oversampler import OneLabelOverSampler
+from mrg.datasets.tools.undersampler import OneLabelUnderSampler
+from mrg.datasets.tools.augmentation import Augmentator
 
 from mrg.utils.nlp import count_sentences
 
@@ -43,7 +43,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labe
         dataset = Augmentator(dataset, label=augment_label, **augment_kwargs)
 
     if oversample:
-        sampler = OneLabelUnbalancedSampler(dataset,
+        sampler = OneLabelOverSampler(dataset,
                                             label=oversample_label,
                                             max_ratio=oversample_max_ratio)
         dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)

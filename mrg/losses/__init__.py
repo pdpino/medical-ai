@@ -2,10 +2,10 @@ import torch
 from torch import nn
 
 from mrg.losses.focal import FocalLoss
-from mrg.losses.bce import WeigthedBCELoss, WeigthedBCEByDiseaseLoss
+from mrg.losses.wbce import WeigthedBCELoss, WeigthedBCEByDiseaseLoss
 
 _LOSS_CLASSES = {
-    'bce': nn.BCELoss,
+    'bce': nn.BCEWithLogitsLoss,
     'wbce': WeigthedBCELoss,
     'wbce_by_disease': WeigthedBCEByDiseaseLoss,
     'focal': FocalLoss,

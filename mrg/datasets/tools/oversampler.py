@@ -1,7 +1,7 @@
 import random
 from torch.utils.data import Sampler
 
-class OneLabelUnbalancedSampler(Sampler):
+class OneLabelOverSampler(Sampler):
     def __init__(self, dataset, label=0, max_ratio=None):
         """Oversamples samples that are less represented, considering a specific label.
         
