@@ -1,6 +1,7 @@
 import time
 import argparse
 import os
+from pprint import pprint
 
 import torch
 
@@ -19,6 +20,7 @@ def run_evaluation(run_name,
                    max_samples=None,
                    batch_size=10,
                    n_epochs=1,
+                   frontal_only=False,
                    labels=None,
                    image_size=512,
                    debug=True,
@@ -42,6 +44,7 @@ def run_evaluation(run_name,
         'max_samples': max_samples,
         'batch_size': batch_size,
         'image_size': (image_size, image_size),
+        'frontal_only': frontal_only,
     }
 
     dataloaders = [
@@ -55,14 +58,20 @@ def run_evaluation(run_name,
     loss_kwargs = hparams.get('loss_kwargs', {})
 
     # Evaluate
-    evaluate_and_save(run_name,
-                      compiled_model.model,
-                      dataloaders,
-                      loss_name,
-                      loss_kwargs=loss_kwargs,
-                      suffix=dataset_name,
-                      debug=debug,
-                      device=device)
+    suffix = f'{dataset_name}_size{image_size}'
+    if frontal_only:
+        suffix += '_frontal'
+
+    metrics = evaluate_and_save(run_name,
+                                compiled_model.model,
+                                dataloaders,
+                                loss_name,
+                                loss_kwargs=loss_kwargs,
+                                suffix=suffix,
+                                debug=debug,
+                                device=device)
+    
+    pprint(metrics)
 
 
 def parse_args():
@@ -85,6 +94,8 @@ def parse_args():
                         help='Image size in pixels')
     parser.add_argument('--labels', type=str, nargs='*', default=None,
                         help='Subset of labels')
+    parser.add_argument('--frontal-only', action='store_true',
+                        help='Use only frontal images')
     parser.add_argument('--multiple-gpu', action='store_true',
                         help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
@@ -112,6 +123,7 @@ if __name__ == '__main__':
                    eval_in=args.eval_in,
                    max_samples=args.max_samples,
                    batch_size=args.batch_size,
+                   frontal_only=args.frontal_only,
                    n_epochs=args.epochs,
                    labels=args.labels,
                    image_size=args.image_size,

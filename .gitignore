@@ -5,14 +5,14 @@ logs/
 runs/
 nohup.out
 pdpino-models/
+.vscode/
 
 
 # Python env
 **/.ipynb_checkpoints/
 **/__pycache__
 **/*.egg-info
-pyenv/
-
+pyenv*
 
 # Course project file
 main.py

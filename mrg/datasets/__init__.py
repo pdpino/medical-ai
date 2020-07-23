@@ -6,6 +6,7 @@ from mrg.datasets.covid_kaggle import CovidKaggleDataset
 from mrg.datasets.covid_x import CovidXDataset
 from mrg.datasets.covid_actual import CovidActualDataset
 from mrg.datasets.covid_fig1 import CovidFig1Dataset
+from mrg.datasets.covid_uc import CovidUCDataset
 
 from mrg.datasets.tools.oversampler import OneLabelOverSampler
 from mrg.datasets.tools.undersampler import OneLabelUnderSampler
@@ -19,6 +20,7 @@ _DATASET_DEF = {
   'covid-x': CovidXDataset,
   'covid-actual': CovidActualDataset,
   'covid-fig1': CovidFig1Dataset,
+  'covid-uc': CovidUCDataset,
 }
 
 AVAILABLE_CLASSIFICATION_DATASETS = list(_DATASET_DEF)
@@ -28,16 +30,26 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labe
                                 augment=False, augment_label=None, augment_kwargs={},
                                 oversample=False, oversample_label=0, oversample_max_ratio=None,
                                 undersample=False, undersample_label=0,
-                                batch_size=10, shuffle=False):
+                                batch_size=10, shuffle=False,
+                                **kwargs,
+                                ):
     print(f'Loading {dataset_name}/{dataset_type} dataset...')
 
     assert dataset_name in _DATASET_DEF, f'Dataset not found: {dataset_name}'
     DatasetClass = _DATASET_DEF[dataset_name]
 
+    if 'frontal_only' in kwargs and dataset_name != 'covid-uc':
+        print('\tWarning: frontal-only option is only implemented in covid-uc')
+
     dataset = DatasetClass(dataset_type=dataset_type,
                            labels=labels,
                            image_size=image_size,
-                           max_samples=max_samples)
+                           max_samples=max_samples,
+                           **kwargs,
+                           )
+
+    if len(dataset) == 0:
+        return None
 
     if augment:
         dataset = Augmentator(dataset, label=augment_label, **augment_kwargs)

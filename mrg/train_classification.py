@@ -182,7 +182,8 @@ def train_model(run_name,
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_metrics(trainer):
         # Run on evaluation
-        validator.run(val_dataloader, 1)
+        if val_dataloader is not None:
+            validator.run(val_dataloader, 1)
 
         # State
         epoch = trainer.state.epoch + initial_epoch
@@ -262,6 +263,8 @@ def evaluate_and_save(run_name,
         metrics[name] = evaluate_model(model, dataloader, **kwargs)
 
     save_results(metrics, run_name, classification=True, debug=debug, suffix=suffix)
+
+    return metrics
 
 
 def resume_training(run_name,
@@ -366,6 +369,7 @@ def train_from_scratch(run_name,
                        labels=None,
                        batch_size=None,
                        n_epochs=10,
+                       frontal_only=False,
                        oversample=False,
                        oversample_label=None,
                        oversample_max_ratio=None,
@@ -423,6 +427,7 @@ def train_from_scratch(run_name,
         'max_samples': max_samples,
         'batch_size': batch_size,
         'image_size': (image_size, image_size),
+        'frontal_only': frontal_only,
     }
     dataset_train_kwargs = {
         'oversample': oversample,
@@ -492,7 +497,10 @@ def train_from_scratch(run_name,
     compiled_model = CompiledModel(model, optimizer, metadata)
 
     # Train!
-    train_model(run_name, compiled_model, train_dataloader, val_dataloader,
+    train_model(run_name,
+                compiled_model,
+                train_dataloader,
+                val_dataloader,
                 n_epochs=n_epochs,
                 loss_name=loss_name,
                 loss_kwargs=loss_kwargs,
@@ -544,8 +552,6 @@ def parse_args():
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
-    parser.add_argument('--image-size', type=int, default=512,
-                        help='Image size in pixels')
     parser.add_argument('--labels', type=str, nargs='*', default=None,
                         help='Subset of labels')
     parser.add_argument('--print-metrics', type=str, nargs='*', default=None,
@@ -566,6 +572,12 @@ def parse_args():
     loss_group.add_argument('--focal-alpha', type=float, default=0.75, help='Focal alpha param')
     loss_group.add_argument('--focal-gamma', type=float, default=2, help='Focal gamma param')
 
+
+    images_group = parser.add_argument_group('Images params')
+    images_group.add_argument('--image-size', type=int, default=512,
+                              help='Image size in pixels')
+    images_group.add_argument('--frontal-only', action='store_true',
+                              help='Use only frontal images')
 
     aug_group = parser.add_argument_group('Data-augmentation params')
     aug_group.add_argument('--augment', action='store_true',
