@@ -1,4 +1,4 @@
-# Medical report generation (MRG)
+# Medical AI
 
-Generate medical reports from medical images.
+AI tools for medical diagnosis.
 
