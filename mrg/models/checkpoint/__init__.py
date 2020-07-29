@@ -48,7 +48,13 @@ def _get_latest_filepath(folder):
         for fname in os.listdir(folder)
     ]
 
+    if len(files) == 0:
+        raise Exception('Model filepath empty:', folder)
+
     latest_epoch, latest_fname = max(files)
+
+    if latest_epoch == -1:
+        raise Exception('Model filepath not found: ', files)
 
     return os.path.join(folder, latest_fname)
 
