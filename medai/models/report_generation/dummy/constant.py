@@ -4,29 +4,33 @@ from torch.nn.functional import one_hot
 
 from medai.utils.nlp import END_IDX, PAD_IDX
 
+DUMMY_REPORT = '''the heart is normal in size . the mediastinum is unremarkable . 
+the lungs are clear .
+there is no pneumothorax or pleural effusion . no focal airspace disease .
+no pleural effusion or pneumothorax . END'''
+
 class ConstantReport(nn.Module):
     """Returns a constant report."""
-    def __init__(self, vocab, report):
+    def __init__(self, vocab, report=DUMMY_REPORT):
         super().__init__()
         
-        self.hierarchical = False
         self.report = [vocab[word] for word in report.split()]
         self.vocab_size = len(vocab)
         
         if self.report[-1] != END_IDX:
             self.report.append(END_IDX)
 
-    def forward(self, features, reports=None, free=False):
-        batch_size = features.size()[0]
-        device = features.device
+    def forward(self, images, reports=None, free=False, **unused_kwargs):
+        batch_size = images.size()[0]
+        device = images.device
+
+        base_report = list(self.report)
 
         if reports is None or free:
-            # TODO: implement free
-            pass
+            n_words = len(base_report)
         else:
             n_words = reports.size()[-1]
 
-        base_report = list(self.report)
         missing = n_words - len(base_report)
         if missing > 0:
             base_report += [PAD_IDX] * missing
