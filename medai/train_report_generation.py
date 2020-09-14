@@ -7,17 +7,19 @@ from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
-from torch.nn.utils.rnn import pad_sequence
 
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer, Checkpoint, DiskSaver
 
 from medai.datasets.iu_xray import IUXRayDataset
 from medai.metrics import save_results
-from medai.metrics.report_generation import attach_metrics_report_generation
+from medai.metrics.report_generation import (
+    attach_metrics_report_generation,
+    attach_report_writer,
+)
 from medai.models.classification import (
     AVAILABLE_CLASSIFICATION_MODELS,
-    init_empty_model,
+    create_cnn,
 )
 from medai.models.report_generation import (
     is_decoder_hierarchical,
@@ -45,10 +47,13 @@ from medai.training.report_generation.hierarchical import (
 from medai.utils import get_timestamp, duration_to_str
 
 
-def evaluate_model(model,
+def evaluate_model(run_name,
+                   model,
                    dataloader,
                    n_epochs=1,
                    hierarchical=False,
+                   free=False,
+                   debug=True,
                    device='cuda'):
     """Evaluate a report-generation model on a dataloader."""
     dataset = dataloader.dataset
@@ -60,8 +65,9 @@ def evaluate_model(model,
     else:
         get_step_fn = get_step_fn_flat
 
-    engine = Engine(get_step_fn(model, training=False, device=device))
-    attach_metrics_report_generation(engine, hierarchical=hierarchical)
+    engine = Engine(get_step_fn(model, training=False, free=free, device=device))
+    attach_metrics_report_generation(engine, hierarchical=hierarchical, free=free)
+    attach_report_writer(engine, dataset.get_vocab(), run_name, debug=debug)
 
     engine.run(dataloader, n_epochs)
     
@@ -72,13 +78,16 @@ def evaluate_and_save(run_name,
                       model,
                       dataloaders,
                       hierarchical=False,
+                      free=False,
                       debug=True,
                       device='cuda',
                       suffix='',
                       ):
     kwargs = {
         'hierarchical': hierarchical,
-        'device': device
+        'free': free,
+        'device': device,
+        'debug': debug,
     }
 
     metrics = {}
@@ -87,7 +96,7 @@ def evaluate_and_save(run_name,
         if dataloader is None:
             continue
         name = dataloader.dataset.dataset_type
-        metrics[name] = evaluate_model(model, dataloader, **kwargs)
+        metrics[name] = evaluate_model(run_name, model, dataloader, **kwargs)
 
     save_results(metrics, run_name, classification=False, debug=debug, suffix=suffix)
 
@@ -337,7 +346,7 @@ def train_from_scratch(run_name,
             'imagenet': cnn_imagenet,
             'freeze': cnn_freeze,
         }
-        cnn = init_empty_model(**cnn_kwargs).to(device)
+        cnn = create_cnn(**cnn_kwargs).to(device)
 
     # Create decoder
     decoder_kwargs = {

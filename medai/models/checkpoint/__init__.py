@@ -9,7 +9,7 @@ from torch import nn
 from ignite.engine import Events
 from ignite.handlers import Checkpoint, DiskSaver
 
-from medai.models.classification import init_empty_model
+from medai.models.classification import create_cnn
 from medai.models.report_generation import create_decoder
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.checkpoint.compiled_model import CompiledModel
@@ -104,7 +104,7 @@ def load_compiled_model_classification(run_name,
     metadata = _load_meta(folder)
 
     # Create empty model and optimizer
-    model = init_empty_model(**metadata['model_kwargs']).to(device)
+    model = create_cnn(**metadata['model_kwargs']).to(device)
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
         model = nn.DataParallel(model)
@@ -139,7 +139,7 @@ def load_compiled_model_report_generation(run_name,
     # Create CNN
     cnn_kwargs = metadata.get('cnn_kwargs', None)
     assert cnn_kwargs, 'CNN kwargs are not present in metadata'
-    cnn = init_empty_model(**cnn_kwargs)
+    cnn = create_cnn(**cnn_kwargs)
     
     # Create Decoder
     decoder = create_decoder(**metadata['decoder_kwargs'])

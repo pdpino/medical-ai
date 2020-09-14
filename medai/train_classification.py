@@ -19,7 +19,7 @@ from medai.metrics.classification import (
     attach_metric_cm,
 )
 from medai.models.classification import (
-    init_empty_model,
+    create_cnn,
     AVAILABLE_CLASSIFICATION_MODELS,
 )
 from medai.models.checkpoint import (
@@ -465,7 +465,7 @@ def train_from_scratch(run_name,
         'imagenet': imagenet,
         'freeze': freeze,
     }
-    model = init_empty_model(**model_kwargs).to(device)
+    model = create_cnn(**model_kwargs).to(device)
 
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead

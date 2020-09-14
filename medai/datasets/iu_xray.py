@@ -5,6 +5,8 @@ from PIL import Image
 import os
 import json
 
+from medai.datasets.common import BatchItem
+from medai.datasets.vocab import load_vocab
 from medai.utils.nlp import (
     UNKNOWN_IDX,
     compute_vocab,
@@ -27,9 +29,10 @@ def _get_default_image_transformation(image_size=(512, 512)):
                               ])
 
 class IUXRayDataset(Dataset):
-    def __init__(self, dataset_type='train', max_samples=None, sort_samples=True,
+    def __init__(self, dataset_type='train', max_samples=None, 
+                 sort_samples=True,
                  frontal_only=False, image_size=(512, 512),
-                 vocab=None):
+                 vocab=None, recompute_vocab=False):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_IU_XRAY not found in env variables')
 
@@ -60,7 +63,8 @@ class IUXRayDataset(Dataset):
             reports = reports[:max_samples]
 
         # Save amounts
-        self._preprocess_reports(reports, sort_samples=sort_samples, vocab=vocab,
+        self._preprocess_reports(reports, sort_samples=sort_samples, 
+                                 vocab=vocab, recompute_vocab=recompute_vocab,
                                  frontal_only=frontal_only)
         
     def size(self):
@@ -72,9 +76,14 @@ class IUXRayDataset(Dataset):
     def __getitem__(self, idx):
         report = self.reports[idx]
 
+        filename = report['filename']
         image = self.load_image(report['image_name'])
 
-        return image, report['tokens_idxs']
+        return BatchItem(
+            image=image,
+            report=report['tokens_idxs'],
+            filename=filename,
+            )
 
     def load_image(self, image_name):
         image_path = os.path.join(self.images_dir, f'{image_name}.png')
@@ -92,18 +101,21 @@ class IUXRayDataset(Dataset):
         return self.word_to_idx
 
     def _preprocess_reports(self, reports, sort_samples=True, vocab=None,
-                            frontal_only=False):
-        if vocab is None:
-            # Compute word_to_idx dictionary
+                            recompute_vocab=False, frontal_only=False):
+        if recompute_vocab:
             self.word_to_idx = compute_vocab(_reports_iterator(reports))
-        else:
+        elif vocab is not None:
             self.word_to_idx = vocab
+        else:
+            self.word_to_idx = load_vocab('iu_xray')
 
         self.n_unique_reports = len(reports)
 
         # Compute final reports array
         self.reports = []
         for report in reports:
+            filename = report['filename']
+
             tokens = report['clean_text'].split()
 
             tokens_idxs = [
@@ -119,6 +131,7 @@ class IUXRayDataset(Dataset):
                     continue
 
                 self.reports.append({
+                    'filename': filename,
                     'tokens_idxs': tokens_idxs,
                     'image_name': image['id'],
                 })

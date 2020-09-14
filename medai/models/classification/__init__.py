@@ -20,7 +20,7 @@ _MODELS_DEF = {
 AVAILABLE_CLASSIFICATION_MODELS = list(_MODELS_DEF)
 
 
-def init_empty_model(model_name, labels, **kwargs):
+def create_cnn(model_name, labels, **kwargs):
     if model_name not in _MODELS_DEF:
         raise Exception(f'Model not found: {model_name}')
 
