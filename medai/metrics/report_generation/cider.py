@@ -4,8 +4,7 @@ from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 from pycocoevalcap.cider import cider_scorer
 
-from medai.utils.nlp import PAD_IDX
-from medai.utils.nlp_metrics import indexes_to_strings
+from medai.utils.nlp import PAD_IDX, indexes_to_strings
 
 
 class CiderD(Metric):
@@ -34,7 +33,7 @@ class CiderD(Metric):
 
             generated, gt = indexes_to_strings(generated, gt)
 
-            self.scorer += (generated, gt)
+            self.scorer += (generated, [gt])
 
     @sync_all_reduce('scorer')
     def compute(self):

@@ -5,8 +5,7 @@ from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 from pycocoevalcap.bleu import bleu_scorer
 
-from medai.utils.nlp import PAD_IDX
-from medai.utils.nlp_metrics import indexes_to_strings
+from medai.utils.nlp import PAD_IDX, indexes_to_strings
 
 class Bleu(Metric):
     """Computes BLEU metric up to N."""
@@ -35,7 +34,7 @@ class Bleu(Metric):
 
             generated, gt = indexes_to_strings(generated, gt)
 
-            self.scorer += (generated, gt)
+            self.scorer += (generated, [gt])
 
 
     @sync_all_reduce('scorer')
@@ -50,7 +49,7 @@ class Bleu(Metric):
             # Scores are cached, returned only scores
             scores = result
         else:
-            # would be an error
+            # would be an internal error
             print(f'Warning: BleuScorer returned {type(result)}, {result}')
             scores = [0.0] * self._n
 

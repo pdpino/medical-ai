@@ -4,8 +4,7 @@ from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 from pycocoevalcap.rouge import rouge
 
-from medai.utils.nlp import PAD_IDX
-from medai.utils.nlp_metrics import indexes_to_strings
+from medai.utils.nlp import PAD_IDX, indexes_to_strings
 
 
 class RougeL(Metric):
@@ -34,7 +33,7 @@ class RougeL(Metric):
 
             generated, gt = indexes_to_strings(generated, gt)
 
-            self._current_score += self.scorer.calc_score([generated], gt)
+            self._current_score += self.scorer.calc_score([generated], [gt])
             self._n_samples += 1
 
     @sync_all_reduce('_current_score', '_n_samples')

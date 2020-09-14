@@ -1,5 +1,6 @@
 import torch
 from torch.nn.utils.rnn import pad_sequence
+import numpy as np
 
 # Common tokens
 PAD_TOKEN = 'PAD'
@@ -90,3 +91,37 @@ class ReportReader:
             report = report.view(-1).tolist()
 
         return ' '.join([self._idx_to_word[int(g)] for g in report])
+
+
+
+def indexes_to_strings(candidate, ground_truth):
+    """Receives two word-indexes tensors, and returns candidate and gt strings.
+    
+    Assumes pad_idx is 0, otherwise np.trim_zeros() function would be ugly to implement
+
+    Args:
+        candidate -- torch.Tensor of shape n_words
+        ground_truth -- torch.Tensor of shape n_words
+    Returns:
+        candidate_str, ground_truth_strs
+        - candidate_str: string of concatenated indexes
+        - ground_truth_strs: list of strings of concatenated indexes
+    """
+    # To numpy
+    candidate = candidate.cpu().detach().numpy()
+    ground_truth = ground_truth.cpu().detach().numpy()
+
+    # Trim padding from the end of sentences
+    candidate = np.trim_zeros(candidate, 'b')
+    ground_truth = np.trim_zeros(ground_truth, 'b')
+
+    if candidate[-1] == END_IDX:
+        candidate = candidate[:-1]
+    if ground_truth[-1] == END_IDX:
+        ground_truth = ground_truth[:-1]
+
+    # Join as string
+    candidate = ' '.join(str(val) for val in candidate)
+    ground_truth = ' '.join(str(val) for val in ground_truth)
+
+    return candidate, ground_truth
