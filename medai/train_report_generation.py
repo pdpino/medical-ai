@@ -90,6 +90,11 @@ def evaluate_and_save(run_name,
         'debug': debug,
     }
 
+    if free:
+        suffix += 'free'
+    else:
+        suffix += 'notfree'
+
     metrics = {}
 
     for dataloader in dataloaders:

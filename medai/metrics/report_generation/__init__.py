@@ -5,16 +5,19 @@ import numpy as np
 from ignite.engine import Events
 from ignite.metrics import RunningAverage, MetricsLambda
 
+from medai.metrics import get_results_folder
 from medai.metrics.report_generation.word_accuracy import WordAccuracy
 from medai.metrics.report_generation.bleu import Bleu
 from medai.metrics.report_generation.rouge import RougeL
 from medai.metrics.report_generation.cider import CiderD
+from medai.metrics.report_generation.distinct_sentences import DistinctSentences
+from medai.metrics.report_generation.distinct_words import DistinctWords
 from medai.utils import WORKSPACE_DIR
 from medai.utils.csv import CSVWriter
 from medai.utils.nlp import ReportReader
 
 
-def _get_flatten_reports(outputs):
+def _get_flat_reports(outputs):
     """Transforms the output to arrays of words indexes.
     
     Args:
@@ -29,7 +32,7 @@ def _get_flatten_reports(outputs):
 
 
 def _attach_bleu(engine, up_to_n=4, 
-                 output_transform=_get_flatten_reports):
+                 output_transform=_get_flat_reports):
     bleu_up_to_n = Bleu(n=up_to_n, output_transform=output_transform)
     for i in range(up_to_n):
         bleu_n = MetricsLambda(operator.itemgetter(i), bleu_up_to_n)
@@ -42,10 +45,7 @@ def _attach_bleu(engine, up_to_n=4,
 def attach_metrics_report_generation(engine, hierarchical=False, free=False):
     losses = ['loss']
     if hierarchical:
-        # output_transform = _get_flatten_reports
         losses.extend(['word_loss', 'stop_loss'])
-    # else:
-    #     output_transform = _transform_score_to_indexes
 
     # Attach losses
     for loss_name in losses:
@@ -54,17 +54,24 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False):
 
     # Attach word accuracy
     if not free:
-        word_acc = WordAccuracy(output_transform=_get_flatten_reports)
+        word_acc = WordAccuracy(output_transform=_get_flat_reports)
         word_acc.attach(engine, 'word_acc')
 
     # Attach multiple bleu
     _attach_bleu(engine, 4) # , output_transform=output_transform)
 
-    rouge = RougeL(output_transform=_get_flatten_reports)
+    rouge = RougeL(output_transform=_get_flat_reports)
     rouge.attach(engine, 'rougeL')
 
-    cider = CiderD(output_transform=_get_flatten_reports)
+    cider = CiderD(output_transform=_get_flat_reports)
     cider.attach(engine, 'ciderD')
+
+    # Attach variability
+    distinct_words = DistinctWords(output_transform=_get_flat_reports)
+    distinct_words.attach(engine, 'distinct_words')
+
+    distinct_sentences = DistinctSentences(output_transform=_get_flat_reports)
+    distinct_sentences.attach(engine, 'distinct_sentences')
 
 
 def attach_report_writer(engine, vocab, run_name, debug=True):
@@ -73,8 +80,11 @@ def attach_report_writer(engine, vocab, run_name, debug=True):
     For each example in the dataset writes to a CSV the generated report and ground truth.
     """
     report_reader = ReportReader(vocab)
-    debug = 'debug' if debug else ''
-    folder = os.path.join(WORKSPACE_DIR, 'report_generation', 'results', debug, run_name)
+
+    folder = get_results_folder(run_name,
+                                classification=False,
+                                debug=debug,
+                                save_mode=True)
     path = os.path.join(folder, 'outputs.csv')
     
     writer = CSVWriter(path, columns=[

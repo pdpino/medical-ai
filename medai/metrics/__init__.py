@@ -16,7 +16,7 @@ class MetricsEncoder(json.JSONEncoder):
         return obj
 
 
-def _get_results_folder(run_name, classification=True, debug=True, save_mode=False):
+def get_results_folder(run_name, classification=True, debug=True, save_mode=False):
     mode_folder = 'classification' if classification else 'report_generation'
     debug_folder = 'debug' if debug else ''
 
@@ -33,7 +33,7 @@ def _get_results_folder(run_name, classification=True, debug=True, save_mode=Fal
 
 def save_results(metrics_dict, run_name, classification=True, debug=True,
                  suffix=''):
-    folder = _get_results_folder(run_name, classification=classification, debug=debug,
+    folder = get_results_folder(run_name, classification=classification, debug=debug,
                                  save_mode=True)
 
     filename = 'metrics'
