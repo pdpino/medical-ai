@@ -52,9 +52,10 @@ def evaluate_dummy_model(model_name,
 
     # Load datasets
     train_dataset = IUXRayDataset('train')
+    val_dataset = IUXRayDataset('val')
+    test_dataset = IUXRayDataset('test')
+
     vocab = train_dataset.get_vocab()
-    val_dataset = IUXRayDataset('val', vocab=vocab)
-    test_dataset = IUXRayDataset('test', vocab=vocab)    
 
     # Decide hierarchical
     is_hierarchical = _is_hierarchical(model_name)
@@ -94,6 +95,8 @@ def evaluate_dummy_model(model_name,
             cnn = create_cnn(**similar_cnn_kwargs).to(device)
 
         model = MostSimilarImage(cnn, vocab)
+        model.eval()
+
         print('Fitting model...')
         model.fit(train_dataloader, device=device)
 

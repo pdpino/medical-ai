@@ -14,7 +14,7 @@ from medai.metrics.report_generation.distinct_sentences import DistinctSentences
 from medai.metrics.report_generation.distinct_words import DistinctWords
 from medai.utils import WORKSPACE_DIR
 from medai.utils.csv import CSVWriter
-from medai.utils.nlp import ReportReader
+from medai.utils.nlp import ReportReader, trim_rubbish
 
 
 def _get_flat_reports(outputs):
@@ -103,22 +103,36 @@ def attach_report_writer(engine, vocab, run_name, debug=True):
     def _save_text(engine):
         output = engine.state.output
         filenames = engine.state.batch.filenames
-        batch_report = output['flat_reports']
-        batch_generated = output['flat_reports_gen']
+        gt_reports = output['flat_reports']
+        gen_reports = output['flat_reports_gen']
         
         epoch = engine.state.epoch
         dataset_type = engine.state.dataloader.dataset.dataset_type
 
         # Save result
-        for report, generated, filename in zip(batch_report, batch_generated, filenames):
-            original_report = f'"{report_reader.idx_to_text(report)}"'
-            generated_report = f'"{report_reader.idx_to_text(generated)}"'
+        for report, generated, filename in zip(
+            gt_reports,
+            gen_reports,
+            filenames,
+        ):
+            # Remove padding and END token
+            report = trim_rubbish(report)
+            generated = trim_rubbish(generated)
+
+            # Pass to text
+            report = report_reader.idx_to_text(report)
+            generated = report_reader.idx_to_text(generated)
+
+            # Add quotes to avoid issues with commas
+            report = f'"{report}"'
+            generated = f'"{generated}"'
+
             writer.write(
                 filename,
                 epoch,
                 dataset_type,
-                original_report,
-                generated_report,
+                report,
+                generated,
             )
             
     @engine.on(Events.COMPLETED)

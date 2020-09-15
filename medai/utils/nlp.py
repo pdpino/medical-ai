@@ -93,11 +93,26 @@ class ReportReader:
         return ' '.join([self._idx_to_word[int(g)] for g in report])
 
 
+def trim_rubbish(report):
+    """Trims padding and END token of a report.
+    
+    Receives a report list/array/tensor of word indexes.
+    Assumes pad_idx is 0, otherwise np.trim_zeros() function would be uglier
+    """
+    if isinstance(report, torch.Tensor):
+        report = report.cpu().detach().numpy()
+
+    # Trim padding from the end of sentences
+    report = np.trim_zeros(report, 'b')
+
+    if report[-1] == END_IDX:
+        report = report[:-1]
+
+    return report  
+
 
 def indexes_to_strings(candidate, ground_truth):
     """Receives two word-indexes tensors, and returns candidate and gt strings.
-    
-    Assumes pad_idx is 0, otherwise np.trim_zeros() function would be ugly to implement
 
     Args:
         candidate -- torch.Tensor of shape n_words
@@ -107,18 +122,8 @@ def indexes_to_strings(candidate, ground_truth):
         - candidate_str: string of concatenated indexes
         - ground_truth_strs: list of strings of concatenated indexes
     """
-    # To numpy
-    candidate = candidate.cpu().detach().numpy()
-    ground_truth = ground_truth.cpu().detach().numpy()
-
-    # Trim padding from the end of sentences
-    candidate = np.trim_zeros(candidate, 'b')
-    ground_truth = np.trim_zeros(ground_truth, 'b')
-
-    if candidate[-1] == END_IDX:
-        candidate = candidate[:-1]
-    if ground_truth[-1] == END_IDX:
-        ground_truth = ground_truth[:-1]
+    candidate = trim_rubbish(candidate)
+    ground_truth = trim_rubbish(ground_truth)
 
     # Join as string
     candidate = ' '.join(str(val) for val in candidate)

@@ -31,7 +31,7 @@ class MostSimilarImage(nn.Module):
         all_features = []
         all_reports = []
 
-        for batch in dataloader:
+        for batch in iter(dataloader):
             images = batch.images.to(device)
             features = self.images_to_features(images)
             all_features.append(features)
@@ -52,16 +52,16 @@ class MostSimilarImage(nn.Module):
         return features
 
 
-    def forward(self, images, reports=None, free=False, **unused_kwargs):
-        batch_size = images.size()[0]
+    def forward(self, images, reports=None, free=False, **unused):
         device = images.device
 
         features = self.images_to_features(images)
+        # shape: batch_size, features_size
 
         distances = torch.cdist(features, self.all_features)
         # shape: batch_size, dataset_size
 
-        _, closest = distances.min(-1)
+        _, closest = distances.min(dim=-1)
         # shape: batch_size
 
         output_reports = [
@@ -77,9 +77,9 @@ class MostSimilarImage(nn.Module):
             n_words_target = reports.size()[1]
             n_words_current = output_reports.size()[1]
 
-            if n_words_current >= n_words_target:
+            if n_words_current > n_words_target:
                 output_reports = output_reports[:, :n_words_target]
-            else:
+            elif n_words_current < n_words_target:
                 missing = n_words_target - n_words_current
                 output_reports = pad(output_reports, (0, missing))
 
@@ -90,4 +90,4 @@ class MostSimilarImage(nn.Module):
 
         output_reports = output_reports.to(device)
 
-        return output_reports,
+        return output_reports, distances
