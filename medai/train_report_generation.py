@@ -57,8 +57,8 @@ def evaluate_model(run_name,
                    device='cuda'):
     """Evaluate a report-generation model on a dataloader."""
     dataset = dataloader.dataset
-    if isinstance(dataset, Subset): dataset = dataset.dataset
-    print(f'Evaluating model in {dataset.dataset_type}...')
+    if isinstance(dataset, Subset): dataset = dataset.dataset # HACK
+    print(f'Evaluating model in {dataset.dataset_type}, free={free}...')
 
     if hierarchical:
         get_step_fn = get_step_fn_hierarchical
@@ -67,7 +67,8 @@ def evaluate_model(run_name,
 
     engine = Engine(get_step_fn(model, training=False, free=free, device=device))
     attach_metrics_report_generation(engine, hierarchical=hierarchical, free=free)
-    attach_report_writer(engine, dataset.get_vocab(), run_name, debug=debug)
+    attach_report_writer(engine, dataset.get_vocab(), run_name, free=free,
+                         debug=debug)
 
     engine.run(dataloader, n_epochs)
     
@@ -78,32 +79,48 @@ def evaluate_and_save(run_name,
                       model,
                       dataloaders,
                       hierarchical=False,
-                      free=False,
+                      free='both',
                       debug=True,
                       device='cuda',
                       suffix='',
                       ):
     kwargs = {
         'hierarchical': hierarchical,
-        'free': free,
         'device': device,
         'debug': debug,
     }
 
-    if free:
-        suffix += 'free'
+    if free == 'both':
+        free_values = [False, True]
+    elif free:
+        free_values = [True]
     else:
-        suffix += 'notfree'
+        free_values = False
 
-    metrics = {}
+    for free in free_values:
+        # Add a suffix
+        more_suffix = 'free' if free else 'notfree'
+        if suffix:
+            used_suffix = f'{suffix}-{more_suffix}'
+        else:
+            used_suffix = more_suffix
 
-    for dataloader in dataloaders:
-        if dataloader is None:
-            continue
-        name = dataloader.dataset.dataset_type
-        metrics[name] = evaluate_model(run_name, model, dataloader, **kwargs)
+        metrics = {}
 
-    save_results(metrics, run_name, classification=False, debug=debug, suffix=suffix)
+        kwargs['free'] = free
+
+        for dataloader in dataloaders:
+            if dataloader is None:
+                continue
+            name = dataloader.dataset.dataset_type
+            metrics[name] = evaluate_model(run_name, model, dataloader, **kwargs)
+
+        save_results(metrics,
+                     run_name,
+                     classification=False,
+                     debug=debug,
+                     suffix=used_suffix,
+                     )
 
 
 def train_model(run_name,

@@ -38,7 +38,7 @@ def evaluate_dummy_model(model_name,
                          k_first=100,
                          similar_run_name=None,
                          similar_cnn_kwargs={},
-                         free=False,
+                         free='both',
                          debug=True,
                          device='cuda',
                          ):
@@ -46,8 +46,8 @@ def evaluate_dummy_model(model_name,
     run_name = f'{get_timestamp()}_dummy-{model_name}'
     if 'common-' in model_name:
         run_name += f'-{str(k_first)}'
-    if free:
-        run_name += '_free'
+    # if free:
+    #     run_name += '_free'
 
 
     # Load datasets
@@ -144,8 +144,10 @@ def parse_args():
                         help='Max samples to load (debugging)')
     parser.add_argument('--cpu', action='store_true',
                         help='Use CPU only')
-    parser.add_argument('--free', action='store_true',
-                        help='Evaluate in free mode')
+    parser.add_argument('--free-only', action='store_true',
+                        help='Evaluate only in free mode')
+    parser.add_argument('--not-free-only', action='store_true',
+                        help='Evaluate only in not-free mode')
     args = parser.parse_args()
 
     args.similar_run_name = args.cnn_run_name
@@ -155,6 +157,13 @@ def parse_args():
         'imagenet': args.imagenet,
         'freeze': True,
     }
+
+    if args.free_only:
+        args.free = True
+    elif args.not_free_only:
+        args.free = False
+    else:
+        args.free = 'both'
 
     if args.model_name == 'most-similar-image':
         if args.similar_run_name is None and args.cnn_name is None:

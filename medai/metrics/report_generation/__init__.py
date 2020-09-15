@@ -74,7 +74,7 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False):
     distinct_sentences.attach(engine, 'distinct_sentences')
 
 
-def attach_report_writer(engine, vocab, run_name, debug=True):
+def attach_report_writer(engine, vocab, run_name, debug=True, free=False):
     """Attach a report-writer to an engine.
     
     For each example in the dataset writes to a CSV the generated report and ground truth.
@@ -85,7 +85,8 @@ def attach_report_writer(engine, vocab, run_name, debug=True):
                                 classification=False,
                                 debug=debug,
                                 save_mode=True)
-    path = os.path.join(folder, 'outputs.csv')
+    suffix = 'free' if free else 'notfree'
+    path = os.path.join(folder, f'outputs-{suffix}.csv')
     
     writer = CSVWriter(path, columns=[
         'filename',
