@@ -46,8 +46,12 @@ def evaluate_dummy_model(model_name,
     run_name = f'{get_timestamp()}_dummy-{model_name}'
     if 'common-' in model_name:
         run_name += f'-{str(k_first)}'
-    # if free:
-    #     run_name += '_free'
+    if model_name == 'most-similar-image':
+        if similar_run_name:
+            run_name += f'_{similar_run_name}'
+        else:
+            cnn_name = similar_cnn_kwargs.get('model_name', None)
+            run_name += f'_{cnn_name}'
 
 
     # Load datasets
@@ -91,6 +95,7 @@ def evaluate_dummy_model(model_name,
             compiled_model = load_compiled_model_classification(
                 similar_run_name, debug=debug, device=device)
             cnn = compiled_model.model.to(device)
+            compiled_model.optimizer = None # Not needed
         else:
             cnn = create_cnn(**similar_cnn_kwargs).to(device)
 

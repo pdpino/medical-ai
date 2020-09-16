@@ -5,6 +5,7 @@ import subprocess
 import argparse
 import pandas as pd
 import numpy as np
+import hashlib
 from sklearn.metrics import precision_recall_fscore_support as prf1s, roc_auc_score
 from pprint import pprint
 
@@ -21,6 +22,79 @@ CHEXPERT_LABELS = [
     'Pleural Other', 'Fracture', 'Support Devices',
 ]
 
+TMP_FOLDER = os.path.join(WORKSPACE_DIR, 'tmp', 'chexpert-labeler')
+CACHE_FOLDER = os.path.join(WORKSPACE_DIR, 'cache', 'chexpert-labeler')
+
+GT_LABELED_FILEPATH = os.path.join(CACHE_FOLDER, 'gt-reports-labeled.csv')
+
+
+def _labels_with_suffix(suffix):
+    """Returns the chexpert labels with a suffix appended to each."""
+    return [f'{label}-{suffix}' for label in CHEXPERT_LABELS]
+
+
+def _hash_report(report, n=20):
+    """Hash a report to avoid recalculations."""
+    if not isinstance(report, str):
+        raise Exception('Report must be string')
+    payload = report.encode('utf-8')
+    return hashlib.sha1(payload).hexdigest()[:n]
+
+
+def _load_cached_gt_labels(df):
+    """Loads cached file with labeled ground truth."""
+    if not os.path.isfile(GT_LABELED_FILEPATH):
+        print('Cached file for GT not found in', GT_LABELED_FILEPATH)
+        return None
+
+    # Load cached CSV
+    cached = pd.read_csv(GT_LABELED_FILEPATH)
+
+    # Calculate a hash for each report
+    df = df.assign(hash=[
+        _hash_report(report)
+        for report in df['ground_truth']
+    ])
+
+    # Determine if it has all necessary hashes
+    target_hashes = set(df['hash'])
+    cached_hashes = set(cached['hash'])
+    if not target_hashes.issubset(cached_hashes):
+        print('Cached file for GT does not have all reports')
+        return None
+
+    # Merge on hashes
+    merged = df.merge(cached, how='left', on='hash')
+
+    # Return only np.array with labels
+    labels = _labels_with_suffix('gt')
+    return merged[labels].to_numpy()
+
+
+def _save_cached_gt_labels(df):
+    """Saves calculated labels for ground-truth reports to a CSV file."""
+    # TODO: merge with previous cache, in case 
+
+    # Select only useful columns
+    columns = ['ground_truth'] + _labels_with_suffix('gt')
+    cache_df = df[columns].copy()
+
+    # Calculate a hash for each report
+    if 'hash' not in df:
+        cache_df = cache_df.assign(hash=[
+            _hash_report(report)
+            for report in cache_df['ground_truth']
+        ])
+
+    # Remove duplicate rows
+    cache_df.drop_duplicates(subset='hash', inplace=True)
+
+    # Save to file
+    os.makedirs(CACHE_FOLDER, exist_ok=True)
+    cache_df.to_csv(GT_LABELED_FILEPATH, index=False)
+    print(f'\tSaved labels cache to {GT_LABELED_FILEPATH}')
+    return
+
 
 def _get_custom_env():
     """Adds a necessary environment variable to run the labeler."""
@@ -31,15 +105,11 @@ def _get_custom_env():
     return custom_env
 
 
-def _labels_with_suffix(suffix):
-    """Returns the chexpert labels with a suffix appended to each."""
-    return [f'{label}-{suffix}' for label in CHEXPERT_LABELS]
-
-
 def _concat_df_matrix(df, results, suffix):
     """Concats a DF with a matrix."""
     labels = _labels_with_suffix(suffix)
-    return pd.concat([df, pd.DataFrame(results, columns=labels)], axis=1, join='inner')
+    return pd.concat([df, pd.DataFrame(results, columns=labels)],
+                     axis=1, join='inner')
 
 
 def _apply_labeler_to_column(dataframe, column_name):
@@ -48,15 +118,14 @@ def _apply_labeler_to_column(dataframe, column_name):
     reports_only = dataframe[column_name]
     
     # Tmp folder can be removed afterwards
-    tmp_folder = os.path.join(WORKSPACE_DIR, 'tmp', 'chexpert-labeler')
-    os.makedirs(tmp_folder, exist_ok=True)
+    os.makedirs(TMP_FOLDER, exist_ok=True)
     
     # Create input file
-    input_path = os.path.join(tmp_folder, 'reports-input.csv')
+    input_path = os.path.join(TMP_FOLDER, 'reports-input.csv')
     reports_only.to_csv(input_path, header=False, index=False, quoting=csv.QUOTE_ALL)
     
     # Call chexpert-labeler
-    output_path = os.path.join(tmp_folder, 'reports-output.csv')
+    output_path = os.path.join(TMP_FOLDER, 'reports-output.csv')
     cmd_cd = f'cd {CHEXPERT_FOLDER}'
     cmd_call = f'{CHEXPERT_PYTHON} label.py --reports_path {input_path} --output_path {output_path}'
     cmd = f'{cmd_cd} && {cmd_call}'
@@ -85,14 +154,26 @@ def _apply_labeler_to_column(dataframe, column_name):
 
 def _apply_labeler_to_df(df):
     """Calculates chexpert labels for a set of GT and generated reports."""
-    # Calculate labels for both cases
-    ground_truth = _apply_labeler_to_column(df, 'ground_truth')
+    # Calculate labels for ground truth
+    ground_truth = _load_cached_gt_labels(df)
+    cache_missed = ground_truth is None
+    if cache_missed:
+        # Cache miss, actually calculate and save
+        ground_truth = _apply_labeler_to_column(df, 'ground_truth')
+    else:
+        print('Using cached labels for ground truth')
+
+
+    # Calculate labels for generated
     generated = _apply_labeler_to_column(df, 'generated')
 
     # Concat in main dataframe
     df = _concat_df_matrix(df, ground_truth, 'gt')
     df = _concat_df_matrix(df, generated, 'gen')
     
+    if cache_missed:
+        _save_cached_gt_labels(df)
+
     return df
 
 
@@ -107,7 +188,7 @@ def _calculate_metrics(df):
     precision, recall, f1, s = prf1s(ground_truth, generated, zero_division=0)
     
     try:
-        roc_auc = roc_auc_score(ground_truth, generated)
+        roc_auc = roc_auc_score(ground_truth, generated, average=None)
     except ValueError as e:
         print(e)
         roc_auc = np.array([-1]*len(CHEXPERT_LABELS))
@@ -171,6 +252,10 @@ def evaluate_run(run_name,
 
     # Read outputs
     df = pd.read_csv(model_output_path)
+
+    _n_distinct_epochs = set(df['epoch'])
+    if len(_n_distinct_epochs) != 1:
+        raise NotImplementedError('Only works for one epoch, found: ', _n_distinct_epochs)
 
     # Debugging purposes
     if max_samples is not None:
