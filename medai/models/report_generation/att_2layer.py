@@ -2,11 +2,12 @@ import torch
 from torch import nn
 
 class AttentionTwoLayers(nn.Module):
-    def __init__(self, features_size, lstm_size, internal_size=100):
+    def __init__(self, features_size, lstm_size, internal_size=100,
+                 double_bias=True):
         super().__init__()
 
         self.visual_fc = nn.Linear(features_size, internal_size)
-        self.state_fc = nn.Linear(lstm_size, internal_size)
+        self.state_fc = nn.Linear(lstm_size, internal_size, bias=double_bias)
 
         self.last_fc = nn.Sequential(
             nn.Tanh(),

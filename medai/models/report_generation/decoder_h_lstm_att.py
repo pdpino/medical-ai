@@ -78,7 +78,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
         # Iterate over sentences
         seq_out = []
         stops_out = []
-        scores_out = []
+        scores_out = [] # REVIEW: should add the first scores??
 
         for sentence_i in sentences_iterator:
             # Pass thru LSTM
@@ -109,10 +109,11 @@ class HierarchicalLSTMAttDecoder(nn.Module):
                     break
 
             # Get next input
-            att_features, att_scores = self.attention_layer(features, initial_h_state)
+            att_features, att_scores = self.attention_layer(features, h_state)
             sentence_input_t = att_features
 
-            if self._use_attention: scores_out.append(att_scores)
+            if self._use_attention:
+                scores_out.append(att_scores)
 
         seq_out = torch.stack(seq_out, dim=1)
         # shape: batch_size, n_sentences, max_n_words, vocab_size

@@ -105,7 +105,7 @@ def trim_rubbish(report):
     # Trim padding from the end of sentences
     report = np.trim_zeros(report, 'b')
 
-    if report[-1] == END_IDX:
+    if len(report) > 0 and report[-1] == END_IDX:
         report = report[:-1]
 
     return report  

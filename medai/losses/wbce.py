@@ -18,9 +18,6 @@ class WeigthedBCELoss(nn.Module):
         target = target.float()
 
         # Calculate weights
-        BP = 1
-        BN = 1
-
         total = target.numel()
         positive = (target == 1).sum().item()
         negative = total - positive
@@ -28,6 +25,9 @@ class WeigthedBCELoss(nn.Module):
         if positive != 0 and negative != 0:
             BP = total / positive
             BN = total / negative
+        else:
+            BP = 1
+            BN = 1
 
         loss = -BP * target * torch.log(output) - BN * (1 - target) * torch.log(1 - output)
 
