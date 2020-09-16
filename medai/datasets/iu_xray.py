@@ -4,8 +4,9 @@ from torchvision import transforms
 from PIL import Image
 import os
 import json
+import pandas as pd
 
-from medai.datasets.common import BatchItem
+from medai.datasets.common import BatchItem, CHEXPERT_LABELS
 from medai.datasets.vocab import load_vocab
 from medai.utils.nlp import (
     UNKNOWN_IDX,
@@ -30,6 +31,7 @@ def _get_default_image_transformation(image_size=(512, 512)):
 
 class IUXRayDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None, 
+                 labels=None,
                  sort_samples=True,
                  frontal_only=False, image_size=(512, 512),
                  vocab=None, recompute_vocab=False):
@@ -43,9 +45,12 @@ class IUXRayDataset(Dataset):
         self.image_format = 'RGB'
         self.image_size = image_size
         self.transform = _get_default_image_transformation(self.image_size)
-        
+
         self.images_dir = os.path.join(DATASET_DIR, 'images')
         self.reports_dir = os.path.join(DATASET_DIR, 'reports')
+
+        self.multilabel = True
+        self._preprocess_labels(labels)
 
         # Load reports
         reports_fname = os.path.join(self.reports_dir, 'reports.clean.json')
@@ -79,8 +84,11 @@ class IUXRayDataset(Dataset):
         filename = report['filename']
         image = self.load_image(report['image_name'])
 
+        labels = self.labels_by_report[filename]
+
         return BatchItem(
             image=image,
+            labels=labels,
             report=report['tokens_idxs'],
             filename=filename,
             )
@@ -141,3 +149,47 @@ class IUXRayDataset(Dataset):
 
         # Reports are repeated to match n_images
         self.n_images = len(self.reports)
+
+    def _preprocess_labels(self, labels=None):
+        # Choose labels to use
+        if labels is None:
+            self.labels = list(CHEXPERT_LABELS)
+        else:
+            self.labels = [l for l in labels if l in CHEXPERT_LABELS]
+
+        # Load Dataframe
+        path = os.path.join(self.reports_dir,
+                            'reports_with_chexpert_labels.csv')
+        self.labels_df = pd.read_csv(path, index_col=0)
+
+        # Transform uncertains and none to 0 # REVIEW
+        self.labels_df = self.labels_df.replace([-1, -2], 0)
+
+        # Save in a more convenient storage for __getitem__
+        self.labels_by_report = dict()
+        for index, row in self.labels_df.iterrows():
+            filename = row['filename']
+            labels = row[self.labels].to_numpy().astype(int)
+
+            self.labels_by_report[filename] = torch.tensor(labels)
+
+
+    def get_labels_presence_for(self, target_label):
+        """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
+            label for each sample.
+        """
+        if isinstance(target_label, int):
+            target_label = self.labels[target_label]
+
+        filename_to_label = {
+            filename: label
+            for filename, label in zip(
+                self.labels_df['filename'],
+                self.labels_df[target_label].astype(int),
+            )
+        }
+
+        return [
+            (index, filename_to_label[report['filename']])
+            for index, report in enumerate(self.reports)
+        ]

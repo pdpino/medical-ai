@@ -7,6 +7,7 @@ from medai.datasets.covid_x import CovidXDataset
 from medai.datasets.covid_actual import CovidActualDataset
 from medai.datasets.covid_fig1 import CovidFig1Dataset
 from medai.datasets.covid_uc import CovidUCDataset
+from medai.datasets.iu_xray import IUXRayDataset
 
 from medai.datasets.tools.oversampler import OneLabelOverSampler
 from medai.datasets.tools.undersampler import OneLabelUnderSampler
@@ -21,11 +22,13 @@ _DATASET_DEF = {
   'covid-actual': CovidActualDataset,
   'covid-fig1': CovidFig1Dataset,
   'covid-uc': CovidUCDataset,
+  'iu-x-ray': IUXRayDataset,
 }
 
 AVAILABLE_CLASSIFICATION_DATASETS = list(_DATASET_DEF)
 
-def prepare_data_classification(dataset_name='cxr14', dataset_type='train', labels=None,
+def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
+                                labels=None,
                                 max_samples=None, image_size=(512, 512),
                                 augment=False, augment_label=None, augment_kwargs={},
                                 oversample=False, oversample_label=0, oversample_max_ratio=None,

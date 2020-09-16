@@ -9,18 +9,13 @@ import hashlib
 from sklearn.metrics import precision_recall_fscore_support as prf1s, roc_auc_score
 from pprint import pprint
 
+from medai.datasets.common import CHEXPERT_LABELS
 from medai.utils import WORKSPACE_DIR
 from medai.metrics import get_results_folder
 
 
 CHEXPERT_FOLDER = '~/chexpert/chexpert-labeler'
 CHEXPERT_PYTHON = '~/software/miniconda3/envs/chexpert-label/bin/python'
-CHEXPERT_LABELS = [
-    'No Finding', 'Enlarged Cardiomediastinum', 'Cardiomegaly',
-    'Lung Lesion', 'Lung Opacity', 'Edema', 'Consolidation',
-    'Pneumonia', 'Atelectasis', 'Pneumothorax', 'Pleural Effusion',
-    'Pleural Other', 'Fracture', 'Support Devices',
-]
 
 TMP_FOLDER = os.path.join(WORKSPACE_DIR, 'tmp', 'chexpert-labeler')
 CACHE_FOLDER = os.path.join(WORKSPACE_DIR, 'cache', 'chexpert-labeler')

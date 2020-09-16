@@ -92,7 +92,7 @@ class Augmentator(Dataset):
         image = self._to_pil(item[0])
         image = self._to_tensor(aug_fn(image))
 
-        return (image,) + item[1:]
+        return item._replace(image=image)
 
 
     def get_labels_presence_for(self, label):

@@ -51,10 +51,10 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
     """Creates a step function for an Engine."""
     def step_fn(engine, data_batch):
         # Move inputs to GPU
-        images = data_batch[0].to(device)
+        images = data_batch.image.to(device)
         # shape: batch_size, channels=3, height, width
         
-        labels = data_batch[1].to(device)
+        labels = data_batch.labels.to(device)
         # shape(multilabel=True): batch_size, n_labels
         # shape(multilabel=False): batch_size
 

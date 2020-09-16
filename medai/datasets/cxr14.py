@@ -6,6 +6,7 @@ from PIL import Image
 import os
 import random
 
+from medai.datasets.common import BatchItem
 
 CXR14_DISEASES = [
     'Atelectasis',
@@ -135,7 +136,13 @@ class CXR14Dataset(Dataset):
 
         image = self.transform(image)
 
-        return image, labels, bboxes, bbox_valid, image_name
+        return BatchItem(
+            image=image,
+            labels=labels,
+            # bboxes=bboxes, # FIXME
+            # bbox_valid=bbox_valid,
+            filename=image_name,
+        )
     
     def precompute_metadata(self):
         self.precomputed = []
@@ -162,7 +169,8 @@ class CXR14Dataset(Dataset):
         bboxes = torch.zeros(self.n_diseases, 4) # 4: x, y, w, h
         bbox_valid = torch.zeros(self.n_diseases)
 
-        return image_name, labels, bboxes, bbox_valid # DEBUG: loads faster
+        # FIXME: bboxes are not loaded (too slow, fix it!)
+        return image_name, labels, bboxes, bbox_valid
 
         rows = self.bbox_index.loc[self.bbox_index['Image Index']==image_name]
         for _, row in rows.iterrows():

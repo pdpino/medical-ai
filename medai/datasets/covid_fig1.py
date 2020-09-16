@@ -4,6 +4,7 @@ from torchvision import transforms
 from PIL import Image
 import pandas as pd
 
+from medai.datasets.common import BatchItem
 
 DATASET_DIR = os.environ.get('DATASET_DIR_COVID_FIG1')
 
@@ -72,7 +73,11 @@ class CovidFig1Dataset(Dataset):
         image = Image.open(image_path).convert(self.image_format)
         image = self.transform(image)
 
-        return image, label
+        return BatchItem(
+            image=image,
+            labels=label,
+            filename=image_name,
+        )
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
