@@ -375,11 +375,14 @@ def train_from_scratch(run_name,
                        frontal_only=False,
                        oversample=False,
                        oversample_label=None,
+                       oversample_class=None,
+                       oversample_ratio=None,
                        oversample_max_ratio=None,
                        undersample=False,
                        undersample_label=None,
                        augment=False,
                        augment_label=None,
+                       augment_class=None,
                        augment_kwargs={},
                        post_evaluation=True,
                        debug=True,
@@ -400,14 +403,20 @@ def train_from_scratch(run_name,
         run_name += '_frz'
     if oversample:
         run_name += '_os'
-        if oversample_max_ratio is not None:
+        if oversample_ratio is not None:
+            run_name += f'-r{oversample_ratio}'
+        elif oversample_max_ratio is not None:
             run_name += f'-max{oversample_max_ratio}'
+        if oversample_class is not None:
+            run_name += f'-cl{oversample_class}'
     elif undersample:
         run_name += '_us'
     if augment:
         run_name += '_aug'
         if augment_label is not None:
             run_name += f'-{augment_label}'
+            if augment_class is not None:
+                run_name += f'-cls{augment_class}'
     if loss_name:
         run_name += f'_{loss_name}'
         if loss_name == 'focal':
@@ -435,9 +444,12 @@ def train_from_scratch(run_name,
     dataset_train_kwargs = {
         'oversample': oversample,
         'oversample_label': oversample_label,
+        'oversample_class': oversample_class,
+        'oversample_ratio': oversample_ratio,
         'oversample_max_ratio': oversample_max_ratio,
         'augment': augment,
         'augment_label': augment_label,
+        'augment_class': augment_class,
         'augment_kwargs': augment_kwargs,
         'undersample': undersample,
         'undersample_label': undersample_label,
@@ -596,6 +608,9 @@ def parse_args():
                         help='If present, augment dataset')
     aug_group.add_argument('--augment-label', default=None,
                         help='Augment only samples with a given label present (str/int)')
+    aug_group.add_argument('--augment-class', type=int, choices=[0,1], default=None,
+                        help='If --augment-label is provided, choose if augmenting \
+                              positive (1) or negative (0) samples')
     aug_group.add_argument('--aug-crop', type=float, default=0.8,
                         help='Augment samples by cropping a random fraction')
     aug_group.add_argument('--aug-translate', type=float, default=0.1,
@@ -607,13 +622,20 @@ def parse_args():
     aug_group.add_argument('--aug-brightness', type=float, default=0.5,
                         help='Augment samples by changing the brightness randomly')
 
-    aug_group.add_argument('-os', '--oversample', default=None,
-                        help='Oversample samples with a given label present (str/int)')
-    aug_group.add_argument('--os-max-ratio', type=int, default=None,
-                        help='Max ratio to oversample by')
+    sampl_group = parser.add_argument_group('Data sampling params')
+    sampl_group.add_argument('-os', '--oversample', default=None,
+                             help='Oversample samples with a given label present (str/int)')
+    sampl_group.add_argument('--os-ratio', type=int, default=None,
+                             help='Specify oversample ratio. If none, chooses ratio \
+                                   to level positive and negative samples')
+    sampl_group.add_argument('--os-class', type=int, choices=[0,1], default=None,
+                             help='Force class value to oversample (0=neg, 1=pos). \
+                                   If none, chooses least represented')
+    sampl_group.add_argument('--os-max-ratio', type=int, default=None,
+                             help='Max ratio to oversample by')
 
-    aug_group.add_argument('-us', '--undersample', default=None,
-                        help='Undersample from the majority class with a given label (str/int)')
+    sampl_group.add_argument('-us', '--undersample', default=None,
+                             help='Undersample from the majority class with a given label (str/int)')
 
 
     args = parser.parse_args()
@@ -702,9 +724,12 @@ if __name__ == '__main__':
             n_epochs=args.epochs,
             oversample=args.oversample is not None,
             oversample_label=args.oversample,
+            oversample_class=args.os_class,
+            oversample_ratio=args.os_ratio,
             oversample_max_ratio=args.os_max_ratio,
             augment=args.augment,
             augment_label=args.augment_label,
+            augment_class=args.augment_class,
             augment_kwargs=args.augment_kwargs,
             undersample=args.undersample is not None,
             undersample_label=args.undersample,

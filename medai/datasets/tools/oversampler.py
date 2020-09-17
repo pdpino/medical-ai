@@ -2,7 +2,7 @@ import random
 from torch.utils.data import Sampler
 
 class OneLabelOverSampler(Sampler):
-    def __init__(self, dataset, label=0, max_ratio=None):
+    def __init__(self, dataset, label=0, ratio=None, force_class=None, max_ratio=None):
         """Oversamples samples that are less represented, considering a specific label.
         
         Used to oversample one under-represented class.
@@ -15,6 +15,10 @@ class OneLabelOverSampler(Sampler):
         Args:
             dataset -- torch.utils.data.Dataset that implements `get_labels_presence_for(label)`
             label -- str (label name) or int (index)
+            ratio -- int. Specifies amount of times to oversample. If not provided,
+                calculates ratio to level negative and positive samples.
+            force_class -- 0, 1 or None
+                If not None, forcedly oversample samples with class provided (1=positive, 0=negative)
             max_ratio -- float indicating max oversampling ratio allowed
         """
         total_samples = len(dataset)
@@ -25,16 +29,23 @@ class OneLabelOverSampler(Sampler):
         # Compute oversampling ratio
         positives = sum(presence for idx, presence in labels_presence_by_idx)
         negatives = total_samples - positives
-        ratio = negatives // positives if positives > 0 else 1
 
         # Choose class to sample (0 or 1, absence or presence)
-        OVERSAMPLE_CLASS = 1
-        UNDERSAMPLE_CLASS = 0
+        if force_class is None:
+            # Oversample the minority class by default
+            OVERSAMPLE_CLASS = 1 if negatives > positives else 0
+        else:
+            # Unless user wants to force oversampling a specific class
+            assert force_class in (0, 1), f'force_class must be 0 or 1, got: {force_class}'
+            OVERSAMPLE_CLASS = force_class
 
-        if ratio < 1:
-            OVERSAMPLE_CLASS = 0
-            UNDERSAMPLE_CLASS = 1
-            ratio = positives // negatives if negatives > 0 else 1
+        UNDERSAMPLE_CLASS = 1 - OVERSAMPLE_CLASS
+
+        if ratio is None:
+            if OVERSAMPLE_CLASS == 1:
+                ratio = negatives // positives if positives > 0 else 1
+            else: # OVERSAMPLE_CLASS == 0
+                ratio = positives // negatives if negatives > 0 else 1
 
         # If ratio is still 0, means positive ~~ negatives
         # --> don't oversample --> set ratio = 1
@@ -67,6 +78,7 @@ class OneLabelOverSampler(Sampler):
             'negatives': negatives,
             'new-total': len(self.resampled_indexes),
             'original': total_samples,
+            'os-class': OVERSAMPLE_CLASS,
         }
         print(f'\tOversampling {label_name}:', ' '.join(f"{k}={v}" for k, v in stats.items()))
 

@@ -9,7 +9,7 @@ class Augmentator(Dataset):
         - method `get_labels_presence_for(label)`, see OneLabelUnbalancedSampler
         - attribute `image_size: tuple`, with (height, width) format
     """
-    def __init__(self, dataset, label=None, crop=0.8, translate=0.1, rotation=15,
+    def __init__(self, dataset, label=None, force_class=None, crop=0.8, translate=0.1, rotation=15,
                  contrast=0.5, brightness=0.5):
         self.dataset = dataset
 
@@ -17,12 +17,19 @@ class Augmentator(Dataset):
         if label is None:
             # Augment samples from all labels
             iterator = [(idx, True) for idx in range(len(self.dataset))]
-            _augmented_samples = 'all samples'
+            _samples_info = 'all samples'
         else:
             # Only augment samples from a specific label
             label_name = dataset.labels[label] if isinstance(label, int) else label
-            iterator = dataset.get_labels_presence_for(label)
-            _augmented_samples = f'samples only from label {label_name}'
+
+            # ...and with an specific class
+            target_class = force_class if force_class is not None else 1
+
+            samples_idxs = [
+                (idx, presence == target_class)
+                for idx, presence in dataset.get_labels_presence_for(label)
+            ]
+            _samples_info = f'samples only from label {label_name}, with class={target_class}'
 
 
         # Define augmentation methods
@@ -56,10 +63,10 @@ class Augmentator(Dataset):
 
         # Create new indices array
         self.indices = []
-        for idx, presence in iterator:
-            self.indices.append((idx, None))
+        for idx, should_augment in samples_idxs:
+            self.indices.append((idx, None)) # Always include the original sample
 
-            if not presence:
+            if not should_augment:
                 continue
 
             for aug_method in self._aug_fns.keys():
@@ -73,7 +80,7 @@ class Augmentator(Dataset):
             'original': len(self.dataset),
         }
         stats_str = ' '.join(f'{k}={v}' for k, v in stats.items())
-        print(f'\tAugmenting {_augmented_samples}: ', stats_str)
+        print(f'\tAugmenting {_samples_info}: ', stats_str)
 
     def __getattr__(self, name):
         return getattr(self.dataset, name)

@@ -30,8 +30,11 @@ AVAILABLE_CLASSIFICATION_DATASETS = list(_DATASET_DEF)
 def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 labels=None,
                                 max_samples=None, image_size=(512, 512),
-                                augment=False, augment_label=None, augment_kwargs={},
-                                oversample=False, oversample_label=0, oversample_max_ratio=None,
+                                augment=False,
+                                augment_label=None, augment_class=None, augment_kwargs={},
+                                oversample=False,
+                                oversample_label=0, oversample_class=None,
+                                oversample_ratio=None, oversample_max_ratio=None,
                                 undersample=False, undersample_label=0,
                                 batch_size=10, shuffle=False,
                                 **kwargs,
@@ -55,12 +58,17 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         return None
 
     if augment:
-        dataset = Augmentator(dataset, label=augment_label, **augment_kwargs)
+        dataset = Augmentator(dataset,
+                              label=augment_label,
+                              force_class=augment_class,
+                              **augment_kwargs)
 
     if oversample:
         sampler = OneLabelOverSampler(dataset,
-                                            label=oversample_label,
-                                            max_ratio=oversample_max_ratio)
+                                      label=oversample_label,
+                                      force_class=oversample_class,
+                                      ratio=oversample_ratio,
+                                      max_ratio=oversample_max_ratio)
         dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
     elif undersample:
         sampler = OneLabelUnderSampler(dataset, label=undersample_label)
