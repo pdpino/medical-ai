@@ -39,7 +39,8 @@ class TBWriter:
             'loss': 'Loss',
             'acc': 'Acc',
             'hamming': 'Hamming',
-            'bce': 'BCELoss'
+            'bce': 'BCELoss',
+            'roc_auc': 'Roc_auc', # Macro averaged
         }
 
     def write_histogram(self, model, epoch, wall_time):

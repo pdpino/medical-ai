@@ -1,3 +1,5 @@
+from functools import reduce
+
 import torch
 from torch.nn.functional import binary_cross_entropy
 from ignite.metrics import (
@@ -8,6 +10,7 @@ from ignite.metrics import (
     ConfusionMatrix,
     # VariableAccumulation,
     Loss,
+    MetricsLambda,
 )
 from ignite.utils import to_onehot
 
@@ -108,8 +111,10 @@ def _get_transform_cm_multilabel(label_index):
 def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
                            use_round=True,
                            get_transform_fn=None,
+                           include_macro=False,
                            metric_args=()):
     """Attaches one metric per label to an engine."""
+    metrics = []
     for index, disease in enumerate(labels):
         if get_transform_fn:
             transform_fn = get_transform_fn(index)
@@ -118,6 +123,14 @@ def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
 
         metric = MetricClass(*metric_args, output_transform=transform_fn)
         metric.attach(engine, f'{metric_name}_{disease}')
+        metrics.append(metric)
+
+    if include_macro:
+        def _calc_macro_avg(*metrics):
+            return reduce(lambda x, y: x+y, metrics) / len(metrics)
+
+        macro_avg = MetricsLambda(_calc_macro_avg, *metrics)
+        macro_avg.attach(engine, metric_name)
 
 
 def _transform_remove_loss(output):
@@ -156,7 +169,8 @@ def attach_metrics_classification(engine, labels, multilabel=True, include_cm=Fa
         _attach_binary_metrics(engine, labels, 'prec', Precision, True)
         _attach_binary_metrics(engine, labels, 'recall', Recall, True)
         _attach_binary_metrics(engine, labels, 'spec', Specificity, True)
-        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False)
+        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False,
+                               include_macro=True)
     else:
         acc = Accuracy(output_transform=_transform_remove_loss)
         acc.attach(engine, 'acc')
