@@ -1,22 +1,14 @@
 import torch
 from torch import nn
 
+from medai.models.common import get_adaptive_pooling_layer
+
 class NoAttention(nn.Module):
     """Has the same API as an Attention network, but does not implement attention."""
     def __init__(self, reduction='avg'):
         super().__init__()
 
-        if reduction == 'avg' or reduction == 'mean':
-            reduction_step = nn.AdaptiveAvgPool2d((1, 1))
-        elif reduction == 'max':
-            reduction_step = nn.AdaptiveMaxPool2d((1, 1))
-        else:
-            raise Exception(f'No such reduction {reduction}')
-
-        self.features_reduction = nn.Sequential(
-            reduction_step,
-            nn.Flatten(),
-        )
+        self.features_reduction = get_adaptive_pooling_layer(reduction)
 
     def forward(self, features, unused_h_state):
         # features shape: batch_size, n_features, height, width

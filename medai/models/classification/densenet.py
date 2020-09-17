@@ -2,9 +2,15 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
+from medai.models.common import (
+    get_adaptive_pooling_layer,
+    get_linear_layers,
+)
+
 class Densenet121CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, **kwargs):
+                 pretrained_cnn=None, gpool='max', fc_layers=(),
+                 **unused):
         super().__init__()
         self.base_cnn = models.densenet121(pretrained=imagenet)
         
@@ -17,13 +23,14 @@ class Densenet121CNN(nn.Module):
 
         self.labels = list(labels)
 
-        self.global_pool = nn.Sequential(
-            nn.AdaptiveMaxPool2d((1, 1)),
-            nn.Flatten(),
-        )
+        self.global_pool = get_adaptive_pooling_layer(gpool)
 
         self.features_size = 1024
-        self.prediction = nn.Linear(self.features_size, len(self.labels))
+        self.prediction = get_linear_layers(
+            self.features_size,
+            len(self.labels),
+            fc_layers,
+        )
         
     def forward(self, x, features=False):
         x = self.base_cnn.features(x)

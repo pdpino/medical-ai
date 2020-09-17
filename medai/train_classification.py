@@ -18,6 +18,7 @@ from medai.metrics.classification import (
     attach_metrics_classification,
     attach_metric_cm,
 )
+from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.classification import (
     create_cnn,
     AVAILABLE_CLASSIFICATION_MODELS,
@@ -360,6 +361,8 @@ def train_from_scratch(run_name,
                        cnn_name='resnet-50',
                        imagenet=True,
                        freeze=False,
+                       cnn_pooling='max',
+                       fc_layers=(),
                        max_samples=None,
                        image_size=512,
                        loss_name=None,
@@ -464,6 +467,8 @@ def train_from_scratch(run_name,
         'labels': train_dataloader.dataset.labels,
         'imagenet': imagenet,
         'freeze': freeze,
+        'gpool': cnn_pooling,
+        'fc_layers': fc_layers,
     }
     model = create_cnn(**model_kwargs).to(device)
 
@@ -537,13 +542,6 @@ def parse_args():
     parser.add_argument('-d', '--dataset', type=str, default=None,
                         choices=AVAILABLE_CLASSIFICATION_DATASETS,
                         help='Choose dataset to train on')
-    parser.add_argument('-m', '--model', type=str, default=None,
-                        choices=AVAILABLE_CLASSIFICATION_MODELS,
-                        help='Choose base CNN to use')
-    parser.add_argument('-noig', '--no-imagenet', action='store_true',
-                        help='If present, dont use imagenet pretrained weights')
-    parser.add_argument('-frz', '--freeze', action='store_true',
-                        help='If present, freeze base cnn parameters (only train FC layers)')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
     parser.add_argument('-lr', '--learning-rate', type=float, default=None,
@@ -564,6 +562,20 @@ def parse_args():
                         help='If present, dont run post-evaluation')
     parser.add_argument('--cpu', action='store_true',
                         help='Use CPU only')
+
+    cnn_group = parser.add_argument_group('CNN params')
+    cnn_group.add_argument('-m', '--model', type=str, default=None,
+                        choices=AVAILABLE_CLASSIFICATION_MODELS,
+                        help='Choose base CNN to use')
+    cnn_group.add_argument('-noig', '--no-imagenet', action='store_true',
+                        help='If present, dont use imagenet pretrained weights')
+    cnn_group.add_argument('-frz', '--freeze', action='store_true',
+                        help='If present, freeze base cnn parameters (only train FC layers)')
+    cnn_group.add_argument('--cnn-pooling', type=str, default='max',
+                        choices=AVAILABLE_POOLING_REDUCTIONS,
+                        help='Choose reduction for global-pooling layer')
+    cnn_group.add_argument('--fc-layers', nargs='+', type=int, default=(),
+                        help='Choose sizes for FC layers at the end')
 
     loss_group = parser.add_argument_group('Loss params')
     loss_group.add_argument('-l', '--loss-name', type=str, default=None,
@@ -677,6 +689,8 @@ if __name__ == '__main__':
             cnn_name=args.model,
             imagenet=not args.no_imagenet,
             freeze=args.freeze,
+            cnn_pooling=args.cnn_pooling,
+            fc_layers=args.fc_layers,
             max_samples=args.max_samples,
             image_size=args.image_size,
             loss_name=args.loss_name,

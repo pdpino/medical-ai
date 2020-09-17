@@ -54,7 +54,7 @@ class TransfusionCBRCNN(nn.Module):
     Paper: Transfusion: Understanding Transfer Learning for medical imaging
     """
     def __init__(self, labels, multilabel=True, pretrained_cnn=None,
-                 n_channels=3, name='tall', **kwargs):
+                 n_channels=3, name='tall', **unused):
         super().__init__()
 
         self.labels = list(labels)

@@ -4,7 +4,7 @@ from torchvision import models
 
 class VGG19CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, **kwargs):
+                 pretrained_cnn=None, **unused):
         """VGG-19.
         
         The head is the original one (except from the last layer).

@@ -2,13 +2,16 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
+from medai.models.common import (
+    get_adaptive_pooling_layer,
+    get_linear_layers,
+)
+
 class MobileNetV2CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, **kwargs):
-        """VGG-19.
-        
-        The head is the original one (except from the last layer).
-        """
+                 pretrained_cnn=None, gpool='max', fc_layers=(),
+                 **unused):
+        """MobileNet-v2."""
         super().__init__()
 
         self.labels = list(labels)
@@ -22,14 +25,14 @@ class MobileNetV2CNN(nn.Module):
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
 
-        self.global_pool = nn.Sequential(
-            nn.AdaptiveMaxPool2d((1, 1)),
-            nn.Flatten(),
-        )
+        self.global_pool = get_adaptive_pooling_layer(gpool)
 
         self.features_size = 1280
-        self.prediction = nn.Linear(self.features_size, len(labels))
-
+        self.prediction = get_linear_layers(
+            self.features_size,
+            len(self.labels),
+            fc_layers,
+        )
 
 
     def forward(self, x, features=False):

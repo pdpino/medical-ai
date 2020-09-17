@@ -2,9 +2,16 @@ import torch
 import torch.nn as nn
 from torchvision import models
 
+from medai.models.common import (
+    get_adaptive_pooling_layer,
+    get_linear_layers,
+)
+
 class Resnet50CNN(nn.Module):
     def __init__(self, labels, imagenet=True, freeze=False,
-                 pretrained_cnn=None, dropout=None, **kwargs):
+                 pretrained_cnn=None, gpool='max', fc_layers=(),
+                 dropout=None,
+                 **unused):
         """Resnet-50."""
         super().__init__()
 
@@ -19,20 +26,16 @@ class Resnet50CNN(nn.Module):
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
 
-        self.global_pool = nn.Sequential(
-            nn.AdaptiveMaxPool2d((1, 1)),
-            nn.Flatten(),
-        )
+        self.global_pool = get_adaptive_pooling_layer(gpool)
 
         self.dropout = nn.Dropout(dropout) if dropout else None
 
-        n_diseases = len(labels)
-
         self.features_size = 2048
-
-        self.prediction = nn.Linear(self.features_size, n_diseases)
-
-
+        self.prediction = get_linear_layers(
+            self.features_size,
+            len(self.labels),
+            fc_layers,
+        )
 
     def forward(self, x, features=False):
         # x shape: batch_size, 3, height, width
