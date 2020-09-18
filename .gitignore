@@ -16,3 +16,6 @@ pyenv*
 
 # Course project file
 main.py
+
+# Others
+medai/batch*.sh

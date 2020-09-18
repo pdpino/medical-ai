@@ -109,7 +109,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
                     break
 
             # Get next input
-            att_features, att_scores = self.attention_layer(features, h_state)
+            att_features, att_scores = self.attention_layer(features, h_t)
             sentence_input_t = att_features
 
             if self._use_attention:
