@@ -11,7 +11,7 @@ from torch.utils.data.dataset import Subset
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer, Checkpoint, DiskSaver
 
-from medai.datasets.iu_xray import IUXRayDataset
+from medai.datasets import prepare_data_report_generation
 from medai.metrics import save_results
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
@@ -44,7 +44,7 @@ from medai.training.report_generation.hierarchical import (
     create_hierarchical_dataloader,
     get_step_fn_hierarchical,
 )
-from medai.utils import get_timestamp, duration_to_str
+from medai.utils import get_timestamp, duration_to_str, print_hw_options
 
 
 def evaluate_model(run_name,
@@ -251,19 +251,26 @@ def resume_training(run_name,
 
 
     # Load data
-    vocab = metadata['vocab']
-    image_size = metadata.get('image_size', (512, 512))
-    dataset_kwargs = {
-        'vocab': vocab,
-        'image_size': image_size,
-        'max_samples': max_samples,
-    }
-    train_dataset = IUXRayDataset(dataset_type='train', **dataset_kwargs)
-    val_dataset = IUXRayDataset(dataset_type='val', **dataset_kwargs)
+    dataset_kwargs = metadata.get('dataset_kwargs', None)
+    if dataset_kwargs is None:
+        # HACK: backward compatibility
+        dataset_kwargs = {
+            'vocab': metadata['vocab'],
+            'image_size': metadata.get('image_size', (512, 512)),
+            'max_samples': max_samples,
+            'batch_size': metadata['hparams'].get('batch_size', 24),
+        }
 
-    batch_size = metadata['hparams'].get('batch_size', 24) # backward compatibility
-    train_dataloader = create_dataloader(train_dataset, batch_size=batch_size)
-    val_dataloader = create_dataloader(val_dataset, batch_size=batch_size)
+    train_dataloader = prepare_data_report_generation(
+        create_dataloader,
+        dataset_type='train',
+        **dataset_kwargs,
+    )
+    val_dataloader = prepare_data_report_generation(
+        create_dataloader,
+        dataset_type='val',
+        **dataset_kwargs,
+    )
 
     # Train
     train_model(run_name,
@@ -279,8 +286,11 @@ def resume_training(run_name,
 
 
     if post_evaluation:
-        test_dataset = IUXRayDataset(dataset_type='test', **dataset_kwargs)
-        test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
+        test_dataloader = prepare_data_report_generation(
+            create_dataloader,
+            dataset_type='test',
+            **dataset_kwargs,
+        )
 
         dataloaders = [
             train_dataloader,
@@ -314,6 +324,7 @@ def train_from_scratch(run_name,
                        debug=True,
                        multiple_gpu=False,
                        post_evaluation=True,
+                       num_workers=2,
                        device='cuda',
                        ):
     """Train a model from scratch."""
@@ -335,18 +346,26 @@ def train_from_scratch(run_name,
 
     # Load data
     image_size = (image_size, image_size)
-    train_dataset = IUXRayDataset(dataset_type='train',
-                                  max_samples=max_samples,
-                                  image_size=image_size,
-                                  )
-    val_dataset = IUXRayDataset(dataset_type='val',
-                                image_size=image_size,
-                                vocab=train_dataset.get_vocab(),
-                                max_samples=max_samples,
-                                )
+    dataset_kwargs = {
+        'dataset_name': 'iu-x-ray',
+        'max_samples': max_samples,
+        'image_size': image_size,
+        'batch_size': batch_size,
+        'num_workers': num_workers,
+    }
+    train_dataloader = prepare_data_report_generation(
+        create_dataloader,
+        dataset_type='train',
+        **dataset_kwargs,
+    )
+    vocab = train_dataloader.dataset.get_vocab()
+    dataset_kwargs['vocab'] = vocab
 
-    train_dataloader = create_dataloader(train_dataset, batch_size=batch_size)
-    val_dataloader = create_dataloader(val_dataset, batch_size=batch_size)
+    val_dataloader = prepare_data_report_generation(
+        create_dataloader,
+        dataset_type='val',
+        **dataset_kwargs,
+    )
 
 
     # Create CNN
@@ -373,7 +392,7 @@ def train_from_scratch(run_name,
     # Create decoder
     decoder_kwargs = {
         'decoder_name': decoder_name,
-        'vocab_size': len(train_dataset.word_to_idx),
+        'vocab_size': len(vocab),
         'embedding_size': embedding_size,
         'hidden_size': hidden_size,
         'features_size': cnn.features_size,
@@ -399,7 +418,8 @@ def train_from_scratch(run_name,
         'cnn_kwargs': cnn_kwargs,
         'decoder_kwargs': decoder_kwargs,
         'opt_kwargs': opt_kwargs,
-        'vocab': train_dataset.get_vocab(),
+        'dataset_kwargs': dataset_kwargs,
+        'vocab': vocab,
         'image_size': image_size,
         'hparams': {
             'pretrained_cnn': cnn_run_name,
@@ -426,12 +446,11 @@ def train_from_scratch(run_name,
 
 
     if post_evaluation:
-        test_dataset = IUXRayDataset(dataset_type='test',
-                                     vocab=train_dataset.get_vocab(),
-                                     max_samples=max_samples,
-                                     image_size=image_size,
-                                    )
-        test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
+        test_dataloader = prepare_data_report_generation(
+            create_dataloader,
+            dataset_type='test',
+            **dataset_kwargs,
+        )
 
         dataloaders = [
             train_dataloader,
@@ -471,8 +490,6 @@ def parse_args():
                         help='Input image sizes')
     parser.add_argument('-notf', '--no-teacher-forcing', action='store_true',
                         help='If present, does not use teacher forcing')
-    parser.add_argument('--multiple-gpu', action='store_true',
-                        help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
 
@@ -486,6 +503,16 @@ def parse_args():
                         help='If present, freeze base cnn parameters (only train FC layers)')
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                         help='Run name of a pretrained CNN')
+
+    hw_group = parser.add_argument_group('Hardware params')
+    hw_group.add_argument('--multiple-gpu', action='store_true',
+                          help='Use multiple gpus')
+    hw_group.add_argument('--cpu', action='store_true',
+                          help='Use CPU only')
+    hw_group.add_argument('--num-workers', type=int, default=4,
+                          help='Number of workers for dataloader')
+    hw_group.add_argument('--num-threads', type=int, default=1,
+                          help='Number of threads for pytorch')
 
     args = parser.parse_args()
 
@@ -501,10 +528,12 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if args.num_threads > 0:
+        torch.set_num_threads(args.num_threads)
 
-    _CUDA_VISIBLE = os.environ.get('CUDA_VISIBLE_DEVICES', '')
-    print(f'Using device={device} visible={_CUDA_VISIBLE} multiple={args.multiple_gpu}')
+    device = torch.device('cuda' if not args.cpu and torch.cuda.is_available() else 'cpu')
+
+    print_hw_options(device, args)
 
     run_name = get_timestamp()
 
@@ -535,6 +564,7 @@ if __name__ == '__main__':
                            max_samples=args.max_samples,
                            debug=not args.no_debug,
                            multiple_gpu=args.multiple_gpu,
+                           num_workers=args.num_workers,
                            device=device,
                            )
 

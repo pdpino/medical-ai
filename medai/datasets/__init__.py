@@ -15,17 +15,21 @@ from medai.datasets.tools.augmentation import Augmentator
 
 from medai.utils.nlp import count_sentences
 
-_DATASET_DEF = {
-  'cxr14': CXR14Dataset,
-  'covid-kaggle': CovidKaggleDataset,
-  'covid-x': CovidXDataset,
-  'covid-actual': CovidActualDataset,
-  'covid-fig1': CovidFig1Dataset,
-  'covid-uc': CovidUCDataset,
-  'iu-x-ray': IUXRayDataset,
+_CL_DATASETS = {
+    'cxr14': CXR14Dataset,
+    'covid-kaggle': CovidKaggleDataset,
+    'covid-x': CovidXDataset,
+    'covid-actual': CovidActualDataset,
+    'covid-fig1': CovidFig1Dataset,
+    'covid-uc': CovidUCDataset,
+    'iu-x-ray': IUXRayDataset,
 }
 
-AVAILABLE_CLASSIFICATION_DATASETS = list(_DATASET_DEF)
+_RG_DATASETS = {
+    'iu-x-ray': IUXRayDataset,
+}
+
+AVAILABLE_CLASSIFICATION_DATASETS = list(_CL_DATASETS)
 
 def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 labels=None,
@@ -37,12 +41,13 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 oversample_ratio=None, oversample_max_ratio=None,
                                 undersample=False, undersample_label=0,
                                 batch_size=10, shuffle=False,
+                                num_workers=2,
                                 **kwargs,
                                 ):
     print(f'Loading {dataset_name}/{dataset_type} dataset...')
 
-    assert dataset_name in _DATASET_DEF, f'Dataset not found: {dataset_name}'
-    DatasetClass = _DATASET_DEF[dataset_name]
+    assert dataset_name in _CL_DATASETS, f'Dataset not found: {dataset_name}'
+    DatasetClass = _CL_DATASETS[dataset_name]
 
     if kwargs.get('frontal_only') and dataset_name != 'covid-uc':
         print('\tWarning: frontal-only option is only implemented in covid-uc')
@@ -63,18 +68,23 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                               force_class=augment_class,
                               **augment_kwargs)
 
+    dataloader_kwargs = {
+        'batch_size': batch_size,
+        'num_workers': num_workers,
+    }
+
     if oversample:
         sampler = OneLabelOverSampler(dataset,
                                       label=oversample_label,
                                       force_class=oversample_class,
                                       ratio=oversample_ratio,
                                       max_ratio=oversample_max_ratio)
-        dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
+        dataloader = DataLoader(dataset, sampler=sampler, **dataloader_kwargs)
     elif undersample:
         sampler = OneLabelUnderSampler(dataset, label=undersample_label)
-        dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
+        dataloader = DataLoader(dataset, sampler=sampler, **dataloader_kwargs)
     else:
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+        dataloader = DataLoader(dataset, shuffle=shuffle, **dataloader_kwargs)
     
     return dataloader
 
@@ -107,3 +117,30 @@ def create_report_dataset_subset(dataset, max_n_words=None, max_n_sentences=None
     
     return Subset(dataset, indices)
 
+
+def prepare_data_report_generation(create_dataloader_fn,
+                                   dataset_name=None,
+                                   dataset_type='train',
+                                   max_samples=None,
+                                   vocab=None,
+                                   image_size=(512, 512),
+                                   batch_size=10,
+                                   num_workers=2):
+    print(f'Loading {dataset_name}/{dataset_type} dataset...')
+
+    assert dataset_name in _RG_DATASETS, f'Dataset not found: {dataset_name}'
+    DatasetClass = _RG_DATASETS[dataset_name]
+
+
+    dataset = DatasetClass(dataset_type=dataset_type,
+                           max_samples=max_samples,
+                           vocab=vocab,
+                           image_size=image_size,
+                           )
+
+    dataloader = create_dataloader_fn(dataset,
+                                      batch_size=batch_size,
+                                      num_workers=num_workers,
+                                      )
+
+    return dataloader

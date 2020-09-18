@@ -16,7 +16,7 @@ class Augmentator(Dataset):
         # Define which samples to augment
         if label is None:
             # Augment samples from all labels
-            iterator = [(idx, True) for idx in range(len(self.dataset))]
+            samples_idxs = [(idx, True) for idx in range(len(self.dataset))]
             _samples_info = 'all samples'
         else:
             # Only augment samples from a specific label

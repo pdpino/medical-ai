@@ -57,3 +57,16 @@ def parse_str_or_int(s):
         return int(s)
     except:
         return s
+
+
+def print_hw_options(device, args):
+    _CUDA_VISIBLE = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+    d = {
+        'device': device,
+        'visible': _CUDA_VISIBLE,
+        'multiple': args.multiple_gpu,
+        'num_workers': args.num_workers,
+        'num_threads': args.num_threads,
+    }
+    info_str = ' '.join(f'{k}={v}' for k, v in d.items())
+    print(f'Using {info_str}')

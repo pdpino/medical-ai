@@ -31,7 +31,12 @@ from medai.models.checkpoint import (
     load_compiled_model_classification,
 )
 from medai.tensorboard import TBWriter
-from medai.utils import get_timestamp, duration_to_str, parse_str_or_int
+from medai.utils import (
+    get_timestamp,
+    duration_to_str,
+    parse_str_or_int,
+    print_hw_options,
+)
 
 
 def _choose_print_metrics(dataset_name, additional=None):
@@ -358,6 +363,7 @@ def resume_training(run_name,
 
 def train_from_scratch(run_name,
                        dataset_name,
+                       shuffle=False,
                        cnn_name='resnet-50',
                        imagenet=True,
                        freeze=False,
@@ -387,6 +393,7 @@ def train_from_scratch(run_name,
                        post_evaluation=True,
                        debug=True,
                        multiple_gpu=False,
+                       num_workers=2,
                        device='cuda',
                        ):
     """Train a model from scratch."""
@@ -430,6 +437,8 @@ def train_from_scratch(run_name,
         run_name += f'_size{image_size}'
     if n_epochs == 0:
         run_name += '_e0'
+    if fc_layers and len(fc_layers) > 0:
+        run_name += '_fc' + '-'.join(str(l) for l in fc_layers)
 
 
     # Load data
@@ -440,8 +449,10 @@ def train_from_scratch(run_name,
         'batch_size': batch_size,
         'image_size': (image_size, image_size),
         'frontal_only': frontal_only,
+        'num_workers': num_workers,
     }
     dataset_train_kwargs = {
+        'shuffle': shuffle,
         'oversample': oversample,
         'oversample_label': oversample_label,
         'oversample_class': oversample_class,
@@ -558,22 +569,20 @@ def parse_args():
                         help='Max samples to load (debugging)')
     parser.add_argument('-lr', '--learning-rate', type=float, default=None,
                         help='Learning rate')
-    parser.add_argument('-bs', '--batch_size', type=int, default=None,
+    parser.add_argument('-bs', '--batch-size', type=int, default=None,
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
+    parser.add_argument('--shuffle', action='store_true', default=None,
+                        help='Whether to shuffle or not the samples when training')
     parser.add_argument('--labels', type=str, nargs='*', default=None,
                         help='Subset of labels')
     parser.add_argument('--print-metrics', type=str, nargs='*', default=None,
                         help='Additional metrics to print to stdout')
-    parser.add_argument('--multiple-gpu', action='store_true',
-                        help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
     parser.add_argument('--no-eval', action='store_true',
                         help='If present, dont run post-evaluation')
-    parser.add_argument('--cpu', action='store_true',
-                        help='Use CPU only')
 
     cnn_group = parser.add_argument_group('CNN params')
     cnn_group.add_argument('-m', '--model', type=str, default=None,
@@ -637,6 +646,15 @@ def parse_args():
     sampl_group.add_argument('-us', '--undersample', default=None,
                              help='Undersample from the majority class with a given label (str/int)')
 
+    hw_group = parser.add_argument_group('Hardware params')
+    hw_group.add_argument('--multiple-gpu', action='store_true',
+                          help='Use multiple gpus')
+    hw_group.add_argument('--cpu', action='store_true',
+                          help='Use CPU only')
+    hw_group.add_argument('--num-workers', type=int, default=2,
+                          help='Number of workers for dataloader')
+    hw_group.add_argument('--num-threads', type=int, default=1,
+                          help='Number of threads for pytorch')
 
     args = parser.parse_args()
 
@@ -685,10 +703,12 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
-    device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
+    if args.num_threads > 0:
+        torch.set_num_threads(args.num_threads)
 
-    _CUDA_VISIBLE = os.environ.get('CUDA_VISIBLE_DEVICES', '')
-    print(f'Using device={device} visible={_CUDA_VISIBLE} multiple={args.multiple_gpu}')
+    device = torch.device('cuda' if not args.cpu and torch.cuda.is_available() else 'cpu')
+
+    print_hw_options(device, args)
 
     start_time = time.time()
 
@@ -708,6 +728,7 @@ if __name__ == '__main__':
 
         train_from_scratch(run_name,
             args.dataset,
+            shuffle=args.shuffle,
             cnn_name=args.model,
             imagenet=not args.no_imagenet,
             freeze=args.freeze,
@@ -736,6 +757,7 @@ if __name__ == '__main__':
             post_evaluation=args.post_evaluation,
             debug=args.debug,
             multiple_gpu=args.multiple_gpu,
+            num_workers=args.num_workers,
             device=device,
             )
 
