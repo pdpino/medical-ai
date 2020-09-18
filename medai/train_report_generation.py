@@ -570,3 +570,4 @@ if __name__ == '__main__':
 
     total_time = time.time() - start_time
     print(f'Total time: {duration_to_str(total_time)}')
+    print('=' * 80)

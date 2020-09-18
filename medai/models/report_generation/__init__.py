@@ -1,16 +1,21 @@
 from medai.models.report_generation.decoder_lstm import LSTMDecoder
+from medai.models.report_generation.decoder_lstm_v2 import LSTMDecoderV2
 from medai.models.report_generation.decoder_lstm_att import LSTMAttDecoder
 from medai.models.report_generation.decoder_lstm_att_v2 import LSTMAttDecoderV2
 from medai.models.report_generation.decoder_lstm_att_v3 import LSTMAttDecoderV3
 from medai.models.report_generation.decoder_h_lstm_att import h_lstm_wrapper
+from medai.models.report_generation.decoder_h_lstm_att_v2 import h_lstm_wrapper_v2
 
 _MODELS_DEF = {
     'lstm': LSTMDecoder,
+    'lstm-v2': LSTMDecoderV2,
     'lstm-att': LSTMAttDecoder,
     'lstm-att-v2': LSTMAttDecoderV2,
     'lstm-att-v3': LSTMAttDecoderV3,
     'h-lstm': h_lstm_wrapper(attention=False),
     'h-lstm-att': h_lstm_wrapper(attention=True),
+    'h-lstm-v2': h_lstm_wrapper_v2(attention=False),
+    'h-lstm-att-v2': h_lstm_wrapper_v2(attention=True),
 }
 
 AVAILABLE_DECODERS = list(_MODELS_DEF)

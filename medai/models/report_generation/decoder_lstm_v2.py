@@ -1,20 +1,18 @@
-"""Difference with decoder_lstm_att.py (i.e. v1):
-* Attented features are passed as input to the LSTM, instead of merging with h_state
-* h0 and c0 are initialized with features information (same as lstm-v2)
+"""Difference with v1:
+* Initializes both h0 and c0 with the image features.
 """
-
 from itertools import count
 import torch
 from torch import nn
+import numpy as np
 
-from medai.models.report_generation.att_2layer import AttentionTwoLayers
 from medai.utils.nlp import PAD_IDX, START_IDX, END_IDX
 
 
-class LSTMAttDecoderV2(nn.Module):
+class LSTMDecoderV2(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size,
-                 teacher_forcing=True, **unused):
+                 teacher_forcing=True, **kwargs):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -28,45 +26,49 @@ class LSTMAttDecoderV2(nn.Module):
         )
 
         self.embeddings_table = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
-        self.lstm_cell = nn.LSTMCell(embedding_size + features_size, hidden_size)
+        self.lstm_cell = nn.LSTMCell(embedding_size, hidden_size)
         self.W_vocab = nn.Linear(hidden_size, vocab_size)
 
-        self.attention = AttentionTwoLayers(features_size, hidden_size, double_bias=False)
+    def forward(self, features, reports=None, free=False, max_words=10000):
+        """Forward pass.
+        
+        Args:
+            features: tensor of shape (batch_size, n_features, height, width)
+            reports: tensor of shape (batch_size, n_words), or None
+            free: boolean, indicating if the generation should be free
+                (or bounded by the size of reports). If free=False, reports can't be None.
+            max_words: int indicating an upper bound to the free-generation. Used to avoid an
+                infinite generation loop.
+        Returns:
+            (seq_out,)
+            seq_out: tensor of shape (batch_size, n_generated_words, vocab_size)
+                If free=False, n_generated_words == n_words;
+                else, n_generated_words may be any number of words.
+        """
+        batch_size = features.size()[0]
+        device = features.device
 
-
-    def forward(self, image_features, reports=None, free=False, max_words=10000):
-        batch_size = image_features.size()[0]
-            # image_features shape: batch_size, features_size, height, width
-
-        device = image_features.device
-
-        # Build initial state
-        initial_state = self.features_fc(image_features)
+        # Transform features to correct size
+        initial_state = self.features_fc(features)
             # shape: batch_size, hidden_size*2
         initial_h_state = initial_state[:, :self.hidden_size]
         initial_c_state = initial_state[:, self.hidden_size:]
             # shapes: batch_size, hidden_size
 
+        # Build initial state
         state = (initial_h_state, initial_c_state)
-
-        # Pass h0 thru attention
-        att_features, att_scores = self.attention(image_features, initial_h_state)
-            # att_features shape: batch_size, features_size
-            # att_scores shape: batch_size, height, width
 
         # Build initial input
         start_idx = self.start_idx.to(device).repeat(batch_size) # shape: batch_size
-        input_words = self.embeddings_table(start_idx)
+        input_t = self.embeddings_table(start_idx)
             # shape: batch_size, embedding_size
-        input_t = torch.cat((input_words, att_features), dim=1)
-            # shape: batch_size, embedding_size + features_size
 
         # Decide teacher forcing
         teacher_forcing = self.teacher_forcing \
             and self.training \
             and reports is not None \
-            and not free
-        
+            and not free \
+
         # Set iteration maximum
         if free:
             words_iterator = range(max_words) if max_words else count()
@@ -79,7 +81,6 @@ class LSTMAttDecoderV2(nn.Module):
 
         # Generate word by word
         seq_out = []
-        scores_out = []
 
         for word_i in words_iterator:
             # Pass thru LSTM
@@ -90,10 +91,6 @@ class LSTMAttDecoderV2(nn.Module):
             # Predict with FC
             prediction_t = self.W_vocab(h_t) # shape: batch_size, vocab_size
             seq_out.append(prediction_t)
-
-            # Pass state thru attention
-            att_features, att_scores = self.attention(image_features, h_t)
-            scores_out.append(att_scores)
 
             # Decide if should stop
             # Remember if each element in the batch has outputted the END token
@@ -112,15 +109,10 @@ class LSTMAttDecoderV2(nn.Module):
                 _, next_words_indices = prediction_t.max(dim=1)
                 # shape: batch_size
 
-            input_words = self.embeddings_table(next_words_indices)
-                # shape: batch_size, embedding_size
-            input_t = torch.cat((input_words, att_features), dim=1)
-                # shape: batch_size, embedding_size + features_size
+            input_t = self.embeddings_table(next_words_indices)
+            # shape: batch_size, embedding_size
 
         seq_out = torch.stack(seq_out, dim=1)
         # shape: batch_size, max_sentence_len, vocab_size
 
-        scores_out = torch.stack(scores_out, dim=1)
-        # shape: batch_size, max_sentence_len, height, width
-
-        return seq_out, scores_out
+        return seq_out,
