@@ -73,12 +73,12 @@ class OneLabelOverSampler(Sampler):
         # Print info    
         label_name = dataset.labels[label] if isinstance(label, int) else label
         stats = {
+            'os-class': OVERSAMPLE_CLASS,
             'ratio': ratio,
             'positives': positives,
             'negatives': negatives,
             'new-total': len(self.resampled_indexes),
             'original': total_samples,
-            'os-class': OVERSAMPLE_CLASS,
         }
         print(f'\tOversampling {label_name}:', ' '.join(f"{k}={v}" for k, v in stats.items()))
 

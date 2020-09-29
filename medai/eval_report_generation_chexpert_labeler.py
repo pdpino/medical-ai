@@ -25,6 +25,8 @@ GT_LABELED_FILEPATH = os.path.join(CACHE_FOLDER, 'gt-reports-labeled.csv')
 
 def _labels_with_suffix(suffix):
     """Returns the chexpert labels with a suffix appended to each."""
+    if not suffix:
+        return list(CHEXPERT_LABELS)
     return [f'{label}-{suffix}' for label in CHEXPERT_LABELS]
 
 
@@ -100,7 +102,7 @@ def _get_custom_env():
     return custom_env
 
 
-def _concat_df_matrix(df, results, suffix):
+def _concat_df_matrix(df, results, suffix=None):
     """Concats a DF with a matrix."""
     labels = _labels_with_suffix(suffix)
     return pd.concat([df, pd.DataFrame(results, columns=labels)],

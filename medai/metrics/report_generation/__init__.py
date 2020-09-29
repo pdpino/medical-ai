@@ -49,7 +49,7 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False):
 
     # Attach losses
     for loss_name in losses:
-        loss = RunningAverage(output_transform=lambda x: x[loss_name])
+        loss = RunningAverage(output_transform=operator.itemgetter(loss_name))
         loss.attach(engine, loss_name)
 
     # Attach word accuracy
