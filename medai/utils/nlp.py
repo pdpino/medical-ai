@@ -85,12 +85,27 @@ class ReportReader:
 
     def __init__(self, vocab):
         self._idx_to_word = {v: k for k, v in vocab.items()}
+        self._vocab = dict(vocab)
 
     def idx_to_text(self, report):
         if isinstance(report, torch.Tensor):
             report = report.view(-1).tolist()
 
+        if not isinstance(report, list):
+            return 'ERROR'
+
         return ' '.join([self._idx_to_word[int(g)] for g in report])
+
+    def text_to_idx(self, report):
+        if isinstance(report, str):
+            report = report.split()
+
+        assert isinstance(report, list), f'Report must be list, got: {type(report)}'
+
+        return [
+            self._vocab.get(word, UNKNOWN_IDX)
+            for word in report
+        ]
 
 
 def trim_rubbish(report):
