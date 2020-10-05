@@ -125,6 +125,8 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    vocab=None,
                                    image_size=(512, 512),
                                    batch_size=10,
+                                   sort_samples=True,
+                                   shuffle=False,
                                    num_workers=2):
     print(f'Loading {dataset_name}/{dataset_type} dataset...')
 
@@ -136,10 +138,12 @@ def prepare_data_report_generation(create_dataloader_fn,
                            max_samples=max_samples,
                            vocab=vocab,
                            image_size=image_size,
+                           sort_samples=sort_samples,
                            )
 
     dataloader = create_dataloader_fn(dataset,
                                       batch_size=batch_size,
+                                      shuffle=shuffle,
                                       num_workers=num_workers,
                                       )
 

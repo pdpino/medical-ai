@@ -260,11 +260,13 @@ def resume_training(run_name,
             'max_samples': max_samples,
             'batch_size': metadata['hparams'].get('batch_size', 24),
         }
+    dataset_train_kwargs = metadata.get('dataset_train_kwargs', {})
 
     train_dataloader = prepare_data_report_generation(
         create_dataloader,
         dataset_type='train',
         **dataset_kwargs,
+        **dataset_train_kwargs,
     )
     val_dataloader = prepare_data_report_generation(
         create_dataloader,
@@ -310,6 +312,8 @@ def resume_training(run_name,
 def train_from_scratch(run_name,
                        decoder_name='lstm',
                        batch_size=15,
+                       sort_samples=True,
+                       shuffle=False,
                        teacher_forcing=True,
                        embedding_size=100,
                        hidden_size=100,
@@ -336,6 +340,10 @@ def train_from_scratch(run_name,
         run_name += f'_{cnn_model_name}'
     if image_size != 512:
         run_name += f'_size{image_size}'
+    if not sort_samples:
+        run_name += '_nosort'
+    if shuffle:
+        run_name += '_shf'
 
     # Decide hierarchical
     hierarchical = is_decoder_hierarchical(decoder_name)
@@ -353,10 +361,15 @@ def train_from_scratch(run_name,
         'batch_size': batch_size,
         'num_workers': num_workers,
     }
+    dataset_train_kwargs = {
+        'sort_samples': sort_samples,
+        'shuffle': shuffle,
+    }
     train_dataloader = prepare_data_report_generation(
         create_dataloader,
         dataset_type='train',
         **dataset_kwargs,
+        **dataset_train_kwargs,
     )
     vocab = train_dataloader.dataset.get_vocab()
     dataset_kwargs['vocab'] = vocab
@@ -419,6 +432,7 @@ def train_from_scratch(run_name,
         'decoder_kwargs': decoder_kwargs,
         'opt_kwargs': opt_kwargs,
         'dataset_kwargs': dataset_kwargs,
+        'dataset_train_kwargs': dataset_train_kwargs,
         'vocab': vocab,
         'image_size': image_size,
         'hparams': {
@@ -470,8 +484,6 @@ def train_from_scratch(run_name,
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--max-samples', type=int, default=None,
-                        help='Max samples to load (debugging)')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from a previous run')
     parser.add_argument('-dec', '--decoder', type=str,
@@ -486,12 +498,20 @@ def parse_args():
                         help='Embedding size of the decoder')
     parser.add_argument('-hs', '--hidden-size', type=int, default=100,
                         help='Hidden size of the decoder')
-    parser.add_argument('--image-size', type=int, default=512,
-                        help='Input image sizes')
     parser.add_argument('-notf', '--no-teacher-forcing', action='store_true',
                         help='If present, does not use teacher forcing')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+
+    data_group = parser.add_argument_group('Data')
+    data_group.add_argument('--image-size', type=int, default=512,
+                            help='Input image sizes')
+    data_group.add_argument('--max-samples', type=int, default=None,
+                            help='Max samples to load (debugging)')
+    data_group.add_argument('--no-sort', action='store_true',
+                            help='Do not sort samples')
+    data_group.add_argument('--shuffle', action='store_true',
+                            help='Shuffle samples on training')
 
     cnn_group = parser.add_argument_group('CNN')
     cnn_group.add_argument('-c', '--cnn', type=str, default=None,
@@ -551,6 +571,8 @@ if __name__ == '__main__':
         train_from_scratch(run_name,
                            decoder_name=args.decoder,
                            batch_size=args.batch_size,
+                           sort_samples=not args.no_sort,
+                           shuffle=args.shuffle,
                            teacher_forcing=not args.no_teacher_forcing,
                            embedding_size=args.embedding_size,
                            hidden_size=args.hidden_size,
