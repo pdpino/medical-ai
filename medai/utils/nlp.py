@@ -91,7 +91,7 @@ class ReportReader:
         if isinstance(report, torch.Tensor):
             report = report.view(-1).tolist()
 
-        if not isinstance(report, list):
+        if not isinstance(report, (list, np.ndarray)):
             return 'ERROR'
 
         return ' '.join([self._idx_to_word[int(g)] for g in report])

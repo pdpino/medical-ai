@@ -21,6 +21,7 @@ class TBWriter:
     def __init__(self, run_name, classification=True,
                  ignore_metrics=IGNORE_METRICS,
                  dryrun=False,
+                 histogram=False,
                  workspace_dir=utils.WORKSPACE_DIR, debug=True, **kwargs):
         self.log_dir = _get_log_dir(run_name, classification=classification,
                                     workspace_dir=workspace_dir, debug=debug)
@@ -45,7 +46,13 @@ class TBWriter:
             'stop_loss': 'Loss_stop',
         }
 
+        self._histogram = histogram
+
+
     def write_histogram(self, model, epoch, wall_time):
+        if not self._histogram:
+            return
+
         if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             model = model.module
 

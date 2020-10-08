@@ -6,7 +6,7 @@ import argparse
 import pandas as pd
 import numpy as np
 import hashlib
-from sklearn.metrics import precision_recall_fscore_support as prf1s, roc_auc_score
+from sklearn.metrics import precision_recall_fscore_support as prf1s, roc_auc_score, accuracy_score
 from pprint import pprint
 
 from medai.datasets.common import CHEXPERT_LABELS
@@ -182,6 +182,11 @@ def _calculate_metrics(df):
     ground_truth = df[labels_gt].to_numpy()
     generated = df[labels_gen].to_numpy()
     
+    acc = np.array([
+        accuracy_score(ground_truth[:, i], generated[:, i])
+        for i in range(len(CHEXPERT_LABELS))
+    ])
+
     precision, recall, f1, s = prf1s(ground_truth, generated, zero_division=0)
     
     try:
@@ -190,7 +195,7 @@ def _calculate_metrics(df):
         print(e)
         roc_auc = np.array([-1]*len(CHEXPERT_LABELS))
         
-    return precision, recall, f1, roc_auc
+    return acc, precision, recall, f1, roc_auc
 
 
 def _calculate_metrics_dict(df):
@@ -200,7 +205,7 @@ def _calculate_metrics_dict(df):
     for dataset_type in set(df['dataset_type']):
         sub_df = df[df['dataset_type'] == dataset_type]
         
-        precision, recall, f1, roc_auc = _calculate_metrics(sub_df)
+        acc, precision, recall, f1, roc_auc = _calculate_metrics(sub_df)
         
         metrics = {}
         
@@ -213,6 +218,7 @@ def _calculate_metrics_dict(df):
             for label, value in zip(CHEXPERT_LABELS, array):
                 metrics[f'{prefix}-{label}'] = value
         
+        _add_to_results(acc, 'acc')
         _add_to_results(precision, 'prec')
         _add_to_results(recall, 'recall')
         _add_to_results(f1, 'f1')
