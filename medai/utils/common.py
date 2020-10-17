@@ -40,6 +40,23 @@ def arr_to_range(arr, min_value=0, max_value=1):
     return np.interp(arr, (arr.min(), arr.max()), (min_value, max_value))
 
 
+def tensor_to_range01(arr, eps=1e-8):
+    # arr shape: batch_size, n_channels, height, width
+    
+    arr_min = arr.min(-1)[0].min(-1)[0]
+    # shape: batch_size, n_channels
+    
+    arr_max = arr.max(-1)[0].max(-1)[0]
+    # shape: batch_size, n_channels
+
+    arr_min = arr_min.unsqueeze(-1).unsqueeze(-1)
+    arr_max = arr_max.unsqueeze(-1).unsqueeze(-1)
+    # shape: batch_size, n_channels, 1, 1
+    
+    arr_range = (arr_max - arr_min) + eps
+    return (arr - arr_min) / arr_range
+
+
 def num_trainable_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
