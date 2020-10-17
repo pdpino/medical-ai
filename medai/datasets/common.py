@@ -5,6 +5,8 @@ BatchItem = namedtuple('BatchItem', [
     'labels',
     'report',
     'filename',
+    'bboxes',
+    'bboxes_valid',
 ])
 
 BatchItems = namedtuple('BatchItems', [
@@ -15,7 +17,7 @@ BatchItems = namedtuple('BatchItems', [
     'stops', # Stop signals for hierarchical decoders
 ])
 
-BatchItem.__new__.__defaults__ = (None,) * len(BatchItem._fields)
+BatchItem.__new__.__defaults__ = (-1,) * len(BatchItem._fields)
 BatchItems.__new__.__defaults__ = (None,) * len(BatchItems._fields)
 
 CHEXPERT_LABELS = [

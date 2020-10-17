@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch import optim
 from ignite.engine import Engine, Events
-from ignite.handlers import Timer, Checkpoint, DiskSaver
+from ignite.handlers import Timer
 
 from medai.datasets import (
     prepare_data_classification,

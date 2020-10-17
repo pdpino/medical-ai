@@ -4,6 +4,7 @@ from torchvision import transforms
 import pandas as pd
 from PIL import Image
 import os
+import json
 import random
 
 from medai.datasets.common import BatchItem
@@ -37,13 +38,10 @@ def _get_default_image_transformation(image_size=(512, 512)):
 
 class CXR14Dataset(Dataset):
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
-                 image_size=(512, 512)):
+                 image_size=(512, 512), **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_CXR14 not found in env variables')
 
-        if dataset_type not in ['train', 'val', 'test']:
-            raise ValueError('No such type, must be train, val, or test')
-        
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
         self.image_size = image_size
@@ -51,16 +49,28 @@ class CXR14Dataset(Dataset):
         
         self.image_dir = os.path.join(DATASET_DIR, 'images')
 
+        # Load split images
+        SPLITS_DIR = os.path.join(DATASET_DIR, 'splits')
+        split_fpath = os.path.join(SPLITS_DIR, f'{dataset_type}.txt')
+        if not os.path.isfile(split_fpath):
+            _AVAILABLE_SPLITS = [
+                split.replace('.txt', '')
+                for split in os.listdir(SPLITS_DIR)
+            ]
+            raise ValueError(f'No such type, must be one of {_AVAILABLE_SPLITS}')
+
+        with open(split_fpath, 'r') as f:
+            split_images = [l.strip() for l in f.readlines()]
+
+
         # Load csv files
-        labels_fname = os.path.join(DATASET_DIR, dataset_type + '_label.csv')
+        labels_fname = os.path.join(DATASET_DIR, 'label_index.csv')
         self.label_index = pd.read_csv(labels_fname, header=0)
         
-        bbox_fname = os.path.join(DATASET_DIR, 'BBox_List_2017.csv')
-        self.bbox_index = pd.read_csv(bbox_fname, header=0)
-        
-        # Drop Bbox file unnamed columns (are empty)
-        drop_unnamed = [col for col in self.bbox_index.columns if col.startswith('Unnamed')]
-        self.bbox_index.drop(drop_unnamed, axis=1, inplace=True)
+        # Load Bbox JSON
+        bboxes_fpath = os.path.join(DATASET_DIR, 'bbox_by_image_by_disease.json')
+        with open(bboxes_fpath, 'r') as f:
+            self.bboxes_by_image = json.load(f)
         
         # Choose diseases names
         if not labels:
@@ -82,8 +92,8 @@ class CXR14Dataset(Dataset):
         columns = ['FileName'] + self.labels
         self.label_index = self.label_index[columns]
 
-        # Keep only the images in the directory 
-        available_images = set(os.listdir(self.image_dir))
+        # Keep only the images in the directory
+        available_images = set(split_images).intersection(set(os.listdir(self.image_dir)))
         available_images = set(self.label_index['FileName']).intersection(available_images)
 
         # Keep only max_samples images
@@ -92,11 +102,7 @@ class CXR14Dataset(Dataset):
 
         self.label_index = self.label_index.loc[self.label_index['FileName'].isin(available_images)]
         
-        # Keep bbox_index with available images
-        self.bbox_index = self.bbox_index.loc[self.bbox_index['Image Index'].isin(available_images)]
-        
-        # Precompute items' metadata
-        self.precompute_metadata()
+        self.label_index.reset_index(drop=True, inplace=True)
         
     def size(self):
         n_images, _ = self.label_index.shape
@@ -122,41 +128,7 @@ class CXR14Dataset(Dataset):
         return n_samples
 
     def __getitem__(self, idx):
-        image_name, labels, bboxes, bbox_valid = self.precomputed[idx]
-        
-        image_fname = os.path.join(self.image_dir, image_name)
-        try:
-            image = Image.open(image_fname).convert(self.image_format)
-        except OSError as e:
-            print(f'({self.dataset_type}) Failed to load image, may be broken: {image_fname}')
-            print(e)
-
-            # FIXME: a way to ignore the image during training? (though it may broke other things)
-            raise
-
-        image = self.transform(image)
-
-        return BatchItem(
-            image=image,
-            labels=labels,
-            # bboxes=bboxes, # FIXME
-            # bbox_valid=bbox_valid,
-            filename=image_name,
-        )
-    
-    def precompute_metadata(self):
-        self.precomputed = []
-        self.names_to_idx = dict()
-        for idx in range(len(self)):
-            item = self.precompute_item_metadata(idx)
-            image_name = item[0]
-
-            self.precomputed.append(item)
-            
-            self.names_to_idx[image_name] = idx
-
-
-    def precompute_item_metadata(self, idx):
+        # Load image_name and labels
         row = self.label_index.iloc[idx]
         
         # Image name
@@ -164,36 +136,44 @@ class CXR14Dataset(Dataset):
 
         # Extract labels
         labels = row[self.labels].to_numpy().astype('int')
-        
-        # Get bboxes
-        bboxes = torch.zeros(self.n_diseases, 4) # 4: x, y, w, h
-        bbox_valid = torch.zeros(self.n_diseases)
 
-        # FIXME: bboxes are not loaded (too slow, fix it!)
-        return image_name, labels, bboxes, bbox_valid
+        # Load image
+        image_fname = os.path.join(self.image_dir, image_name)
+        try:
+            image = Image.open(image_fname).convert(self.image_format)
+        except OSError as e:
+            print(f'({self.dataset_type}) Failed to load image, may be broken: {image_fname}')
+            print(e)
 
-        rows = self.bbox_index.loc[self.bbox_index['Image Index']==image_name]
-        for _, row in rows.iterrows():
-            _, disease_name, x, y, w, h = row
-            x = int(x)
-            y = int(y)
-            w = int(w)
-            h = int(h)
-            
-            # TODO: fix in the BBox csv file?
-            if disease_name == 'Infiltrate':
-                disease_name = 'Infiltration'
+            # FIXME: a way to ignore the image during training? (though it may break other things)
+            raise
 
-            if disease_name not in self.labels:
-                continue
+        image = self.transform(image)
 
-            disease_index = self.labels.index(disease_name)
-            for j, value in enumerate([x, y, w, h]):
-                bboxes[disease_index, j] = value
+        # Load bboxes # REVIEW: precompute this?
+        raw_bboxes = self.bboxes_by_image.get(image_name, {})
+        bboxes = []
+        bboxes_valid = []
 
-            bbox_valid[disease_index] = 1
-        
-        return image_name, labels, bboxes, bbox_valid
+        for label in self.labels:
+            bbox = raw_bboxes.get(label, None)
+            if bbox is None:
+                bboxes_valid.append(0)
+                bboxes.append([0, 0, 0, 0])
+            else:
+                bboxes_valid.append(1)
+                bboxes.append(bbox)
+
+        bboxes_valid = torch.tensor(bboxes_valid)
+        bboxes = torch.tensor(bboxes)
+
+        return BatchItem(
+            image=image,
+            labels=labels,
+            bboxes=bboxes,
+            bboxes_valid=bboxes_valid,
+            filename=image_name,
+        )
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
