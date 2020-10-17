@@ -15,6 +15,7 @@ from medai.utils.nlp import (
 
 DATASET_DIR = os.environ.get('DATASET_DIR_IU_XRAY')
 
+_AVAILABLE_SPLITS = ['train', 'val', 'test', 'all']
 
 def _reports_iterator(reports):
     for report in reports:
@@ -38,8 +39,8 @@ class IUXRayDataset(Dataset):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_IU_XRAY not found in env variables')
 
-        if dataset_type not in ['train', 'val', 'test']:
-            raise ValueError('No such type, must be train, val, or test')
+        if dataset_type not in _AVAILABLE_SPLITS:
+            raise ValueError(f'No such type, must be in {_AVAILABLE_SPLITS}')
         
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
@@ -58,10 +59,11 @@ class IUXRayDataset(Dataset):
             reports = list(json.load(f).values())
 
         # Filter by train, val, test
-        list_fname = os.path.join(self.reports_dir, f'{dataset_type}.txt')
-        with open(list_fname, 'r') as f:
-            reports_from_split = set(l.strip() for l in f.readlines())
-        reports = [rep for rep in reports if rep['filename'] in reports_from_split]
+        if dataset_type != 'all':
+            list_fname = os.path.join(self.reports_dir, f'{dataset_type}.txt')
+            with open(list_fname, 'r') as f:
+                reports_from_split = set(l.strip() for l in f.readlines())
+            reports = [rep for rep in reports if rep['filename'] in reports_from_split]
 
         # Keep only max images
         if max_samples is not None:

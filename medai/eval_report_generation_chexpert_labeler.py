@@ -5,11 +5,11 @@ import subprocess
 import argparse
 import pandas as pd
 import numpy as np
-import hashlib
 from sklearn.metrics import precision_recall_fscore_support as prf1s, roc_auc_score, accuracy_score
 from pprint import pprint
 
 from medai.datasets.common import CHEXPERT_LABELS
+from medai.datasets.iu_xray import DATASET_DIR
 from medai.utils import WORKSPACE_DIR
 from medai.metrics import get_results_folder
 
@@ -18,9 +18,7 @@ CHEXPERT_FOLDER = '~/chexpert/chexpert-labeler'
 CHEXPERT_PYTHON = '~/software/miniconda3/envs/chexpert-label/bin/python'
 
 TMP_FOLDER = os.path.join(WORKSPACE_DIR, 'tmp', 'chexpert-labeler')
-CACHE_FOLDER = os.path.join(WORKSPACE_DIR, 'cache', 'chexpert-labeler')
-
-GT_LABELED_FILEPATH = os.path.join(CACHE_FOLDER, 'gt-reports-labeled.csv')
+GT_LABELS_FILEPATH = os.path.join(DATASET_DIR, 'reports', 'reports_with_chexpert_labels.csv')
 
 
 def _labels_with_suffix(suffix):
@@ -30,67 +28,27 @@ def _labels_with_suffix(suffix):
     return [f'{label}-{suffix}' for label in CHEXPERT_LABELS]
 
 
-def _hash_report(report, n=20):
-    """Hash a report to avoid recalculations."""
-    if not isinstance(report, str):
-        raise Exception('Report must be string')
-    payload = report.encode('utf-8')
-    return hashlib.sha1(payload).hexdigest()[:n]
+def _load_gt_labels(df):
+    if not os.path.isfile(GT_LABELS_FILEPATH):
+        raise Exception('Ground truth labels not found: ', GT_LABELS_FILEPATH)
 
+    # Load CSV
+    gt_with_labels = pd.read_csv(GT_LABELS_FILEPATH, index_col=0)
+    gt_with_labels.replace((-1, -2), 0, inplace=True)
 
-def _load_cached_gt_labels(df):
-    """Loads cached file with labeled ground truth."""
-    if not os.path.isfile(GT_LABELED_FILEPATH):
-        print('Cached file for GT not found in', GT_LABELED_FILEPATH)
-        return None
+    # Assure it has all necessary reports
+    target_reports = set(df['filename'])
+    saved_reports = set(gt_with_labels['filename'])
+    if not target_reports.issubset(saved_reports):
+        missing = saved_reports.difference(target_reports)
+        raise Exception(f'GT missing {len(missing)} reports')
 
-    # Load cached CSV
-    cached = pd.read_csv(GT_LABELED_FILEPATH)
-
-    # Calculate a hash for each report
-    df = df.assign(hash=[
-        _hash_report(report)
-        for report in df['ground_truth']
-    ])
-
-    # Determine if it has all necessary hashes
-    target_hashes = set(df['hash'])
-    cached_hashes = set(cached['hash'])
-    if not target_hashes.issubset(cached_hashes):
-        print('Cached file for GT does not have all reports')
-        return None
-
-    # Merge on hashes
-    merged = df.merge(cached, how='left', on='hash')
+    # Merge on filenames
+    merged = df.merge(gt_with_labels, how='left', on='filename')
 
     # Return only np.array with labels
-    labels = _labels_with_suffix('gt')
+    labels = CHEXPERT_LABELS
     return merged[labels].to_numpy()
-
-
-def _save_cached_gt_labels(df):
-    """Saves calculated labels for ground-truth reports to a CSV file."""
-    # TODO: merge with previous cache, in case 
-
-    # Select only useful columns
-    columns = ['ground_truth'] + _labels_with_suffix('gt')
-    cache_df = df[columns].copy()
-
-    # Calculate a hash for each report
-    if 'hash' not in df:
-        cache_df = cache_df.assign(hash=[
-            _hash_report(report)
-            for report in cache_df['ground_truth']
-        ])
-
-    # Remove duplicate rows
-    cache_df.drop_duplicates(subset='hash', inplace=True)
-
-    # Save to file
-    os.makedirs(CACHE_FOLDER, exist_ok=True)
-    cache_df.to_csv(GT_LABELED_FILEPATH, index=False)
-    print(f'\tSaved labels cache to {GT_LABELED_FILEPATH}')
-    return
 
 
 def _get_custom_env():
@@ -134,8 +92,8 @@ def _apply_labeler_to_column(dataframe, column_name):
                                            env=_get_custom_env(),
                                            )
     except subprocess.CalledProcessError as e:
-        print('Exception: ', e.stderr)
-        return None
+        print('Labeler failed: ', e.stderr)
+        raise
     
     # Read chexpert-labeler output
     out_df = pd.read_csv(output_path)
@@ -151,15 +109,8 @@ def _apply_labeler_to_column(dataframe, column_name):
 
 def _apply_labeler_to_df(df):
     """Calculates chexpert labels for a set of GT and generated reports."""
-    # Calculate labels for ground truth
-    ground_truth = _load_cached_gt_labels(df)
-    cache_missed = ground_truth is None
-    if cache_missed:
-        # Cache miss, actually calculate and save
-        ground_truth = _apply_labeler_to_column(df, 'ground_truth')
-    else:
-        print('Using cached labels for ground truth')
-
+    # Load labels for ground truth
+    ground_truth = _load_gt_labels(df)
 
     # Calculate labels for generated
     generated = _apply_labeler_to_column(df, 'generated')
@@ -167,9 +118,6 @@ def _apply_labeler_to_df(df):
     # Concat in main dataframe
     df = _concat_df_matrix(df, ground_truth, 'gt')
     df = _concat_df_matrix(df, generated, 'gen')
-    
-    if cache_missed:
-        _save_cached_gt_labels(df)
 
     return df
 
@@ -234,6 +182,7 @@ def evaluate_run(run_name,
                  override=False,
                  max_samples=None,
                  free=False,
+                 quiet=False,
                  ):
     """Evaluates a run with the Chexpert-labeler."""
     # Folder containing run results
@@ -280,7 +229,8 @@ def evaluate_run(run_name,
         json.dump(metrics, f)
     print('Saved to file: ', chexpert_metrics_path)
 
-    pprint(metrics)
+    if not quiet:
+        pprint(metrics)
 
 
 def parse_args():
@@ -296,6 +246,8 @@ def parse_args():
                         help='If present, the run is non-debug')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Debug: use a max amount of samples')
+    parser.add_argument('--quiet', action='store_true',
+                        help='Do not print metrics to stdout')
 
     args = parser.parse_args()
 
@@ -312,4 +264,5 @@ if __name__ == '__main__':
                  override=args.override,
                  max_samples=args.max_samples,
                  free=args.free,
+                 quiet=args.quiet,
                  )
