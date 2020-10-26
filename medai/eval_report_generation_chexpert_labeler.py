@@ -10,14 +10,14 @@ from pprint import pprint
 
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.datasets.iu_xray import DATASET_DIR
-from medai.utils import WORKSPACE_DIR
+from medai.utils import TMP_DIR
 from medai.metrics import get_results_folder
 
 
 CHEXPERT_FOLDER = '~/chexpert/chexpert-labeler'
 CHEXPERT_PYTHON = '~/software/miniconda3/envs/chexpert-label/bin/python'
 
-TMP_FOLDER = os.path.join(WORKSPACE_DIR, 'tmp', 'chexpert-labeler')
+TMP_FOLDER = os.path.join(TMP_DIR, 'chexpert-labeler')
 GT_LABELS_FILEPATH = os.path.join(DATASET_DIR, 'reports', 'reports_with_chexpert_labels.csv')
 
 
@@ -71,14 +71,14 @@ def _apply_labeler_to_column(dataframe, column_name):
     """Apply chexpert-labeler to a column of a dataframe."""
     # Grab reports
     reports_only = dataframe[column_name]
-    
+
     # Tmp folder can be removed afterwards
     os.makedirs(TMP_FOLDER, exist_ok=True)
-    
+
     # Create input file
     input_path = os.path.join(TMP_FOLDER, 'reports-input.csv')
     reports_only.to_csv(input_path, header=False, index=False, quoting=csv.QUOTE_ALL)
-    
+
     # Call chexpert-labeler
     output_path = os.path.join(TMP_FOLDER, 'reports-output.csv')
     cmd_cd = f'cd {CHEXPERT_FOLDER}'
@@ -94,16 +94,16 @@ def _apply_labeler_to_column(dataframe, column_name):
     except subprocess.CalledProcessError as e:
         print('Labeler failed: ', e.stderr)
         raise
-    
+
     # Read chexpert-labeler output
     out_df = pd.read_csv(output_path)
-    
+
     # Nan are unknown: mark as negative
     out_df = out_df.fillna(0)
-    
+
     # -1 are Uncertain, mark as negative (REVIEW)
     out_df = out_df.replace(-1, 0)
-    
+
     return out_df[CHEXPERT_LABELS].to_numpy()
 
 
@@ -126,23 +126,23 @@ def _calculate_metrics(df):
     """Calculate metrics for a set of reports."""
     labels_gt = _labels_with_suffix('gt')
     labels_gen = _labels_with_suffix('gen')
-    
+
     ground_truth = df[labels_gt].to_numpy()
     generated = df[labels_gen].to_numpy()
-    
+
     acc = np.array([
         accuracy_score(ground_truth[:, i], generated[:, i])
         for i in range(len(CHEXPERT_LABELS))
     ])
 
     precision, recall, f1, s = prf1s(ground_truth, generated, zero_division=0)
-    
+
     try:
         roc_auc = roc_auc_score(ground_truth, generated, average=None)
     except ValueError as e:
         print(e)
         roc_auc = np.array([-1]*len(CHEXPERT_LABELS))
-        
+
     return acc, precision, recall, f1, roc_auc
 
 
@@ -152,20 +152,20 @@ def _calculate_metrics_dict(df):
 
     for dataset_type in set(df['dataset_type']):
         sub_df = df[df['dataset_type'] == dataset_type]
-        
+
         acc, precision, recall, f1, roc_auc = _calculate_metrics(sub_df)
-        
+
         metrics = {}
-        
+
         def _add_to_results(array, prefix):
             # Add mean value to dict
             metrics[prefix] = array.mean()
-            
+
             # Add values for each label
             array = array.tolist() # Avoid numpy-not-serializable issues
             for label, value in zip(CHEXPERT_LABELS, array):
                 metrics[f'{prefix}-{label}'] = value
-        
+
         _add_to_results(acc, 'acc')
         _add_to_results(precision, 'prec')
         _add_to_results(recall, 'recall')
@@ -197,7 +197,7 @@ def evaluate_run(run_name,
         return
 
     model_output_path = os.path.join(results_folder, f'outputs-{suffix}.csv')
-    
+
     if not os.path.isfile(model_output_path):
         print('Need to compute outputs for run first: ', model_output_path)
         return

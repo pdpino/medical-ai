@@ -4,6 +4,7 @@ import os
 import numpy as np
 
 WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
+TMP_DIR = os.path.join(WORKSPACE_DIR, 'tmp')
 
 def get_timestamp(short=True):
     now = datetime.fromtimestamp(time.time())
@@ -18,7 +19,7 @@ def duration_to_str(all_seconds):
     seconds = all_seconds % 60
     minutes = all_seconds // 60
     hours = minutes // 60
-    
+
     minutes = minutes % 60
 
     return '{}h {}m {}s'.format(hours, minutes, int(seconds))
@@ -42,17 +43,17 @@ def arr_to_range(arr, min_value=0, max_value=1):
 
 def tensor_to_range01(arr, eps=1e-8):
     # arr shape: batch_size, n_channels, height, width
-    
+
     arr_min = arr.min(-1)[0].min(-1)[0]
     # shape: batch_size, n_channels
-    
+
     arr_max = arr.max(-1)[0].max(-1)[0]
     # shape: batch_size, n_channels
 
     arr_min = arr_min.unsqueeze(-1).unsqueeze(-1)
     arr_max = arr_max.unsqueeze(-1).unsqueeze(-1)
     # shape: batch_size, n_channels, 1, 1
-    
+
     arr_range = (arr_max - arr_min) + eps
     return (arr - arr_min) / arr_range
 
