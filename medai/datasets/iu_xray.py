@@ -31,7 +31,7 @@ def _get_default_image_transformation(image_size=(512, 512)):
                               ])
 
 class IUXRayDataset(Dataset):
-    def __init__(self, dataset_type='train', max_samples=None, 
+    def __init__(self, dataset_type='train', max_samples=None,
                  labels=None,
                  sort_samples=True,
                  frontal_only=False, image_size=(512, 512),
@@ -41,7 +41,7 @@ class IUXRayDataset(Dataset):
 
         if dataset_type not in _AVAILABLE_SPLITS:
             raise ValueError(f'No such type, must be in {_AVAILABLE_SPLITS}')
-        
+
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
         self.image_size = image_size
@@ -70,10 +70,10 @@ class IUXRayDataset(Dataset):
             reports = reports[:max_samples]
 
         # Save amounts
-        self._preprocess_reports(reports, sort_samples=sort_samples, 
+        self._preprocess_reports(reports, sort_samples=sort_samples,
                                  vocab=vocab, recompute_vocab=recompute_vocab,
                                  frontal_only=frontal_only)
-        
+
     def size(self):
         return (self.n_images, self.n_unique_reports)
 

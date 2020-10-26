@@ -103,25 +103,6 @@ class CXR14Dataset(Dataset):
         self.label_index = self.label_index.loc[self.label_index['FileName'].isin(available_images)]
         
         self.label_index.reset_index(drop=True, inplace=True)
-        
-    def size(self):
-        n_images, _ = self.label_index.shape
-        return (n_images, self.n_diseases)
-
-    def get_by_name(self, image_name, chosen_diseases=None):
-        idx = self.names_to_idx[image_name]
-
-        image, labels, image_name, bboxes, bbox_valid = self[idx]
-        
-        if chosen_diseases is not None:
-            labels = [
-                label
-                for index, label in enumerate(labels)
-                if self.labels[index] in chosen_diseases
-            ]
-        
-        return image, labels, image_name, bboxes, bbox_valid
-        
     
     def __len__(self):
         n_samples, _ = self.label_index.shape
