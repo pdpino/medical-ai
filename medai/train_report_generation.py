@@ -70,8 +70,11 @@ def evaluate_model(run_name,
     attach_report_writer(engine, dataset.get_vocab(), run_name, free=free,
                          debug=debug)
 
+    # Catch errors, specially for free=True case
+    engine.add_event_handler(Events.EXCEPTION_RAISED, lambda _, err: print(err))
+
     engine.run(dataloader, n_epochs)
-    
+
     return engine.state.metrics
 
 
@@ -95,7 +98,7 @@ def evaluate_and_save(run_name,
     elif free:
         free_values = [True]
     else:
-        free_values = False
+        free_values = [False]
 
     for free in free_values:
         # Add a suffix
@@ -155,11 +158,11 @@ def train_model(run_name,
     # Create validator engine
     validator = Engine(get_step_fn(model, training=False, device=device))
     attach_metrics_report_generation(validator, hierarchical=hierarchical)
-    
+
     # Create trainer engine
     trainer = Engine(get_step_fn(model, optimizer=optimizer, training=True, device=device))
     attach_metrics_report_generation(trainer, hierarchical=hierarchical)
-    
+
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, step=Events.EPOCH_COMPLETED)
@@ -174,18 +177,18 @@ def train_model(run_name,
         max_epochs = trainer.state.max_epochs + initial_epoch
         train_metrics = trainer.state.metrics
         val_metrics = validator.state.metrics
-        
+
         # Save state
         compiled_model.save_current_epoch(epoch)
 
         # Common time
         wall_time = time.time()
-        
+
         # Log to TB
         tb_writer.write_histogram(model, epoch, wall_time)
         tb_writer.write_metrics(train_metrics, 'train', epoch, wall_time)
         tb_writer.write_metrics(val_metrics, 'val', epoch, wall_time)
-        
+
         # Print metrics
         print_str = f'Finished epoch {epoch}/{max_epochs}'
         for metric in print_metrics:
@@ -216,7 +219,7 @@ def train_model(run_name,
     duration_per_epoch = duration_to_str(secs_per_epoch)
     print('Average time per epoch: ', duration_per_epoch)
     print('-'*50)
-    
+
     # Close stuff
     tb_writer.close()
 
@@ -325,6 +328,10 @@ def train_from_scratch(run_name,
                        cnn_freeze=False,
                        max_samples=None,
                        image_size=512,
+                       augment=False,
+                       augment_label=None,
+                       augment_class=None,
+                       augment_kwargs={},
                        debug=True,
                        multiple_gpu=False,
                        post_evaluation=True,
@@ -344,6 +351,12 @@ def train_from_scratch(run_name,
         run_name += '_nosort'
     if shuffle:
         run_name += '_shf'
+    if augment:
+        run_name += '_aug'
+        if augment_label is not None:
+            run_name += f'-{augment_label}'
+            if augment_class is not None:
+                run_name += f'-cls{augment_class}'
 
     # Decide hierarchical
     hierarchical = is_decoder_hierarchical(decoder_name)
@@ -364,6 +377,10 @@ def train_from_scratch(run_name,
     dataset_train_kwargs = {
         'sort_samples': sort_samples,
         'shuffle': shuffle,
+        'augment': augment,
+        'augment_label': augment_label,
+        'augment_class': augment_class,
+        'augment_kwargs': augment_kwargs,
     }
     train_dataloader = prepare_data_report_generation(
         create_dataloader,
@@ -524,6 +541,25 @@ def parse_args():
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                         help='Run name of a pretrained CNN')
 
+    aug_group = parser.add_argument_group('Data-augmentation params')
+    aug_group.add_argument('--augment', action='store_true',
+                        help='If present, augment dataset')
+    aug_group.add_argument('--augment-label', default=None,
+                        help='Augment only samples with a given label present (str/int)')
+    aug_group.add_argument('--augment-class', type=int, choices=[0,1], default=None,
+                        help='If --augment-label is provided, choose if augmenting \
+                              positive (1) or negative (0) samples')
+    aug_group.add_argument('--aug-crop', type=float, default=0.8,
+                        help='Augment samples by cropping a random fraction')
+    aug_group.add_argument('--aug-translate', type=float, default=0.1,
+                        help='Augment samples by translating a random fraction')
+    aug_group.add_argument('--aug-rotation', type=int, default=15,
+                        help='Augment samples by rotating a random amount of degrees')
+    aug_group.add_argument('--aug-contrast', type=float, default=0.5,
+                        help='Augment samples by changing the contrast randomly')
+    aug_group.add_argument('--aug-brightness', type=float, default=0.5,
+                        help='Augment samples by changing the brightness randomly')
+
     hw_group = parser.add_argument_group('Hardware params')
     hw_group.add_argument('--multiple-gpu', action='store_true',
                           help='Use multiple gpus')
@@ -541,6 +577,17 @@ def parse_args():
             parser.error('Must choose a decoder')
         if args.cnn is None and args.cnn_pretrained is None:
             parser.error('Must choose one of cnn or cnn_pretrained')
+
+    if args.augment:
+        args.augment_kwargs = {
+            'crop': args.aug_crop,
+            'translate': args.aug_translate,
+            'rotation': args.aug_rotation,
+            'contrast': args.aug_contrast,
+            'brightness': args.aug_brightness,
+        }
+    else:
+        args.augment_kwargs = {}
 
     return args
 
@@ -584,6 +631,10 @@ if __name__ == '__main__':
                            cnn_imagenet=not args.no_imagenet,
                            cnn_freeze=args.freeze,
                            max_samples=args.max_samples,
+                           augment=args.augment,
+                           augment_label=args.augment_label,
+                           augment_class=args.augment_class,
+                           augment_kwargs=args.augment_kwargs,
                            debug=not args.no_debug,
                            multiple_gpu=args.multiple_gpu,
                            num_workers=args.num_workers,

@@ -4,11 +4,12 @@ import json
 import subprocess
 import argparse
 import re
+import time
 import pandas as pd
 import numpy as np
 from pprint import pprint
 
-from medai.utils import TMP_DIR
+from medai.utils import TMP_DIR, duration_to_str
 from medai.metrics import get_results_folder
 
 
@@ -56,9 +57,6 @@ def _apply_mirqi_to_df(df, gt_col_name='ground_truth', gen_col_name='generated')
 
     # Read MIRQI output # contains reports, "graph" and scores
     out_df = pd.read_csv(OUTPUT_PATH)
-
-    clean_spaces = lambda s: re.sub(r'\s+', ' ', s)
-    out_df['attributes'] = out_df['attributes'].apply(clean_spaces)
 
     # Merge with original DF
     target_cols = ['attributes'] + METRICS_KEYS
@@ -166,6 +164,7 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
+    start_time = time.time()
     evaluate_run(args.run_name,
                  debug=args.debug,
                  override=args.override,
@@ -173,3 +172,6 @@ if __name__ == '__main__':
                  free=args.free,
                  quiet=args.quiet,
                  )
+    total_time = time.time() - start_time
+    print(f'Total time: {duration_to_str(total_time)}')
+    print('=' * 80)

@@ -134,12 +134,13 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    batch_size=10,
                                    sort_samples=True,
                                    shuffle=False,
+                                   augment=False,
+                                   augment_label=None, augment_class=None, augment_kwargs={},
                                    num_workers=2):
     print(f'Loading {dataset_name}/{dataset_type} dataset...')
 
     assert dataset_name in _RG_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _RG_DATASETS[dataset_name]
-
 
     dataset = DatasetClass(dataset_type=dataset_type,
                            max_samples=max_samples,
@@ -147,6 +148,12 @@ def prepare_data_report_generation(create_dataloader_fn,
                            image_size=image_size,
                            sort_samples=sort_samples,
                            )
+
+    if augment:
+        dataset = Augmentator(dataset,
+                              label=augment_label,
+                              force_class=augment_class,
+                              **augment_kwargs)
 
     dataloader = create_dataloader_fn(dataset,
                                       batch_size=batch_size,

@@ -59,7 +59,7 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
         # Move inputs to GPU
         images = data_batch.image.to(device)
         # shape: batch_size, channels=3, height, width
-        
+
         labels = data_batch.labels.to(device)
         # shape(multilabel=True): batch_size, n_labels
         # shape(multilabel=False): batch_size
@@ -81,10 +81,10 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
             labels = labels.float()
         else:
             labels = labels.long()
-        
+
         # Compute classification loss
         loss = loss_fn(outputs, labels)
-        
+
         batch_loss = loss.item()
 
         if training:
@@ -115,7 +115,7 @@ def evaluate_model(model,
 
     labels = dataloader.dataset.labels
     multilabel = dataloader.dataset.multilabel
-    
+
     engine = Engine(get_step_fn(model,
                                 loss,
                                 training=False,
@@ -126,7 +126,7 @@ def evaluate_model(model,
     attach_metric_cm(engine, labels, multilabel=multilabel)
 
     engine.run(dataloader, n_epochs)
-    
+
     return engine.state.metrics
 
 
@@ -148,10 +148,10 @@ def train_model(run_name,
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         print('Resuming from epoch: ', initial_epoch)
-    
+
     # Unwrap stuff
     model, optimizer = compiled_model.get_model_optimizer()
-    
+
     # Classification description
     labels = train_dataloader.dataset.labels
     multilabel = train_dataloader.dataset.multilabel
@@ -170,7 +170,7 @@ def train_model(run_name,
                                    device=device,
                                    ))
     attach_metrics_classification(validator, labels, multilabel=multilabel)
-    
+
     # Create trainer engine
     trainer = Engine(get_step_fn(model,
                                  loss,
@@ -199,7 +199,7 @@ def train_model(run_name,
 
         # Save state
         compiled_model.save_current_epoch(epoch)
-        
+
         # Walltime
         wall_time = time.time()
 
@@ -207,7 +207,7 @@ def train_model(run_name,
         tb_writer.write_histogram(model, epoch, wall_time)
         tb_writer.write_metrics(train_metrics, 'train', epoch, wall_time)
         tb_writer.write_metrics(val_metrics, 'val', epoch, wall_time)
-        
+
         # Print results
         print_str = f'Finished epoch {epoch}/{max_epochs}'
         for metric in print_metrics:
