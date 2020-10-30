@@ -128,9 +128,10 @@ def run_evaluation(run_name,
                                                         )
 
     # Load data
+    dataset_type = 'test-bbox'
     kwargs = {
         'dataset_name': 'cxr14',
-        'dataset_type': 'test-bbox',
+        'dataset_type': dataset_type,
         'labels': compiled_model.metadata.get('dataset_kwargs', {}).get('labels', None),
         'max_samples': max_samples,
         'batch_size': batch_size,
@@ -196,6 +197,7 @@ def run_evaluation(run_name,
 
     if not quiet:
         pprint(metrics)
+    metrics = { dataset_type: metrics }
     save_results(metrics, run_name, classification=True, debug=debug, suffix='grad-cam')
 
 

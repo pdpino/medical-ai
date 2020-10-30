@@ -6,7 +6,7 @@ from medai.utils.common import WORKSPACE_DIR
 
 class MetricsEncoder(json.JSONEncoder):
     """Serializes metrics.
-    
+
     ConfusionMatrix metric returns a torch.Tensor, which is not serializable
         --> transform to list of lists.
     """
@@ -32,7 +32,7 @@ def get_results_folder(run_name, classification=True, debug=True, save_mode=Fals
 
 
 def save_results(metrics_dict, run_name, classification=True, debug=True,
-                 suffix=''):
+                 suffix='', merge_prev=True):
     folder = get_results_folder(run_name, classification=classification, debug=debug,
                                  save_mode=True)
 
@@ -42,7 +42,7 @@ def save_results(metrics_dict, run_name, classification=True, debug=True,
 
     filepath = os.path.join(folder, f'{filename}.json')
 
-    if os.path.isfile(filepath):
+    if os.path.isfile(filepath) and merge_prev:
         with open(filepath, 'r') as f:
             old_dict = json.load(f)
         metrics_dict = {
