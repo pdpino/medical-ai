@@ -66,28 +66,28 @@ class CXR14Dataset(Dataset):
         # Load csv files
         labels_fname = os.path.join(DATASET_DIR, 'label_index.csv')
         self.label_index = pd.read_csv(labels_fname, header=0)
-        
+
         # Load Bbox JSON
         bboxes_fpath = os.path.join(DATASET_DIR, 'bbox_by_image_by_disease.json')
         with open(bboxes_fpath, 'r') as f:
             self.bboxes_by_image = json.load(f)
-        
+
         # Choose diseases names
         if not labels:
             self.labels = list(CXR14_DISEASES)
         else:
             # Keep only the ones that exist
             self.labels = [d for d in labels if d in CXR14_DISEASES]
-            
+
             not_found_diseases = list(set(self.labels) - set(CXR14_DISEASES))
             if not_found_diseases:
-                print(f'Diseases not found: {not_found_diseases}(ignoring)')            
+                print(f'Diseases not found: {not_found_diseases}(ignoring)')
 
         self.n_diseases = len(self.labels)
         self.multilabel = True
 
         assert self.n_diseases > 0, 'No diseases selected!'
-        
+
         # Filter labels DataFrame
         columns = ['FileName'] + self.labels
         self.label_index = self.label_index[columns]
@@ -101,9 +101,9 @@ class CXR14Dataset(Dataset):
             available_images = set(list(available_images)[:max_samples])
 
         self.label_index = self.label_index.loc[self.label_index['FileName'].isin(available_images)]
-        
+
         self.label_index.reset_index(drop=True, inplace=True)
-    
+
     def __len__(self):
         n_samples, _ = self.label_index.shape
         return n_samples
@@ -111,7 +111,7 @@ class CXR14Dataset(Dataset):
     def __getitem__(self, idx):
         # Load image_name and labels
         row = self.label_index.iloc[idx]
-        
+
         # Image name
         image_name = row[0]
 
@@ -145,8 +145,8 @@ class CXR14Dataset(Dataset):
                 bboxes_valid.append(1)
                 bboxes.append(bbox)
 
-        bboxes_valid = torch.tensor(bboxes_valid)
-        bboxes = torch.tensor(bboxes)
+        bboxes_valid = torch.tensor(bboxes_valid).float()
+        bboxes = torch.tensor(bboxes).float()
 
         return BatchItem(
             image=image,

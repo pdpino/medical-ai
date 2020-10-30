@@ -64,13 +64,13 @@ def threshold_attributions(attributions, thresh=0.5):
     zeros = torch.zeros(attributions.size()).to(attributions.device)
     attributions = torch.where(attributions >= thresh, ones, zeros)
     # shape: batch_size, h, w
-    
+
     return attributions
 
 
 def bbox_coordinates_to_map(bboxes, valid, image_size):
     """Transform bbox (x,y,w,h) pairs to binary maps.
-    
+
     Args:
       bboxes - tensor of shape (batch_size, n_diseases, 4)
       valid - tensor of shape (batch_size, n_diseases)
@@ -90,25 +90,25 @@ def bbox_coordinates_to_map(bboxes, valid, image_size):
             max_y = min_y + height
 
             bboxes_map[i_batch, j_label, min_y:max_y, min_x:max_x] = 1
-            
+
     return bboxes_map
 
 
 def calculate_attributions(grad_cam, images, label_index, image_size):
     attributions = grad_cam.attribute(images, label_index).detach()
     # shape: batch_size, 1, layer_h, layer_w
-    
+
     attributions = interpolate(attributions, image_size)
     # shape: batch_size, 1, h, w
 
     attributions = tensor_to_range01(attributions)
     # shape: batch_size, 1, h, w
-    
+
     attributions = attributions.squeeze(1)
     # shape: batch_size, h, w
-    
+
     return attributions
-    
+
 
 def run_evaluation(run_name,
                    debug=True,
@@ -131,6 +131,7 @@ def run_evaluation(run_name,
     kwargs = {
         'dataset_name': 'cxr14',
         'dataset_type': 'test-bbox',
+        'labels': compiled_model.metadata.get('dataset_kwargs', {}).get('labels', None),
         'max_samples': max_samples,
         'batch_size': batch_size,
     }
@@ -140,12 +141,12 @@ def run_evaluation(run_name,
     dataloader = prepare_data_classification(**kwargs)
     image_size = dataloader.dataset.image_size
     labels = dataloader.dataset.labels
-    
+
     # Image scaling
     scale = _calculate_image_scale(image_size, device=device)
 
     # Prepare GradCAM
-    wrapped_model = ModelWrapper(compiled_model.model)
+    wrapped_model = ModelWrapper(compiled_model.model).to(device)
     if multiple_gpu:
         wrapped_model = nn.DataParallel(wrapped_model)
 
@@ -156,13 +157,14 @@ def run_evaluation(run_name,
     def step_fn(engine, batch):
         ## Calculate bounding boxes
         images = batch.image.to(device)
+        images.requires_grad = True # Needed for Grad-CAM
         # shape: batch_size, 3, h, w
 
         bboxes_valid = batch.bboxes_valid.to(device) # shape: batch_size, n_labels
         bboxes = (batch.bboxes.to(device) / scale).long() # shape: batch_size, n_labels, 4
         bboxes_map = bbox_coordinates_to_map(bboxes, bboxes_valid, image_size)
         # shape: batch_size, n_labels, height, width
-        
+
         ## Calculate attributions
         attributions = []
         for index, _ in enumerate(labels):
@@ -170,7 +172,7 @@ def run_evaluation(run_name,
             attributions.append(attrs)
         attributions = torch.stack(attributions, dim=1)
         # shape: batch_size, n_labels, h, w
-        
+
         attributions = threshold_attributions(attributions)
         # shape: batch_size, n_labels, h, w
 
@@ -244,6 +246,9 @@ if __name__ == '__main__':
 
     start_time = time.time()
 
+    if args.multiple_gpu:
+        print('Warning: --multiple-gpu option is not working with Grad-CAM')
+
     run_evaluation(args.run_name,
                    debug=not args.no_debug,
                    device=device,
@@ -252,9 +257,12 @@ if __name__ == '__main__':
                    thresh=args.thresh,
                    image_size=args.image_size,
                    quiet=args.quiet,
-                   multiple_gpu=False, # args.multiple_gpu # FIXME: not working
+                   multiple_gpu=False, # args.multiple_gpu, # FIXME: not working
                    )
 
     total_time = time.time() - start_time
     print(f'Total time: {duration_to_str(total_time)}')
     print('=' * 80)
+
+    # --multiple-gpu error:
+    # RuntimeError: All input tensors must be on the same device. Received cuda:0 and cuda:1
