@@ -11,7 +11,7 @@ from pprint import pprint
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.datasets.iu_xray import DATASET_DIR
 from medai.utils import TMP_DIR
-from medai.metrics import get_results_folder
+from medai.metrics import get_results_folder, load_rg_outputs
 
 
 CHEXPERT_FOLDER = '~/chexpert/chexpert-labeler'
@@ -196,14 +196,12 @@ def evaluate_run(run_name,
         print('Skipping run, already calculated: ', run_name)
         return
 
-    model_output_path = os.path.join(results_folder, f'outputs-{suffix}.csv')
-
-    if not os.path.isfile(model_output_path):
-        print('Need to compute outputs for run first: ', model_output_path)
-        return
-
     # Read outputs
-    df = pd.read_csv(model_output_path)
+    df = load_rg_outputs(run_name, debug=debug, free=free)
+
+    if df is None:
+        print('Need to compute outputs for run first: ', run_name)
+        return
 
     _n_distinct_epochs = set(df['epoch'])
     if len(_n_distinct_epochs) != 1:
