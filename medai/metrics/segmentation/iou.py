@@ -2,19 +2,7 @@ import torch
 from ignite.metrics import Metric
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
-
-def divide_tensors(a, b):
-    """Divide two tensors element-wise, avoiding NaN values in the result."""
-    dont_use = b == 0
-
-    a = a.clone()
-    a[dont_use] = 0
-
-    b = b.clone()
-    b[dont_use] = 1
-
-    return a / b
-
+from medai.utils import divide_tensors
 
 class IoU(Metric):
     """Computes intersection-over-union in images."""
@@ -53,11 +41,16 @@ class IoU(Metric):
         iou = divide_tensors(intersection, union)
         # shape: (batch_size, n_labels)
 
-        iou = iou * gt_valid # Only keep valid bboxes scores
-        # shape: (batch_size, n_labels)
+        if gt_valid is not None:
+            iou = iou * gt_valid # Only keep valid bboxes scores
+            # shape: (batch_size, n_labels)
+            n_samples = gt_valid.sum(dim=0) # shape: n_labels
+        else:
+            # Assume all are valid
+            batch_size, n_labels, _, _ = gt_map.size()
+            n_samples = torch.ones(n_labels).to(gt_map.device) * batch_size
 
         added_iou = iou.sum(dim=0) # shape: n_labels
-        n_samples = gt_valid.sum(dim=0) # shape: n_labels
 
         self._added_iou += added_iou
         self._n_samples += n_samples

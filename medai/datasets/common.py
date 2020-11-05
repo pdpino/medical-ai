@@ -7,6 +7,7 @@ BatchItem = namedtuple('BatchItem', [
     'filename',
     'bboxes',
     'bboxes_valid',
+    'masks',
 ])
 
 BatchItems = namedtuple('BatchItems', [

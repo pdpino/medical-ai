@@ -1,9 +1,9 @@
 import torch
 from torch import nn
 
-def _calc_output_size(input_size, kernel_size, stride, dilation=0, padding=0):
+def _calc_output_size(input_size, kernel_size, stride, dilation=1, padding=0):
     """Calculates output size for a given convolution configuration.
-    
+
     Should work with Conv and MaxPool layers.
     See formula in docs https://pytorch.org/docs/stable/nn.html#conv2d
     """
@@ -24,7 +24,7 @@ def _calc_output_size(input_size, kernel_size, stride, dilation=0, padding=0):
 
 def calc_module_output_size(model, input_size):
     """Calculates output size of a model.
-    
+
     Considers only Conv2d, MaxPool2d, AvgPool2d layers.
     Tested only with Sequential layers, deeper configurations may not work
     """
@@ -41,7 +41,7 @@ def calc_module_output_size(model, input_size):
             size = _calc_output_size(size, submodule.kernel_size, submodule.stride,
                                      padding=submodule.padding,
                                      )
-                                     
+
 
         if isinstance(submodule, nn.Conv2d):
             last_channel_out = submodule.out_channels
