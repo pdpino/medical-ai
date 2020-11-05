@@ -195,7 +195,7 @@ def run_evaluation(run_name,
         pprint(metrics)
 
     metrics = { dataset_type: metrics }
-    save_results(metrics, run_name, classification=True, debug=debug, suffix='grad-cam')
+    save_results(metrics, run_name, task='cls', debug=debug, suffix='grad-cam')
 
 
 def parse_args():

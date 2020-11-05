@@ -13,22 +13,7 @@ from medai.models.classification import create_cnn
 from medai.models.report_generation import create_decoder
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.checkpoint.compiled_model import CompiledModel
-from medai.utils.common import WORKSPACE_DIR
-
-
-def _get_checkpoint_folder(run_name, classification=True, debug=True, save_mode=False):
-    mode_folder = 'classification' if classification else 'report_generation'
-    debug_folder = 'debug' if debug else ''
-
-    folder = os.path.join(WORKSPACE_DIR, mode_folder, 'models', debug_folder)
-    folder = os.path.join(folder, run_name)
-
-    if save_mode:
-        os.makedirs(folder, exist_ok=True)
-    else:
-        assert os.path.isdir(folder), f'Run folder does not exist: {folder}'
-
-    return folder
+from medai.utils.files import get_checkpoint_folder
 
 
 _CHECKPOINT_EPOCH_REGEX = re.compile(r'\d+')
@@ -68,20 +53,24 @@ def _load_meta(folder):
     return data
 
 
-def load_metadata(run_name, classification=True, debug=True):
+def load_metadata(run_name, task, debug=True):
     """Public wrapper to call _load_meta()."""
-    folder = _get_checkpoint_folder(run_name,
-                                    classification=classification,
-                                    debug=debug,
-                                    save_mode=False)
+    folder = get_checkpoint_folder(run_name,
+                                   task=task,
+                                   debug=debug,
+                                   save_mode=False,
+                                   assert_exists=True,
+                                   )
 
-    return _load_meta(folder)    
+    return _load_meta(folder)
 
 
-def save_metadata(data, run_name, classification=True, debug=True):
+def save_metadata(data, run_name, task, debug=True):
     """Saves run metadata to file."""
-    folder = _get_checkpoint_folder(run_name, classification=classification, debug=debug,
-                                    save_mode=True)
+    folder = get_checkpoint_folder(run_name,
+                                   task=task,
+                                   debug=debug,
+                                   save_mode=True)
 
     filepath = os.path.join(folder, 'metadata.json')
 
@@ -98,7 +87,12 @@ def load_compiled_model_classification(run_name,
                                        ):
     """Load a compiled classification model."""
     # Folder contains all pertaining files
-    folder = _get_checkpoint_folder(run_name, classification=True, debug=debug, save_mode=False)
+    folder = get_checkpoint_folder(run_name,
+                                   task='cls',
+                                   debug=debug,
+                                   save_mode=False,
+                                   assert_exists=True,
+                                   )
 
     # Load metadata
     metadata = _load_meta(folder)
@@ -129,21 +123,25 @@ def load_compiled_model_report_generation(run_name,
                                           ):
     """Loads a report-generation CNN2Seq model."""
     # Folder contains all pertaining files
-    folder = _get_checkpoint_folder(run_name, classification=False, debug=debug,
-                                    save_mode=False)
+    folder = get_checkpoint_folder(run_name,
+                                   task='rg',
+                                   debug=debug,
+                                   save_mode=False,
+                                   assert_exists=True,
+                                   )
 
     # Load metadata
     metadata = _load_meta(folder)
     hparams = metadata.get('hparams', {})
-    
+
     # Create CNN
     cnn_kwargs = metadata.get('cnn_kwargs', None)
     assert cnn_kwargs, 'CNN kwargs are not present in metadata'
     cnn = create_cnn(**cnn_kwargs)
-    
+
     # Create Decoder
     decoder = create_decoder(**metadata['decoder_kwargs'])
-    
+
     # Create CNN2Seq model and optimizer
     model = CNN2Seq(cnn, decoder).to(device)
     if multiple_gpu:
@@ -170,7 +168,7 @@ def load_compiled_model_report_generation(run_name,
 def attach_checkpoint_saver(run_name,
                             compiled_model,
                             engine,
-                            classification=True,
+                            task,
                             debug=True,
                             epoch_freq=1,
                             dryrun=False,
@@ -181,8 +179,11 @@ def attach_checkpoint_saver(run_name,
 
     initial_epoch = compiled_model.get_current_epoch()
 
-    folderpath = _get_checkpoint_folder(run_name, classification=classification, debug=debug,
-                                        save_mode=True)
+    folderpath = get_checkpoint_folder(run_name,
+                                       task=task,
+                                       debug=debug,
+                                       save_mode=True,
+                                       )
     checkpoint = Checkpoint(
         compiled_model.to_save_checkpoint(),
         DiskSaver(folderpath, require_empty=False, atomic=False),

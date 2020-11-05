@@ -5,25 +5,19 @@ from tensorboardX import SummaryWriter
 from torch import nn
 
 from medai import utils
+from medai.utils.files import get_tb_log_folder
 
 IGNORE_METRICS = [
     'cm', # Confusion-matrix, no sense to put it in TB
 ]
 
-def _get_log_dir(run_name, classification=True,
-                 workspace_dir=utils.WORKSPACE_DIR, debug=True):
-    debug_folder = 'debug' if debug else ''
-    mode_folder = 'classification' if classification else 'report_generation'
-    return os.path.join(workspace_dir, mode_folder, 'runs', debug_folder, run_name)
-
-
 class TBWriter:
-    def __init__(self, run_name, classification=True,
+    def __init__(self, run_name, task,
                  ignore_metrics=IGNORE_METRICS,
                  dryrun=False,
                  histogram=False,
                  workspace_dir=utils.WORKSPACE_DIR, debug=True, **kwargs):
-        self.log_dir = _get_log_dir(run_name, classification=classification,
+        self.log_dir = get_tb_log_folder(run_name, task=task,
                                     workspace_dir=workspace_dir, debug=debug)
 
         self.writer = SummaryWriter(self.log_dir,

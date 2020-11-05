@@ -2,7 +2,7 @@ import json
 import os
 import torch
 
-from medai.utils.common import WORKSPACE_DIR
+from medai.utils.files import get_results_folder
 
 class MetricsEncoder(json.JSONEncoder):
     """Serializes metrics.
@@ -16,24 +16,9 @@ class MetricsEncoder(json.JSONEncoder):
         return obj
 
 
-def get_results_folder(run_name, classification=True, debug=True, save_mode=False):
-    mode_folder = 'classification' if classification else 'report_generation'
-    debug_folder = 'debug' if debug else ''
-
-    folder = os.path.join(WORKSPACE_DIR, mode_folder, 'results', debug_folder)
-    folder = os.path.join(folder, run_name)
-
-    if save_mode:
-        os.makedirs(folder, exist_ok=True)
-    else:
-        assert os.path.isdir(folder), f'Run folder does not exist: {folder}'
-
-    return folder
-
-
-def save_results(metrics_dict, run_name, classification=True, debug=True,
+def save_results(metrics_dict, run_name, task, debug=True,
                  suffix='', merge_prev=True):
-    folder = get_results_folder(run_name, classification=classification, debug=debug,
+    folder = get_results_folder(run_name, task=task, debug=debug,
                                  save_mode=True)
 
     filename = 'metrics'
@@ -62,8 +47,8 @@ def load_rg_outputs(run_name, debug=True, free=False):
     Returns a DataFrame with columns:
     filename,epoch,dataset_type,ground_truth,generated
     """
-    results_folder = get_results_folder(run_name, debug=debug, classification=False)
-    suffix = get_free_suffix(free)
+    results_folder = get_results_folder(run_name, task='rg', debug=debug)
+    suffix = 'free' if free else 'notfree'
 
     outputs_path = os.path.join(results_folder, f'outputs-{suffix}.csv')
 

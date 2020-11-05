@@ -5,7 +5,6 @@ import numpy as np
 from ignite.engine import Events
 from ignite.metrics import RunningAverage, MetricsLambda
 
-from medai.metrics import get_results_folder
 from medai.metrics.report_generation.word_accuracy import WordAccuracy
 from medai.metrics.report_generation.bleu import Bleu
 from medai.metrics.report_generation.rouge import RougeL
@@ -14,12 +13,13 @@ from medai.metrics.report_generation.distinct_sentences import DistinctSentences
 from medai.metrics.report_generation.distinct_words import DistinctWords
 from medai.utils import WORKSPACE_DIR
 from medai.utils.csv import CSVWriter
+from medai.utils.files import get_results_folder
 from medai.utils.nlp import ReportReader, trim_rubbish
 
 
 def _get_flat_reports(outputs):
     """Transforms the output to arrays of words indexes.
-    
+
     Args:
         outputs: dict with at least:
             ['flat_reports']: shape: batch_size, n_words
@@ -31,7 +31,7 @@ def _get_flat_reports(outputs):
     return flat_reports_gen, flat_reports
 
 
-def _attach_bleu(engine, up_to_n=4, 
+def _attach_bleu(engine, up_to_n=4,
                  output_transform=_get_flat_reports):
     bleu_up_to_n = Bleu(n=up_to_n, output_transform=output_transform)
     for i in range(up_to_n):
@@ -76,18 +76,18 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False):
 
 def attach_report_writer(engine, vocab, run_name, debug=True, free=False):
     """Attach a report-writer to an engine.
-    
+
     For each example in the dataset writes to a CSV the generated report and ground truth.
     """
     report_reader = ReportReader(vocab)
 
     folder = get_results_folder(run_name,
-                                classification=False,
+                                task='rg',
                                 debug=debug,
                                 save_mode=True)
     suffix = 'free' if free else 'notfree'
     path = os.path.join(folder, f'outputs-{suffix}.csv')
-    
+
     writer = CSVWriter(path, columns=[
         'filename',
         'epoch',
@@ -95,7 +95,7 @@ def attach_report_writer(engine, vocab, run_name, debug=True, free=False):
         'ground_truth',
         'generated',
     ])
-    
+
     @engine.on(Events.STARTED)
     def _open_writer():
         writer.open()
@@ -106,7 +106,7 @@ def attach_report_writer(engine, vocab, run_name, debug=True, free=False):
         filenames = engine.state.batch.filenames
         gt_reports = output['flat_reports']
         gen_reports = output['flat_reports_gen']
-        
+
         epoch = engine.state.epoch
         dataset_type = engine.state.dataloader.dataset.dataset_type
 
@@ -135,7 +135,7 @@ def attach_report_writer(engine, vocab, run_name, debug=True, free=False):
                 report,
                 generated,
             )
-            
+
     @engine.on(Events.COMPLETED)
     def _close_writer():
         writer.close()

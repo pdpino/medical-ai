@@ -9,7 +9,8 @@ from pycocoevalcap.cider import cider_scorer
 from pycocoevalcap.rouge import rouge as rouge_lib
 
 from medai.datasets.iu_xray import DATASET_DIR
-from medai.metrics import get_results_folder, save_results, load_rg_outputs
+from medai.metrics import save_results, load_rg_outputs
+from medai.utils.files import get_results_folder
 from medai.utils import duration_to_str
 
 class RougeLScorer:
@@ -57,7 +58,7 @@ def run_evaluation(run_name,
     ]
 
     # Read outputted reports
-    folder = get_results_folder(run_name, classification=False, debug=debug)
+    folder = get_results_folder(run_name, task='rg', debug=debug)
 
     suffix = 'free' if free else 'notfree'
 
@@ -117,7 +118,7 @@ def run_evaluation(run_name,
             }
 
     # Save metrics to file
-    save_results(metrics, run_name, classification=False,
+    save_results(metrics, run_name, task='rg',
                  debug=debug, suffix=suffix)
 
     if not quiet:

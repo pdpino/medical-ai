@@ -144,7 +144,7 @@ def train_model(run_name,
                 ):
     # Prepare run
     print('Training run: ', run_name)
-    tb_writer = TBWriter(run_name, classification=True, debug=debug, dryrun=dryrun)
+    tb_writer = TBWriter(run_name, task='cls', debug=debug, dryrun=dryrun)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         print('Resuming from epoch: ', initial_epoch)
@@ -223,7 +223,7 @@ def train_model(run_name,
     attach_checkpoint_saver(run_name,
                             compiled_model,
                             trainer,
-                            classification=True,
+                            task='cls',
                             debug=debug,
                             dryrun=dryrun,
                             )
@@ -268,7 +268,7 @@ def evaluate_and_save(run_name,
         name = dataloader.dataset.dataset_type
         metrics[name] = evaluate_model(model, dataloader, **kwargs)
 
-    save_results(metrics, run_name, classification=True, debug=debug, suffix=suffix)
+    save_results(metrics, run_name, task='cls', debug=debug, suffix=suffix)
 
     return metrics
 
@@ -524,7 +524,7 @@ def train_from_scratch(run_name,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
     }
-    save_metadata(metadata, run_name, classification=True, debug=debug)
+    save_metadata(metadata, run_name, task='cls', debug=debug)
 
 
     # Create compiled_model

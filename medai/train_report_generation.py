@@ -120,7 +120,7 @@ def evaluate_and_save(run_name,
 
         save_results(metrics,
                      run_name,
-                     classification=False,
+                     task='rg',
                      debug=debug,
                      suffix=used_suffix,
                      )
@@ -140,7 +140,7 @@ def train_model(run_name,
                ):
     # Prepare run stuff
     print('Run: ', run_name)
-    tb_writer = TBWriter(run_name, classification=False, debug=debug, dryrun=dryrun)
+    tb_writer = TBWriter(run_name, task='rg', debug=debug, dryrun=dryrun)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         print(f'Resuming from epoch {initial_epoch}')
@@ -204,7 +204,7 @@ def train_model(run_name,
     attach_checkpoint_saver(run_name,
                             compiled_model,
                             trainer,
-                            classification=False,
+                            task='rg',
                             debug=debug,
                             dryrun=dryrun or (not save_model),
                            )
@@ -457,7 +457,7 @@ def train_from_scratch(run_name,
             'batch_size': batch_size,
         },
     }
-    save_metadata(metadata, run_name, classification=False, debug=debug)
+    save_metadata(metadata, run_name, task='rg', debug=debug)
 
     # Compiled model
     compiled_model = CompiledModel(model, optimizer, metadata)

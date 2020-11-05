@@ -11,7 +11,8 @@ from pprint import pprint
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.datasets.iu_xray import DATASET_DIR
 from medai.utils import TMP_DIR
-from medai.metrics import get_results_folder, load_rg_outputs
+from medai.utils.files import get_results_folder
+from medai.metrics import load_rg_outputs
 
 
 CHEXPERT_FOLDER = '~/chexpert/chexpert-labeler'
@@ -186,7 +187,7 @@ def evaluate_run(run_name,
                  ):
     """Evaluates a run with the Chexpert-labeler."""
     # Folder containing run results
-    results_folder = get_results_folder(run_name, classification=False, debug=debug)
+    results_folder = get_results_folder(run_name, task='rg', debug=debug)
 
     # Output file at the end of this process
     suffix = 'free' if free else 'notfree'

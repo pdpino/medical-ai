@@ -10,7 +10,7 @@ import numpy as np
 from pprint import pprint
 
 from medai.utils import TMP_DIR, duration_to_str
-from medai.metrics import get_results_folder
+from medai.metrics.files import get_results_folder
 
 
 MIRQI_FOLDER = '~/software/MIRQI'
@@ -244,7 +244,7 @@ def evaluate_run(run_name,
                  ):
     """Evaluates a run with the MIRQI metric."""
     # Folder containing run results
-    results_folder = get_results_folder(run_name, classification=False, debug=debug)
+    results_folder = get_results_folder(run_name, task='rg', debug=debug)
 
     # Output file at the end of this process
     suffix = 'free' if free else 'notfree'
