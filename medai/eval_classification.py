@@ -22,6 +22,7 @@ def run_evaluation(run_name,
                    n_epochs=1,
                    frontal_only=False,
                    labels=None,
+                   norm_by_sample=False,
                    image_size=512,
                    debug=True,
                    multiple_gpu=False,
@@ -45,6 +46,7 @@ def run_evaluation(run_name,
         'batch_size': batch_size,
         'image_size': (image_size, image_size),
         'frontal_only': frontal_only,
+        'norm_by_sample': norm_by_sample,
     }
 
     dataloaders = [
@@ -70,7 +72,7 @@ def run_evaluation(run_name,
                                 suffix=suffix,
                                 debug=debug,
                                 device=device)
-    
+
     pprint(metrics)
 
 
@@ -82,7 +84,7 @@ def parse_args():
     parser.add_argument('-d', '--dataset', type=str, default=None, required=True,
                         choices=AVAILABLE_CLASSIFICATION_DATASETS,
                         help='Choose dataset to evaluate on')
-    parser.add_argument('--eval-in', nargs='*', default=['train', 'val', 'test'],
+    parser.add_argument('--eval-in', nargs='*', default=['test', 'train', 'val'],
                         help='Eval in datasets')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
@@ -96,6 +98,8 @@ def parse_args():
                         help='Subset of labels')
     parser.add_argument('--frontal-only', action='store_true',
                         help='Use only frontal images')
+    parser.add_argument('--norm-by-sample', action='store_true',
+                        help='If present, normalize each sample (instead of using dataset stats)')
     parser.add_argument('--multiple-gpu', action='store_true',
                         help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
@@ -127,6 +131,7 @@ if __name__ == '__main__':
                    n_epochs=args.epochs,
                    labels=args.labels,
                    image_size=args.image_size,
+                   norm_by_sample=args.norm_by_sample,
                    debug=not args.no_debug,
                    multiple_gpu=args.multiple_gpu,
                    device=device,

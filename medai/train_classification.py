@@ -377,6 +377,7 @@ def train_from_scratch(run_name,
                        lr=None,
                        labels=None,
                        batch_size=None,
+                       norm_by_sample=False,
                        n_epochs=10,
                        frontal_only=False,
                        oversample=False,
@@ -433,6 +434,10 @@ def train_from_scratch(run_name,
         # labels only works in CXR-14, for now
         labels_str = '_'.join(labels)
         run_name += f'_{labels_str}'
+    if norm_by_sample:
+        run_name += '_normS'
+    else:
+        run_name += '_normD'
     if image_size != 512:
         run_name += f'_size{image_size}'
     if n_epochs == 0:
@@ -450,6 +455,7 @@ def train_from_scratch(run_name,
         'image_size': (image_size, image_size),
         'frontal_only': frontal_only,
         'num_workers': num_workers,
+        'norm_by_sample': norm_by_sample,
     }
     dataset_train_kwargs = {
         'shuffle': shuffle,
@@ -611,6 +617,8 @@ def parse_args():
                               help='Image size in pixels')
     images_group.add_argument('--frontal-only', action='store_true',
                               help='Use only frontal images')
+    images_group.add_argument('--norm-by-sample', action='store_true',
+                              help='If present, normalize each sample (instead of using dataset stats)')
 
     aug_group = parser.add_argument_group('Data-augmentation params')
     aug_group.add_argument('--augment', action='store_true',
@@ -742,6 +750,7 @@ if __name__ == '__main__':
             labels=args.labels,
             lr=args.learning_rate,
             batch_size=args.batch_size,
+            norm_by_sample=args.norm_by_sample,
             n_epochs=args.epochs,
             oversample=args.oversample is not None,
             oversample_label=args.oversample,

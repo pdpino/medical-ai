@@ -1,9 +1,36 @@
+import os
 import torch
 from torchvision import transforms
 from tqdm.auto import tqdm
+from PIL import Image
 
 
-def compute_mean_std(image_iterator, show=False):
+class ImageFolderIterator:
+    def __init__(self, folder, image_names, image_format='RGB'):
+        self.folder = folder
+        self.image_names = image_names
+
+        self.image_format = image_format
+
+        self.transform = transforms.ToTensor()
+
+    def __len__(self):
+        return len(self.image_names)
+
+    def __iter__(self):
+        for image_name in self.image_names:
+            fpath = os.path.join(self.folder, image_name)
+            image = Image.open(fpath)
+
+            if self.image_format:
+                image = image.convert(self.image_format)
+
+            image = self.transform(image)
+
+            yield image
+
+
+def compute_mean_std(image_iterator, n_channels=3, show=False):
     """Computes mean and std of a dataset.
 
     Args:
@@ -12,7 +39,6 @@ def compute_mean_std(image_iterator, show=False):
     Returns:
       Channel wise mean, std (i.e. tensors of shape n_channels)
     """
-    n_channels = 3
     mean = torch.zeros(n_channels)
     std = torch.zeros(n_channels)
 
@@ -26,6 +52,7 @@ def compute_mean_std(image_iterator, show=False):
 
         mean += image_flatten.mean(1)
         std += image_flatten.std(1)
+        # shapes: n_channels
 
         n_samples += 1
 

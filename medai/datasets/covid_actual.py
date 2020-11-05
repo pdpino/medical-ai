@@ -9,6 +9,7 @@ from medai.datasets.common import BatchItem
 DATASET_DIR = os.environ.get('DATASET_DIR_COVID_ACTUAL')
 
 def _get_default_image_transformation(image_size=(512, 512)):
+    # FIXME: wrong values
     mean = [0.5086, 0.5086, 0.5086]
     sd = [0.0416, 0.0416, 0.0416]
     return transforms.Compose([transforms.Resize(image_size),
@@ -17,7 +18,9 @@ def _get_default_image_transformation(image_size=(512, 512)):
                               ])
 
 class CovidActualDataset(Dataset):
-    def __init__(self, dataset_type='train', image_size=(512, 512), **kwargs):
+    def __init__(self, dataset_type='train', image_size=(512, 512), **unused):
+        raise NotImplementedError('CovidActualDataset mean and std')
+
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_COVID_ACTUAL not found in env variables')
 
@@ -26,7 +29,7 @@ class CovidActualDataset(Dataset):
 
         dataset_type = 'test'
         print('\tCovid-actual only has test dataset')
-        
+
         if kwargs.get('labels', None) is not None:
             print('Labels selection in CovidKaggle dataset is not implemented yet, ignoring')
 

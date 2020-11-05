@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
 import pandas as pd
 from PIL import Image
 import os
@@ -8,6 +7,7 @@ import json
 import random
 
 from medai.datasets.common import BatchItem
+from medai.utils.images import get_default_image_transform
 
 CXR14_DISEASES = [
     'Atelectasis',
@@ -28,25 +28,25 @@ CXR14_DISEASES = [
 
 DATASET_DIR = os.environ.get('DATASET_DIR_CXR14')
 
-def _get_default_image_transformation(image_size=(512, 512)):
-    mean = 0.4980 # 0.50576189
-    sd = 0.0458
-    return transforms.Compose([transforms.Resize(image_size),
-                               transforms.ToTensor(),
-                               transforms.Normalize([mean], [sd]),
-                              ])
+_DATASET_MEAN = 0.5058
+_DATASET_STD = 0.232
 
 class CXR14Dataset(Dataset):
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
-                 image_size=(512, 512), **unused):
+                 image_size=(512, 512), norm_by_sample=False, **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_CXR14 not found in env variables')
 
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
         self.image_size = image_size
-        self.transform = _get_default_image_transformation(self.image_size)
-        
+        self.transform = get_default_image_transform(
+            self.image_size,
+            norm_by_sample=norm_by_sample,
+            mean=_DATASET_MEAN,
+            std=_DATASET_STD,
+        )
+
         self.image_dir = os.path.join(DATASET_DIR, 'images')
 
         # Load split images

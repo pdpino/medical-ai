@@ -14,6 +14,7 @@ _FOLDERS = [
 ]
 
 def _get_default_image_transformation(image_size=(512, 512)):
+    # FIXME: wrong values
     mean = [0.4872, 0.4875, 0.4876]
     sd = [0.0352, 0.0352, 0.0352]
     return transforms.Compose([transforms.Resize(image_size),
@@ -23,12 +24,14 @@ def _get_default_image_transformation(image_size=(512, 512)):
 
 class CovidKaggleDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None, image_size=(512, 512), **kwargs):
+        raise NotImplementedError('CovidKaggleDataset mean and std')
+
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_COVID_KAGGLE not found in env variables')
 
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
-        
+
         if kwargs.get('labels', None) is not None:
             print('Labels selection in CovidKaggle dataset is not implemented yet, ignoring')
 
@@ -60,7 +63,7 @@ class CovidKaggleDataset(Dataset):
         # Keep only max images
         if max_samples is not None:
             self.images_metadata = self.images_metadata[:max_samples]
-        
+
     def size(self):
         return len(self.images_metadata), len(self.labels)
 

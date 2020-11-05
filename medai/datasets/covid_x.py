@@ -10,6 +10,7 @@ DATASET_DIR = os.environ.get('DATASET_DIR_COVID_X')
 
 
 def _get_default_image_transformation(image_size=(512, 512)):
+    # FIXME: wrong values
     mean = [0.4919, 0.4920, 0.4920]
     sd = [0.0467, 0.0467, 0.0467]
     return transforms.Compose([transforms.Resize(image_size),
@@ -19,6 +20,8 @@ def _get_default_image_transformation(image_size=(512, 512)):
 
 class CovidXDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None, image_size=(512, 512), **kwargs):
+        raise NotImplementedError('CovidXDataset mean and std')
+
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_COVID_X not found in env variables')
 
@@ -79,7 +82,7 @@ class CovidXDataset(Dataset):
 
         self._metadata_df.reset_index(inplace=True)
 
-        
+
     def size(self):
         return len(self._metadata_df), len(self.labels)
 

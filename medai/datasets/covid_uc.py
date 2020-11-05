@@ -1,29 +1,22 @@
 from torch.utils.data import Dataset
-from torchvision import transforms
 from PIL import Image
 import os
 import pandas as pd
 
 from medai.datasets.common import BatchItem
+from medai.utils.images import get_default_image_transform
 
 DATASET_DIR = os.environ.get('DATASET_DIR_COVID_UC')
 
+_DATASET_MEAN_STD = {
+    'frontal': (0.4231, 0.1256),
+    'all': (0.3666, 0.1295),
+}
 
-def _get_default_image_transformation(image_size=(512, 512), frontal_only=False):
-    if frontal_only:
-        mean = 0.3836
-        std = 0.0143
-    else:
-        mean = 0.3296
-        std = 0.0219
-    return transforms.Compose([transforms.Resize(image_size),
-                               transforms.ToTensor(),
-                               transforms.Normalize([mean], [std])
-                              ])
 
 class CovidUCDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None,
-                 image_size=(512, 512), frontal_only=False, **kwargs):
+                 image_size=(512, 512), frontal_only=False, norm_by_sample=False, **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_COVID_UC not found in env variables')
 
@@ -34,7 +27,14 @@ class CovidUCDataset(Dataset):
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
         self.image_size = image_size
-        self.transform = _get_default_image_transformation(self.image_size, frontal_only)
+
+        mean, std = _DATASET_MEAN_STD['frontal' if frontal_only else 'all']
+        self.transform = get_default_image_transform(
+            self.image_size,
+            norm_by_sample=norm_by_sample,
+            mean=mean,
+            std=std,
+        )
 
         self.multilabel = False
 
@@ -77,7 +77,7 @@ class CovidUCDataset(Dataset):
 
         self._metadata_df.reset_index(inplace=True, drop=True)
 
-        
+
     def __len__(self):
         return len(self._metadata_df)
 

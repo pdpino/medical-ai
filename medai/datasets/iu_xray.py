@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
 from PIL import Image
 import os
 import json
@@ -8,6 +7,7 @@ import pandas as pd
 
 from medai.datasets.common import BatchItem, CHEXPERT_LABELS
 from medai.datasets.vocab import load_vocab
+from medai.utils.images import get_default_image_transform
 from medai.utils.nlp import (
     UNKNOWN_IDX,
     compute_vocab,
@@ -21,21 +21,17 @@ def _reports_iterator(reports):
     for report in reports:
         yield report['clean_text'].split()
 
+_DATASET_MEAN = 0.4821
+_DATASET_STD = 0.2374
 
-def _get_default_image_transformation(image_size=(512, 512)):
-    mean = 0.4822
-    sd = 0.0461
-    return transforms.Compose([transforms.Resize(image_size),
-                               transforms.ToTensor(),
-                               transforms.Normalize([mean], [sd])
-                              ])
 
 class IUXRayDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None,
                  labels=None,
                  sort_samples=True,
                  frontal_only=False, image_size=(512, 512),
-                 vocab=None, recompute_vocab=False):
+                 norm_by_sample=False,
+                 vocab=None, recompute_vocab=False, **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_IU_XRAY not found in env variables')
 
@@ -45,7 +41,12 @@ class IUXRayDataset(Dataset):
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
         self.image_size = image_size
-        self.transform = _get_default_image_transformation(self.image_size)
+        self.transform = get_default_image_transform(
+            self.image_size,
+            norm_by_sample=norm_by_sample,
+            mean=_DATASET_MEAN,
+            std=_DATASET_STD,
+        )
 
         self.images_dir = os.path.join(DATASET_DIR, 'images')
         self.reports_dir = os.path.join(DATASET_DIR, 'reports')
@@ -164,14 +165,22 @@ class IUXRayDataset(Dataset):
                             'reports_with_chexpert_labels.csv')
         self.labels_df = pd.read_csv(path, index_col=0)
 
-        # Transform uncertains and none to 0 # REVIEW
-        self.labels_df = self.labels_df.replace([-1, -2], 0)
+        # Transform uncertains and none to 0
+        self.labels_df = self.labels_df.replace({
+            -1: 1, # uncertain values, assumed positive
+            -2: 0, # None values, assumed negative
+        })
 
         # Save in a more convenient storage for __getitem__
         self.labels_by_report = dict()
         for index, row in self.labels_df.iterrows():
             filename = row['filename']
             labels = row[self.labels].to_numpy().astype(int)
+
+            # If all labels are 0 --> set no-findings==1
+            # (notice no-findings and support-devices are ignored)
+            if labels[1:-1].sum() == 0 and labels[0] == 0:
+                labels[0] = 1
 
             self.labels_by_report[filename] = torch.tensor(labels)
 
