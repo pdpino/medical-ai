@@ -177,26 +177,23 @@ def run_evaluation(run_name,
         attributions = threshold_attributions(attributions)
         # shape: batch_size, n_labels, h, w
 
-        return (attributions, bboxes_map, bboxes_valid)
+        return {
+            'activations': attributions,
+            'gt_map': bboxes_map,
+            'gt_valid': bboxes_valid,
+        }
 
     engine = Engine(step_fn)
-    attach_metrics_segmentation(engine, len(labels))
+    attach_metrics_segmentation(engine, labels, multilabel=True, device=device)
 
     # Run!
     engine.run(dataloader, 1)
 
-    # Prettify metrics
-    metrics = {}
-    for key, value in engine.state.metrics.items():
-        if isinstance(value, torch.Tensor):
-            arr = value.detach().cpu()
-            for v, label in zip(arr, labels):
-                metrics[f'{key}-{label}'] = v.item()
-        else:
-            metrics[key] = value
+    metrics = engine.state.metrics
 
     if not quiet:
         pprint(metrics)
+
     metrics = { dataset_type: metrics }
     save_results(metrics, run_name, classification=True, debug=debug, suffix='grad-cam')
 
