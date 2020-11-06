@@ -17,7 +17,7 @@ from medai.models.checkpoint.compiled_model import CompiledModel
 from medai.utils.files import get_checkpoint_folder
 
 
-_CHECKPOINT_EPOCH_REGEX = re.compile(r'\d+')
+_CHECKPOINT_EPOCH_REGEX = re.compile(r'_\d+')
 
 def _get_checkpoint_fname_epoch(fname):
     epoch = _CHECKPOINT_EPOCH_REGEX.search(fname)
@@ -25,7 +25,8 @@ def _get_checkpoint_fname_epoch(fname):
         # Not a checkpoint file
         return -1
 
-    return int(epoch.group(0))
+    epoch = epoch.group(0).strip('_')
+    return int(epoch)
 
 
 def _get_latest_filepath(folder):
@@ -207,15 +208,30 @@ def load_compiled_model_report_generation(run_name,
 
 def attach_checkpoint_saver(run_name,
                             compiled_model,
-                            engine,
+                            trainer,
+                            validator,
                             task,
+                            metric=None,
                             debug=True,
-                            epoch_freq=1,
                             dryrun=False,
                             ):
-    """Attach a Checkpoint handler to an engine to persist to disk a CompiledModel."""
+    """Attach a Checkpoint handler to a validator to persist to disk a CompiledModel."""
     if dryrun:
         return
+
+    def score_fn(unused_engine):
+        value = validator.state.metrics[metric]
+        if metric == 'loss':
+            value = -value
+        return value
+
+    if metric is not None:
+        early_kwargs = {
+            'score_function': score_fn,
+            'score_name': metric,
+        }
+    else:
+        early_kwargs = {}
 
     initial_epoch = compiled_model.get_current_epoch()
 
@@ -227,13 +243,10 @@ def attach_checkpoint_saver(run_name,
     checkpoint = Checkpoint(
         compiled_model.to_save_checkpoint(),
         DiskSaver(folderpath, require_empty=False, atomic=False),
-        global_step_transform=lambda eng, _: eng.state.epoch + initial_epoch,
+        global_step_transform=lambda _a, _b: trainer.state.epoch + initial_epoch,
+        **early_kwargs,
     )
-    if epoch_freq is None:
-        evt = Events.COMPLETED
-    else:
-        evt = Events.EPOCH_COMPLETED(every=epoch_freq)
 
-    engine.add_event_handler(evt, checkpoint)
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint)
 
     return

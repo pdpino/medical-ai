@@ -31,13 +31,27 @@ from medai.utils import (
     parse_str_or_int,
     print_hw_options,
 )
-from medai.utils.logger import attach_log_metrics
+from medai.utils.handlers import attach_log_metrics, attach_early_stopping
+
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(levelname)s(%(asctime)s) %(message)s',
+    datefmt='%m-%d %H:%M',
+)
+LOGGER = logging.getLogger('seg')
+LOGGER.setLevel(logging.INFO)
 
 
 def _get_step_fn(model, optimizer=None, training=False,
                  loss_weights=None,
                  device='cuda'):
-    criterion = nn.CrossEntropyLoss(loss_weights)
+    if isinstance(loss_weights, (list, tuple)):
+        loss_weights = torch.tensor(loss_weights).to(device)
+    elif isinstance(loss_weights, torch.Tensor):
+        loss_weights = loss_weights.to(device)
+
+    criterion = nn.CrossEntropyLoss(weight=loss_weights)
 
     def step_fn(engine, batch):
         images = batch.image.to(device) # shape: batch_size, 1, height, width
@@ -120,6 +134,9 @@ def train_model(run_name,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
+                loss_weights=None,
+                early_stopping=True,
+                early_stopping_kwargs={},
                 n_epochs=1,
                 print_metrics=None,
                 debug=True,
@@ -143,6 +160,7 @@ def train_model(run_name,
 
     validator = Engine(_get_step_fn(model,
                                     training=False,
+                                    loss_weights=loss_weights,
                                     device=device,
                                     ))
     attach_metrics_segmentation(validator, labels, multilabel=False)
@@ -151,6 +169,7 @@ def train_model(run_name,
     trainer = Engine(_get_step_fn(model,
                                   optimizer,
                                   training=True,
+                                  loss_weights=loss_weights,
                                   device=device,
                                   ))
     attach_metrics_segmentation(trainer, labels, multilabel=False)
@@ -179,9 +198,14 @@ def train_model(run_name,
     attach_checkpoint_saver(run_name,
                             compiled_model,
                             trainer,
+                            validator,
                             task='seg',
+                            metric=early_stopping_kwargs['metric'] if early_stopping else None,
                             debug=debug,
                             )
+
+    if early_stopping:
+        attach_early_stopping(trainer, validator, **early_stopping_kwargs)
 
     # Train
     LOGGER.info('-'*51)
@@ -230,6 +254,8 @@ def resume_training(run_name,
     val_dataloader = prepare_data_segmentation(dataset_type='val', **dataset_kwargs)
 
     # Train
+    other_hparams = metadata.get('hparams', {})
+
     train_model(run_name,
                 compiled_model,
                 train_dataloader,
@@ -238,6 +264,7 @@ def resume_training(run_name,
                 print_metrics=print_metrics,
                 debug=debug,
                 device=device,
+                **other_hparams,
                 )
 
     if post_evaluation:
@@ -264,6 +291,9 @@ def train_from_scratch(run_name,
                        image_size=512,
                        print_metrics=None,
                        lr=None,
+                       loss_weights=None,
+                       early_stopping=True,
+                       early_stopping_kwargs={},
                        batch_size=10,
                        norm_by_sample=False,
                        n_epochs=10,
@@ -279,9 +309,11 @@ def train_from_scratch(run_name,
         run_name += '_normS'
     else:
         run_name += '_normD'
-
     if image_size != 512:
         run_name += f'_size{image_size}'
+    if loss_weights is not None:
+        ws = '-'.join(str(int(w*10)) for w in loss_weights)
+        run_name += f'_wce{ws}'
 
     # Load data
     dataset_kwargs = {
@@ -314,10 +346,18 @@ def train_from_scratch(run_name,
     }
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
+    # Other training params
+    other_train_kwargs = {
+        'loss_weights': loss_weights,
+        'early_stopping': early_stopping,
+        'early_stopping_kwargs': early_stopping_kwargs,
+    }
+
     # Save metadata
     metadata = {
         'model_kwargs': model_kwargs,
         'opt_kwargs': opt_kwargs,
+        'hparams': other_train_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
     }
@@ -335,6 +375,7 @@ def train_from_scratch(run_name,
                 print_metrics=print_metrics,
                 debug=debug,
                 device=device,
+                **other_train_kwargs,
                 )
 
     if post_evaluation:
@@ -363,6 +404,8 @@ def parse_args():
     #                     help='Choose dataset to train on')
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.0001,
                         help='Learning rate')
+    parser.add_argument('-wce', '--weight-ce', action='store_true',
+                        help='If present add weights to the cross-entropy')
     parser.add_argument('-bs', '--batch-size', type=int, default=10,
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
@@ -380,6 +423,14 @@ def parse_args():
     # fcn_group.add_argument('-m', '--model', type=str, default=None,
     #                     choices=AVAILABLE_SEGMENTATION_MODELS,
     #                     help='Choose FCN to use')
+
+    es_group = parser.add_argument_group('Early stopping params')
+    es_group.add_argument('--no-early-stopping', action='store_true',
+                          help='If present, dont early stop the training')
+    es_group.add_argument('--es-patience', type=int, default=10,
+                          help='Patience value for early-stopping')
+    es_group.add_argument('--es-metric', type=str, default='iou',
+                          help='Metric to monitor for early-stopping')
 
     images_group = parser.add_argument_group('Images params')
     images_group.add_argument('--image-size', type=int, default=512,
@@ -403,18 +454,22 @@ def parse_args():
     args.debug = not args.no_debug
     args.post_evaluation = not args.no_eval
 
+    if args.weight_ce:
+        # args.weight_ce = [0.1, 0.3, 0.3, 0.3]
+        args.weight_ce = [0.1, 0.4, 0.3, 0.3]
+        # args.weight_ce = [0.1, 0.6, 0.3, 0.3]
+
+    # Build early-stopping parameters
+    args.early_stopping = not args.no_early_stopping
+    args.early_stopping_kwargs = {
+        'patience': args.es_patience,
+        'metric': args.es_metric,
+    }
+
     return args
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        level=logging.WARNING,
-        format='%(levelname)s(%(asctime)s) %(message)s',
-        datefmt='%m-%d %H:%M',
-    )
-    LOGGER = logging.getLogger('seg')
-    LOGGER.setLevel(logging.INFO)
-
     args = parse_args()
 
     if args.num_threads > 0:
@@ -443,6 +498,9 @@ if __name__ == '__main__':
             image_size=args.image_size,
             print_metrics=args.print_metrics,
             lr=args.learning_rate,
+            loss_weights=args.weight_ce,
+            early_stopping=args.early_stopping,
+            early_stopping_kwargs=args.early_stopping_kwargs,
             batch_size=args.batch_size,
             norm_by_sample=args.norm_by_sample,
             n_epochs=args.epochs,

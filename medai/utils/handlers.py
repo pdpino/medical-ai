@@ -1,6 +1,8 @@
+"""Common handlers for any engine."""
 import time
 import logging
 from ignite.engine import Engine, Events
+from ignite.handlers import EarlyStopping
 
 from medai.utils import duration_to_str
 
@@ -14,6 +16,7 @@ def attach_log_metrics(trainer,
                        initial_epoch=0,
                        print_metrics=['loss'],
                        ):
+    """Attaches a function to log metrics after each epoch."""
     def log_metrics(trainer):
         """Performs a step on the end of each epoch."""
         # Run on validation
@@ -41,10 +44,41 @@ def attach_log_metrics(trainer,
         for metric in print_metrics:
             train_value = train_metrics.get(metric, -1)
             val_value = val_metrics.get(metric, -1)
-            metrics_str += f' {metric} {train_value:.3f} {val_value:.3f},'
+            metrics_str += f' {metric} {train_value:.4f} {val_value:.4f},'
 
         logger.info(f'Finished epoch {epoch}/{max_epochs}, {metrics_str} {duration_to_str(timer._elapsed())}')
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, log_metrics)
 
     return
+
+
+def attach_early_stopping(trainer,
+                          validator,
+                          metric='loss',
+                          patience=10,
+                          **kwargs,
+                          ):
+    """Attaches an early stopping handler to a trainer.
+
+    NOTEs:
+        - The handler should be attached after every other handler, so those will get executed completely
+        - The handler is attached to the trainer, not the validator (as in most examples), so the stop signal is sent at the very end of the epoch (i.e. after every handler is run), and not after the `validator.run(...)` is run.
+    """
+    # Set early-stopping to info level
+    es_logger = logging.getLogger('ignite.handlers.early_stopping.EarlyStopping')
+    es_logger.setLevel(logging.INFO)
+
+    def score_fn(unused_engine):
+        value = validator.state.metrics[metric]
+        if metric == 'loss':
+            value = -value
+        return value
+
+    early_stopping = EarlyStopping(patience=patience,
+                                   score_function=score_fn,
+                                   trainer=trainer,
+                                   **kwargs,
+                                   )
+
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
