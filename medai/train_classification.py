@@ -37,7 +37,7 @@ from medai.utils import (
     parse_str_or_int,
     print_hw_options,
 )
-from medai.utils.logger import attach_log_metrics
+from medai.utils.handlers import attach_log_metrics
 
 
 def _choose_print_metrics(dataset_name, additional=None):

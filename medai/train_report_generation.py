@@ -45,7 +45,7 @@ from medai.training.report_generation.hierarchical import (
     get_step_fn_hierarchical,
 )
 from medai.utils import get_timestamp, duration_to_str, print_hw_options
-from medai.utils.logger import attach_log_metrics
+from medai.utils.handlers import attach_log_metrics
 
 
 def evaluate_model(run_name,
