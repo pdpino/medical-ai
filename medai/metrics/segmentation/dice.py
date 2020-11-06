@@ -28,7 +28,7 @@ class Dice(Metric):
         """
         activations, gt_map, _ = output
 
-        intersection = (gt_map * activations).sum(dim=[2, 3]) # shape: BS, n_labels
+        intersection = (2 * gt_map * activations).sum(dim=[2, 3]) # shape: BS, n_labels
         areas = gt_map.sum(dim=[2, 3]) + activations.sum(dim=[2, 3]) # shape: BS, n_labels
         dice = divide_tensors(intersection, areas) # shape: BS, n_labels
 
