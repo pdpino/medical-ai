@@ -10,8 +10,8 @@ from medai.utils.images import get_default_image_transform
 
 DATASET_DIR = os.environ.get('DATASET_DIR_JSRT', None)
 
-_DATASET_MEAN = 0.5937
-_DATASET_STD = 0.2729
+_DATASET_MEAN = 0.5946
+_DATASET_STD = 0.2733
 
 ORGANS = [
     'heart',
@@ -23,7 +23,7 @@ ORGANS = [
 ]
 
 class JSRTDataset(Dataset):
-    def __init__(self, dataset_type='all', image_size=(512, 512), norm_by_sample=False, **unused):
+    def __init__(self, dataset_type='all', image_size=(512, 512), norm_by_sample=False, image_format='L', **unused):
 
         assert DATASET_DIR is not None, 'DATASET_DIR is None'
 
@@ -47,6 +47,7 @@ class JSRTDataset(Dataset):
                 if name in selected_images
             ]
 
+        self.image_format = image_format
         self.image_size = image_size
         self.transform = get_default_image_transform(
             self.image_size,
@@ -70,7 +71,7 @@ class JSRTDataset(Dataset):
         image_name = self.images_names[idx]
 
         image_fpath = os.path.join(self.images_dir, image_name)
-        image = Image.open(image_fpath)
+        image = Image.open(image_fpath).convert(self.image_format)
 
         image = self.transform(image)
 
