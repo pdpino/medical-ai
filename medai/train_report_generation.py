@@ -147,7 +147,7 @@ def train_model(run_name,
         print(f'Resuming from epoch {initial_epoch}')
 
     # Unwrap stuff
-    model, optimizer = compiled_model.get_model_optimizer()
+    model, optimizer, _ = compiled_model.get_elements()
 
     # Flat vs hierarchical step_fn
     if hierarchical:
@@ -440,7 +440,8 @@ def train_from_scratch(run_name,
     save_metadata(metadata, run_name, task='rg', debug=debug)
 
     # Compiled model
-    compiled_model = CompiledModel(model, optimizer, metadata)
+    lr_sch = None
+    compiled_model = CompiledModel(model, optimizer, lr_sch, metadata)
 
     # Train
     train_model(run_name,

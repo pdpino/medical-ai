@@ -40,6 +40,7 @@ def attach_log_metrics(trainer,
         tb_writer.write_metrics(train_metrics, 'train', epoch, wall_time)
         tb_writer.write_metrics(val_metrics, 'val', epoch, wall_time)
 
+        # Log to stdout
         metrics_str = ''
         for metric in print_metrics:
             train_value = train_metrics.get(metric, -1)
@@ -82,3 +83,16 @@ def attach_early_stopping(trainer,
                                    )
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
+
+
+def attach_lr_scheduler_handler(lr_scheduler,
+                                trainer,
+                                validator,
+                                target_metric='loss',
+                                ):
+    """Attaches a callback that updates the lr_scheduler."""
+    def update_scheduler(unused):
+        val_metrics = validator.state.metrics
+        lr_scheduler.step(val_metrics[target_metric])
+
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, update_scheduler)

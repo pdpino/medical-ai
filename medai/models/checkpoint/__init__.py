@@ -4,8 +4,9 @@ import re
 import json
 
 import torch
-from torch import optim
 from torch import nn
+from torch import optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Events
 from ignite.handlers import Checkpoint, DiskSaver
 
@@ -106,7 +107,8 @@ def load_compiled_model_classification(run_name,
         model = nn.DataParallel(model)
     optimizer = optim.Adam(model.parameters(), **metadata['opt_kwargs'])
 
-    compiled_model = CompiledModel(model, optimizer, metadata)
+    lr_sch = None
+    compiled_model = CompiledModel(model, optimizer, lr_sch, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)
@@ -145,7 +147,14 @@ def load_compiled_model_segmentation(run_name,
         model = nn.DataParallel(model)
     optimizer = optim.Adam(model.parameters(), **metadata['opt_kwargs'])
 
-    compiled_model = CompiledModel(model, optimizer, metadata)
+    # Create LR Scheduler
+    lr_scheduler_kwargs = metadata.get('lr_scheduler_kwargs', None)
+    if lr_scheduler_kwargs is not None:
+        lr_scheduler = ReduceLROnPlateau(optimizer, **lr_scheduler_kwargs)
+    else:
+        lr_scheduler = None
+
+    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)
@@ -194,7 +203,8 @@ def load_compiled_model_report_generation(run_name,
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
     # Compiled model
-    compiled_model = CompiledModel(model, optimizer, metadata)
+    lr_sch = None
+    compiled_model = CompiledModel(model, optimizer, lr_sch, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)

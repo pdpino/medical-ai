@@ -5,6 +5,7 @@ import os
 import torch
 from torch import nn
 from torch import optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
@@ -31,7 +32,11 @@ from medai.utils import (
     parse_str_or_int,
     print_hw_options,
 )
-from medai.utils.handlers import attach_log_metrics, attach_early_stopping
+from medai.utils.handlers import (
+    attach_log_metrics,
+    attach_early_stopping,
+    attach_lr_scheduler_handler,
+)
 
 
 logging.basicConfig(
@@ -137,6 +142,7 @@ def train_model(run_name,
                 loss_weights=None,
                 early_stopping=True,
                 early_stopping_kwargs={},
+                lr_sch_metric='loss',
                 n_epochs=1,
                 print_metrics=None,
                 debug=True,
@@ -153,7 +159,7 @@ def train_model(run_name,
     if initial_epoch > 0:
         LOGGER.info(f'Resuming from epoch: {initial_epoch}')
 
-    model, optimizer = compiled_model.get_model_optimizer()
+    model, optimizer, lr_scheduler = compiled_model.get_elements()
 
     labels = train_dataloader.dataset.seg_labels
 
@@ -206,6 +212,10 @@ def train_model(run_name,
 
     if early_stopping:
         attach_early_stopping(trainer, validator, **early_stopping_kwargs)
+
+    if lr_scheduler is not None:
+        attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
+
 
     # Train
     LOGGER.info('-'*51)
@@ -294,6 +304,8 @@ def train_from_scratch(run_name,
                        loss_weights=None,
                        early_stopping=True,
                        early_stopping_kwargs={},
+                       lr_sch_metric='loss',
+                       lr_sch_kwargs={},
                        batch_size=10,
                        norm_by_sample=False,
                        n_epochs=10,
@@ -314,6 +326,10 @@ def train_from_scratch(run_name,
     if loss_weights is not None:
         ws = '-'.join(str(int(w*10)) for w in loss_weights)
         run_name += f'_wce{ws}'
+    if lr_sch_metric:
+        factor = lr_sch_kwargs['factor']
+        patience = lr_sch_kwargs['patience']
+        run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
 
     # Load data
     dataset_kwargs = {
@@ -346,17 +362,22 @@ def train_from_scratch(run_name,
     }
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
+    # Create lr_scheduler
+    lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
+
     # Other training params
     other_train_kwargs = {
         'loss_weights': loss_weights,
         'early_stopping': early_stopping,
         'early_stopping_kwargs': early_stopping_kwargs,
+        'lr_sch_metric': lr_sch_metric,
     }
 
     # Save metadata
     metadata = {
         'model_kwargs': model_kwargs,
         'opt_kwargs': opt_kwargs,
+        'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
         'hparams': other_train_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
@@ -364,7 +385,7 @@ def train_from_scratch(run_name,
     save_metadata(metadata, run_name, task='seg', debug=debug)
 
     # Create compiled model
-    compiled_model = CompiledModel(model, optimizer)
+    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Train
     train_model(run_name,
@@ -402,8 +423,6 @@ def parse_args():
     # parser.add_argument('-d', '--dataset', type=str, default=None,
     #                     choices=AVAILABLE_SEGMENTATION_DATASETS,
     #                     help='Choose dataset to train on')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0001,
-                        help='Learning rate')
     parser.add_argument('-wce', '--weight-ce', action='store_true',
                         help='If present add weights to the cross-entropy')
     parser.add_argument('-bs', '--batch-size', type=int, default=10,
@@ -431,6 +450,17 @@ def parse_args():
                           help='Patience value for early-stopping')
     es_group.add_argument('--es-metric', type=str, default='iou',
                           help='Metric to monitor for early-stopping')
+
+    lr_group = parser.add_argument_group('LR scheduler params')
+    lr_group.add_argument('-lr', '--learning-rate', type=float, default=0.0001,
+                          help='Initial learning rate')
+    lr_group.add_argument('--lr-metric', type=str, default='iou',
+                          help='Select the metric to regulate the LR')
+    lr_group.add_argument('--lr-patience', type=int, default=5,
+                          help='Patience value for LR-scheduler')
+    lr_group.add_argument('--lr-factor', type=float, default=0.1,
+                          help='Factor to multiply the LR on each update')
+
 
     images_group = parser.add_argument_group('Images params')
     images_group.add_argument('--image-size', type=int, default=512,
@@ -464,6 +494,15 @@ def parse_args():
     args.early_stopping_kwargs = {
         'patience': args.es_patience,
         'metric': args.es_metric,
+    }
+
+    # Build LR scheduler parameters
+    args.lr_sch_kwargs = {
+        'mode': 'min' if args.lr_metric == 'loss' else 'max',
+        'threshold_mode': 'abs',
+        'factor': args.lr_factor,
+        'patience': args.lr_patience,
+        'verbose': True,
     }
 
     return args
@@ -501,6 +540,8 @@ if __name__ == '__main__':
             loss_weights=args.weight_ce,
             early_stopping=args.early_stopping,
             early_stopping_kwargs=args.early_stopping_kwargs,
+            lr_sch_metric=args.lr_metric,
+            lr_sch_kwargs=args.lr_sch_kwargs,
             batch_size=args.batch_size,
             norm_by_sample=args.norm_by_sample,
             n_epochs=args.epochs,

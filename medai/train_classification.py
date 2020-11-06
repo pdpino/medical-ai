@@ -151,7 +151,7 @@ def train_model(run_name,
         print('Resuming from epoch: ', initial_epoch)
 
     # Unwrap stuff
-    model, optimizer = compiled_model.get_model_optimizer()
+    model, optimizer, _ = compiled_model.get_elements()
 
     # Classification description
     labels = train_dataloader.dataset.labels
@@ -507,7 +507,8 @@ def train_from_scratch(run_name,
 
 
     # Create compiled_model
-    compiled_model = CompiledModel(model, optimizer, metadata)
+    lr_sch = None
+    compiled_model = CompiledModel(model, optimizer, lr_sch, metadata)
 
     # Train!
     train_model(run_name,
