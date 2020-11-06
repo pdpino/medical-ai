@@ -31,6 +31,7 @@ class IUXRayDataset(Dataset):
                  sort_samples=True,
                  frontal_only=False, image_size=(512, 512),
                  norm_by_sample=False,
+                 image_format='RGB',
                  vocab=None, recompute_vocab=False, **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_IU_XRAY not found in env variables')
@@ -39,7 +40,7 @@ class IUXRayDataset(Dataset):
             raise ValueError(f'No such type, must be in {_AVAILABLE_SPLITS}')
 
         self.dataset_type = dataset_type
-        self.image_format = 'RGB'
+        self.image_format = image_format
         self.image_size = image_size
         self.transform = get_default_image_transform(
             self.image_size,

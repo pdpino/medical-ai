@@ -45,6 +45,7 @@ from medai.training.report_generation.hierarchical import (
     get_step_fn_hierarchical,
 )
 from medai.utils import get_timestamp, duration_to_str, print_hw_options
+from medai.utils.logger import attach_log_metrics
 
 
 def evaluate_model(run_name,
@@ -167,38 +168,16 @@ def train_model(run_name,
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, step=Events.EPOCH_COMPLETED)
 
-    @trainer.on(Events.EPOCH_COMPLETED)
-    def tb_write_metrics(trainer):
-        # Run on evaluation
-        validator.run(val_dataloader, 1)
-
-        # State
-        epoch = trainer.state.epoch + initial_epoch
-        max_epochs = trainer.state.max_epochs + initial_epoch
-        train_metrics = trainer.state.metrics
-        val_metrics = validator.state.metrics
-
-        # Save state
-        compiled_model.save_current_epoch(epoch)
-
-        # Common time
-        wall_time = time.time()
-
-        # Log to TB
-        tb_writer.write_histogram(model, epoch, wall_time)
-        tb_writer.write_metrics(train_metrics, 'train', epoch, wall_time)
-        tb_writer.write_metrics(val_metrics, 'val', epoch, wall_time)
-
-        # Print metrics
-        print_str = f'Finished epoch {epoch}/{max_epochs}'
-        for metric in print_metrics:
-            train_value = train_metrics.get(metric, -1)
-            val_value = val_metrics.get(metric, -1)
-            metric_str = f' {metric} {train_value:.4f} {val_value:.4f},'
-            print_str += metric_str
-
-        print_str += f' {duration_to_str(timer._elapsed())}'
-        print(print_str)
+    attach_log_metrics(trainer,
+                       validator,
+                       compiled_model,
+                       val_dataloader,
+                       tb_writer,
+                       timer,
+                       # logger=LOGGER,
+                       initial_epoch=initial_epoch,
+                       print_metrics=print_metrics,
+                       )
 
     # Attach checkpoint
     attach_checkpoint_saver(run_name,

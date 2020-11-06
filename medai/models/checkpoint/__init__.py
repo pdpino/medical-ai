@@ -11,6 +11,7 @@ from ignite.handlers import Checkpoint, DiskSaver
 
 from medai.models.classification import create_cnn
 from medai.models.report_generation import create_decoder
+from medai.models.segmentation import create_fcn
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.checkpoint.compiled_model import CompiledModel
 from medai.utils.files import get_checkpoint_folder
@@ -99,6 +100,45 @@ def load_compiled_model_classification(run_name,
 
     # Create empty model and optimizer
     model = create_cnn(**metadata['model_kwargs']).to(device)
+    if multiple_gpu:
+        # TODO: use DistributedDataParallel instead
+        model = nn.DataParallel(model)
+    optimizer = optim.Adam(model.parameters(), **metadata['opt_kwargs'])
+
+    compiled_model = CompiledModel(model, optimizer, metadata)
+
+    # Filepath for the latest checkpoint
+    filepath = _get_latest_filepath(folder)
+
+    # Actually load data
+    checkpoint = torch.load(filepath, map_location=device)
+    Checkpoint.load_objects(compiled_model.to_save_checkpoint(), checkpoint)
+
+    return compiled_model
+
+
+def load_compiled_model_segmentation(run_name,
+                                     debug=True,
+                                     device='cuda',
+                                     multiple_gpu=False,
+                                     ):
+    """Load a compiled segmentation model.
+
+    NOTE: function copied from classification models
+    """
+    # Folder contains all pertaining files
+    folder = get_checkpoint_folder(run_name,
+                                   task='seg',
+                                   debug=debug,
+                                   save_mode=False,
+                                   assert_exists=True,
+                                   )
+
+    # Load metadata
+    metadata = _load_meta(folder)
+
+    # Create empty model and optimizer
+    model = create_fcn(**metadata['model_kwargs']).to(device)
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
         model = nn.DataParallel(model)

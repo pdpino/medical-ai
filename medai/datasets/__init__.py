@@ -9,6 +9,7 @@ from medai.datasets.covid_actual import CovidActualDataset
 from medai.datasets.covid_fig1 import CovidFig1Dataset
 from medai.datasets.covid_uc import CovidUCDataset
 from medai.datasets.iu_xray import IUXRayDataset
+from medai.datasets.jsrt import JSRTDataset
 
 from medai.datasets.tools.oversampler import OneLabelOverSampler
 from medai.datasets.tools.undersampler import OneLabelUnderSampler
@@ -30,7 +31,12 @@ _RG_DATASETS = {
     'iu-x-ray': IUXRayDataset,
 }
 
+_SEG_DATASETS = {
+    'jsrt': JSRTDataset,
+}
+
 AVAILABLE_CLASSIFICATION_DATASETS = list(_CL_DATASETS)
+AVAILABLE_SEGMENTATION_DATASETS = list(_SEG_DATASETS)
 
 def _classification_collate_fn(batch_items):
     batch_items = [
@@ -161,4 +167,28 @@ def prepare_data_report_generation(create_dataloader_fn,
                                       num_workers=num_workers,
                                       )
 
+    return dataloader
+
+
+def prepare_data_segmentation(dataset_name=None,
+                              dataset_type='train',
+                              image_size=(512, 512),
+                              batch_size=10,
+                              shuffle=False,
+                              num_workers=2,
+                              **kwargs,
+                             ):
+    assert dataset_name in _SEG_DATASETS, f'Dataset not found: {dataset_name}'
+    DatasetClass = _SEG_DATASETS[dataset_name]
+
+    dataset = DatasetClass(dataset_type=dataset_type,
+                           image_size=image_size,
+                           **kwargs,
+                          )
+
+    dataloader = DataLoader(dataset,
+                            batch_size=batch_size,
+                            shuffle=shuffle,
+                            num_workers=num_workers,
+                           )
     return dataloader
