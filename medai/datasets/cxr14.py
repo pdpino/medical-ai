@@ -33,12 +33,12 @@ _DATASET_STD = 0.232
 
 class CXR14Dataset(Dataset):
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
-                 image_size=(512, 512), norm_by_sample=False, **unused):
+                 image_size=(512, 512), norm_by_sample=False, image_format='RGB', **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_CXR14 not found in env variables')
 
         self.dataset_type = dataset_type
-        self.image_format = 'RGB'
+        self.image_format = image_format
         self.image_size = image_size
         self.transform = get_default_image_transform(
             self.image_size,

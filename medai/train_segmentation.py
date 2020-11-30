@@ -29,8 +29,8 @@ from medai.tensorboard import TBWriter
 from medai.utils import (
     get_timestamp,
     duration_to_str,
-    parse_str_or_int,
     print_hw_options,
+    parsers,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -309,6 +309,11 @@ def train_from_scratch(run_name,
                        batch_size=10,
                        norm_by_sample=False,
                        n_epochs=10,
+                       augment=False,
+                       augment_label=None,
+                       augment_class=None,
+                       augment_times=1,
+                       augment_kwargs={},
                        debug=True,
                        num_workers=2,
                        multiple_gpu=False,
@@ -326,10 +331,14 @@ def train_from_scratch(run_name,
     if loss_weights is not None:
         ws = '-'.join(str(int(w*10)) for w in loss_weights)
         run_name += f'_wce{ws}'
+    if augment:
+        run_name += f'_aug{augment_times}'
     if lr_sch_metric:
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+    if not early_stopping:
+        run_name += '_noes'
 
     # Load data
     dataset_kwargs = {
@@ -341,6 +350,11 @@ def train_from_scratch(run_name,
     }
     dataset_train_kwargs = {
         'shuffle': shuffle,
+        'augment': augment,
+        'augment_label': augment_label,
+        'augment_class': augment_class,
+        'augment_times': augment_times,
+        'augment_kwargs': augment_kwargs,
     }
     train_dataloader = prepare_data_segmentation(dataset_type='train', **dataset_kwargs, **dataset_train_kwargs)
 
@@ -450,6 +464,8 @@ def parse_args():
                           help='Patience value for early-stopping')
     es_group.add_argument('--es-metric', type=str, default='iou',
                           help='Metric to monitor for early-stopping')
+    es_group.add_argument('--es-min-delta', type=float, default=0,
+                          help='Min delta to use for early-stopping')
 
     lr_group = parser.add_argument_group('LR scheduler params')
     lr_group.add_argument('-lr', '--learning-rate', type=float, default=0.0001,
@@ -461,6 +477,7 @@ def parse_args():
     lr_group.add_argument('--lr-factor', type=float, default=0.1,
                           help='Factor to multiply the LR on each update')
 
+    parsers.add_args_augment(parser)
 
     images_group = parser.add_argument_group('Images params')
     images_group.add_argument('--image-size', type=int, default=512,
@@ -486,14 +503,15 @@ def parse_args():
 
     if args.weight_ce:
         # args.weight_ce = [0.1, 0.3, 0.3, 0.3]
-        args.weight_ce = [0.1, 0.4, 0.3, 0.3]
-        # args.weight_ce = [0.1, 0.6, 0.3, 0.3]
+        # args.weight_ce = [0.1, 0.4, 0.3, 0.3]
+        args.weight_ce = [0.1, 0.6, 0.3, 0.3]
 
     # Build early-stopping parameters
     args.early_stopping = not args.no_early_stopping
     args.early_stopping_kwargs = {
         'patience': args.es_patience,
         'metric': args.es_metric,
+        'min_delta': args.es_min_delta,
     }
 
     # Build LR scheduler parameters
@@ -504,6 +522,8 @@ def parse_args():
         'patience': args.lr_patience,
         'verbose': True,
     }
+
+    parsers.build_args_augment_(args)
 
     return args
 
@@ -545,6 +565,11 @@ if __name__ == '__main__':
             batch_size=args.batch_size,
             norm_by_sample=args.norm_by_sample,
             n_epochs=args.epochs,
+            augment=args.augment,
+            augment_label=args.augment_label,
+            augment_class=args.augment_class,
+            augment_times=args.augment_times,
+            augment_kwargs=args.augment_kwargs,
             post_evaluation=args.post_evaluation,
             debug=args.debug,
             multiple_gpu=args.multiple_gpu,

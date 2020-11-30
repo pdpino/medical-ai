@@ -16,7 +16,8 @@ _DATASET_MEAN_STD = {
 
 class CovidUCDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None,
-                 image_size=(512, 512), frontal_only=False, norm_by_sample=False, **unused):
+                 image_size=(512, 512), frontal_only=False, image_format='RGB',
+                 norm_by_sample=False, **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_COVID_UC not found in env variables')
 
@@ -25,7 +26,7 @@ class CovidUCDataset(Dataset):
             raise ValueError(f'No such type "{dataset_type}", must be in {_availables}')
 
         self.dataset_type = dataset_type
-        self.image_format = 'RGB'
+        self.image_format = image_format
         self.image_size = image_size
 
         mean, std = _DATASET_MEAN_STD['frontal' if frontal_only else 'all']

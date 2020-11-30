@@ -76,9 +76,6 @@ class IUXRayDataset(Dataset):
                                  vocab=vocab, recompute_vocab=recompute_vocab,
                                  frontal_only=frontal_only)
 
-    def size(self):
-        return (self.n_images, self.n_unique_reports)
-
     def __len__(self):
         return len(self.reports)
 

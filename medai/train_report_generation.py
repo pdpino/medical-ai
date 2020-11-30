@@ -44,7 +44,12 @@ from medai.training.report_generation.hierarchical import (
     create_hierarchical_dataloader,
     get_step_fn_hierarchical,
 )
-from medai.utils import get_timestamp, duration_to_str, print_hw_options
+from medai.utils import (
+    get_timestamp,
+    duration_to_str,
+    print_hw_options,
+    parsers,
+)
 from medai.utils.handlers import attach_log_metrics
 
 
@@ -311,6 +316,7 @@ def train_from_scratch(run_name,
                        augment=False,
                        augment_label=None,
                        augment_class=None,
+                       augment_times=1,
                        augment_kwargs={},
                        debug=True,
                        multiple_gpu=False,
@@ -360,6 +366,7 @@ def train_from_scratch(run_name,
         'augment': augment,
         'augment_label': augment_label,
         'augment_class': augment_class,
+        'augment_times': augment_times,
         'augment_kwargs': augment_kwargs,
     }
     train_dataloader = prepare_data_report_generation(
@@ -522,24 +529,7 @@ def parse_args():
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                         help='Run name of a pretrained CNN')
 
-    aug_group = parser.add_argument_group('Data-augmentation params')
-    aug_group.add_argument('--augment', action='store_true',
-                        help='If present, augment dataset')
-    aug_group.add_argument('--augment-label', default=None,
-                        help='Augment only samples with a given label present (str/int)')
-    aug_group.add_argument('--augment-class', type=int, choices=[0,1], default=None,
-                        help='If --augment-label is provided, choose if augmenting \
-                              positive (1) or negative (0) samples')
-    aug_group.add_argument('--aug-crop', type=float, default=0.8,
-                        help='Augment samples by cropping a random fraction')
-    aug_group.add_argument('--aug-translate', type=float, default=0.1,
-                        help='Augment samples by translating a random fraction')
-    aug_group.add_argument('--aug-rotation', type=int, default=15,
-                        help='Augment samples by rotating a random amount of degrees')
-    aug_group.add_argument('--aug-contrast', type=float, default=0.5,
-                        help='Augment samples by changing the contrast randomly')
-    aug_group.add_argument('--aug-brightness', type=float, default=0.5,
-                        help='Augment samples by changing the brightness randomly')
+    parsers.add_args_augment(parser)
 
     hw_group = parser.add_argument_group('Hardware params')
     hw_group.add_argument('--multiple-gpu', action='store_true',
@@ -559,16 +549,7 @@ def parse_args():
         if args.cnn is None and args.cnn_pretrained is None:
             parser.error('Must choose one of cnn or cnn_pretrained')
 
-    if args.augment:
-        args.augment_kwargs = {
-            'crop': args.aug_crop,
-            'translate': args.aug_translate,
-            'rotation': args.aug_rotation,
-            'contrast': args.aug_contrast,
-            'brightness': args.aug_brightness,
-        }
-    else:
-        args.augment_kwargs = {}
+    parsers.build_args_augment_(args)
 
     return args
 
@@ -615,6 +596,7 @@ if __name__ == '__main__':
                            augment=args.augment,
                            augment_label=args.augment_label,
                            augment_class=args.augment_class,
+                           augment_times=args.augment_times,
                            augment_kwargs=args.augment_kwargs,
                            debug=not args.no_debug,
                            multiple_gpu=args.multiple_gpu,

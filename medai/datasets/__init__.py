@@ -50,7 +50,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 labels=None,
                                 max_samples=None, image_size=(512, 512),
                                 augment=False,
-                                augment_label=None, augment_class=None, augment_kwargs={},
+                                augment_label=None, augment_class=None, augment_times=1, augment_kwargs={},
                                 oversample=False,
                                 oversample_label=0, oversample_class=None,
                                 oversample_ratio=None, oversample_max_ratio=None,
@@ -78,6 +78,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         dataset = Augmentator(dataset,
                               label=augment_label,
                               force_class=augment_class,
+                              times=augment_times,
                               **augment_kwargs)
 
     dataloader_kwargs = {
@@ -141,7 +142,8 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    sort_samples=True,
                                    shuffle=False,
                                    augment=False,
-                                   augment_label=None, augment_class=None, augment_kwargs={},
+                                   augment_label=None, augment_class=None,
+                                   augment_times=1, augment_kwargs={},
                                    num_workers=2):
     print(f'Loading {dataset_name}/{dataset_type} dataset...')
 
@@ -159,6 +161,7 @@ def prepare_data_report_generation(create_dataloader_fn,
         dataset = Augmentator(dataset,
                               label=augment_label,
                               force_class=augment_class,
+                              times=augment_times,
                               **augment_kwargs)
 
     dataloader = create_dataloader_fn(dataset,
@@ -173,6 +176,8 @@ def prepare_data_report_generation(create_dataloader_fn,
 def prepare_data_segmentation(dataset_name=None,
                               dataset_type='train',
                               image_size=(512, 512),
+                              augment=False,
+                              augment_label=None, augment_class=None, augment_times=1, augment_kwargs={},
                               batch_size=10,
                               shuffle=False,
                               num_workers=2,
@@ -185,6 +190,13 @@ def prepare_data_segmentation(dataset_name=None,
                            image_size=image_size,
                            **kwargs,
                           )
+
+    if augment:
+        dataset = Augmentator(dataset,
+                              label=augment_label,
+                              force_class=augment_class,
+                              times=augment_times,
+                              **augment_kwargs)
 
     dataloader = DataLoader(dataset,
                             batch_size=batch_size,
