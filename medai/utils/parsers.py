@@ -17,9 +17,9 @@ def add_args_augment(parser):
                            help='Augment samples by translating a random fraction')
     aug_group.add_argument('--aug-rotation', type=int, default=15,
                            help='Augment samples by rotating a random amount of degrees')
-    aug_group.add_argument('--aug-contrast', type=float, default=0.5,
+    aug_group.add_argument('--aug-contrast', type=float, default=0.8,
                            help='Augment samples by changing the contrast randomly')
-    aug_group.add_argument('--aug-brightness', type=float, default=0.5,
+    aug_group.add_argument('--aug-brightness', type=float, default=0.8,
                            help='Augment samples by changing the brightness randomly')
     aug_group.add_argument('--aug-shear', nargs=2, default=(10, 10),
                            help='Augment samples by applying a shear transformation.')

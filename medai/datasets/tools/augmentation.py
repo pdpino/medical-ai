@@ -27,7 +27,7 @@ class Augmentator(Dataset):
     """
     def __init__(self, dataset, label=None, force_class=None, times=1, seg_mask=False,
                  dont_shuffle=False,
-                 crop=0.8, translate=0.1, rotation=15, contrast=0.5, brightness=0.5,
+                 crop=0.8, translate=0.1, rotation=15, contrast=0.8, brightness=0.8,
                  shear=(10, 10),
                  ):
         """Init class.
@@ -98,10 +98,25 @@ class Augmentator(Dataset):
             self._aug_fns['rotation'] = RandomRotationMany(rotation)
 
         if contrast is not None:
-            self._aug_fns['contrast'] = ColorJitterMany(contrast=contrast)
+            contrast_down_max = 0.9
+            self._aug_fns['contrast-down'] = ColorJitterMany(
+                contrast=(contrast_down_max - contrast, contrast_down_max),
+            )
+            contrast_up_min = 1.1
+            self._aug_fns['contrast-up'] = ColorJitterMany(
+                contrast=(contrast_up_min, contrast_up_min + contrast),
+            )
 
         if brightness is not None:
-            self._aug_fns['brightness'] = ColorJitterMany(brightness=brightness)
+            brightness_down_max = 0.9
+            self._aug_fns['brightness-down'] = ColorJitterMany(
+                brightness=(brightness_down_max - brightness, brightness_down_max),
+            )
+
+            brightness_up_min = 1.1
+            self._aug_fns['brightness-up'] = ColorJitterMany(
+                brightness=(brightness_up_min, brightness_up_min + brightness),
+            )
 
         # Create new indices array
         self.indices = []
@@ -207,3 +222,46 @@ class Augmentator(Dataset):
 
         return labels_presence_aug_idxs
 
+
+import matplotlib.pyplot as plt
+
+
+def plot_augmented_samples(augmented_dataset, sample_idx, masks=True):
+    """Utility function to plot augmented samples.
+
+    The augmented_dataset must have been created with dont_shuffle=True, so the samples are ordered!!
+    """
+    plot_masks = augmented_dataset.augment_masks and masks
+
+    # Amounts
+    n_aug_methods = len(augmented_dataset._aug_fns)
+    n_cols = n_aug_methods + 1
+    n_rows = 2 if plot_masks else 1
+
+    # Augmented sample idx
+    idx = sample_idx * n_cols
+
+    plt.figure(figsize=(15, 5))
+
+    item = augmented_dataset[idx]
+    plt.subplot(n_rows, n_cols, 1)
+    plt.title('original')
+    plt.imshow(item.image[0], cmap='gray')
+    plt.axis('off')
+
+    if plot_masks:
+        plt.subplot(n_rows, n_cols, n_cols + 1)
+        plt.imshow(item.masks)
+        plt.axis('off')
+
+    for i, method in enumerate(list(augmented_dataset._aug_fns)):
+        item = augmented_dataset[idx + 1 + i]
+        plt.subplot(n_rows, n_cols, i + 2)
+        plt.title(method)
+        plt.imshow(item.image[0], cmap='gray')
+        plt.axis('off')
+
+        if plot_masks:
+            plt.subplot(n_rows, n_cols, n_cols + i + 2)
+            plt.imshow(item.masks)
+            plt.axis('off')
