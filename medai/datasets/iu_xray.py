@@ -166,7 +166,7 @@ class IUXRayDataset(Dataset):
         # Transform uncertains and none to 0
         self.labels_df = self.labels_df.replace({
             -1: 1, # uncertain values, assumed positive
-            -2: 0, # None values, assumed negative
+            -2: 0, # No mention, assumed negative
         })
 
         # Save in a more convenient storage for __getitem__
@@ -175,10 +175,10 @@ class IUXRayDataset(Dataset):
             filename = row['filename']
             labels = row[self.labels].to_numpy().astype(int)
 
-            # If all labels are 0 --> set no-findings==1
-            # (notice no-findings and support-devices are ignored)
-            if labels[1:-1].sum() == 0 and labels[0] == 0:
-                labels[0] = 1
+            # # If all labels are 0 --> set no-findings==1
+            # # (notice no-findings and support-devices are ignored)
+            # if labels[1:-1].sum() == 0 and labels[0] == 0:
+            #     labels[0] = 1
 
             self.labels_by_report[filename] = torch.tensor(labels)
 
