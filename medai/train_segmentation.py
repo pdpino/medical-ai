@@ -142,6 +142,7 @@ def train_model(run_name,
                 lr_sch_metric='loss',
                 n_epochs=1,
                 print_metrics=None,
+                tb_kwargs={},
                 debug=True,
                 device='cuda',
                 ):
@@ -150,6 +151,7 @@ def train_model(run_name,
     tb_writer = TBWriter(run_name,
                          task='seg',
                          debug=debug,
+                         **tb_kwargs,
                          )
 
     initial_epoch = compiled_model.get_current_epoch()
@@ -237,6 +239,7 @@ def resume_training(run_name,
                     n_epochs=10,
                     post_evaluation=True,
                     print_metrics=None,
+                    tb_kwargs={},
                     debug=True,
                     multiple_gpu=False,
                     device='cuda',
@@ -269,6 +272,7 @@ def resume_training(run_name,
                 val_dataloader,
                 n_epochs=n_epochs,
                 print_metrics=print_metrics,
+                tb_kwargs=tb_kwargs,
                 debug=debug,
                 device=device,
                 **other_hparams,
@@ -312,6 +316,7 @@ def train_from_scratch(run_name,
                        augment_times=1,
                        augment_kwargs={},
                        debug=True,
+                       tb_kwargs={},
                        num_workers=2,
                        multiple_gpu=False,
                        device='cuda',
@@ -405,6 +410,7 @@ def train_from_scratch(run_name,
                 val_dataloader,
                 n_epochs=n_epochs,
                 print_metrics=print_metrics,
+                tb_kwargs=tb_kwargs,
                 debug=debug,
                 device=device,
                 **other_train_kwargs,
@@ -482,15 +488,9 @@ def parse_args():
     images_group.add_argument('--norm-by-sample', action='store_true',
                               help='If present, normalize each sample (instead of using dataset stats)')
 
-    hw_group = parser.add_argument_group('Hardware params')
-    hw_group.add_argument('--multiple-gpu', action='store_true',
-                          help='Use multiple gpus')
-    hw_group.add_argument('--cpu', action='store_true',
-                          help='Use CPU only')
-    hw_group.add_argument('--num-workers', type=int, default=2,
-                          help='Number of workers for dataloader')
-    hw_group.add_argument('--num-threads', type=int, default=1,
-                          help='Number of threads for pytorch')
+    parsers.add_args_tb(parser)
+
+    parsers.add_args_hw(parser, num_workers=2)
 
     args = parser.parse_args()
 
@@ -522,6 +522,9 @@ def parse_args():
 
     parsers.build_args_augment_(args)
 
+    # TB params
+    parsers.build_args_tb_(args)
+
     return args
 
 
@@ -542,6 +545,7 @@ if __name__ == '__main__':
                     n_epochs=args.epochs,
                     post_evaluation=args.post_evaluation,
                     print_metrics=args.print_metrics,
+                    tb_kwargs=args.tb_kwargs,
                     debug=args.debug,
                     multiple_gpu=args.multiple_gpu,
                     device=device,
@@ -568,6 +572,7 @@ if __name__ == '__main__':
             augment_times=args.augment_times,
             augment_kwargs=args.augment_kwargs,
             post_evaluation=args.post_evaluation,
+            tb_kwargs=args.tb_kwargs,
             debug=args.debug,
             multiple_gpu=args.multiple_gpu,
             num_workers=args.num_workers,

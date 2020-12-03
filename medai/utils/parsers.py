@@ -42,3 +42,26 @@ def build_args_augment_(args):
     # Allow passing str or int
     if args.augment_label is not None:
         args.augment_label = parse_str_or_int(args.augment_label)
+
+
+def add_args_tb(parser):
+    tb_group = parser.add_argument_group('Tensorboard params')
+    tb_group.add_argument('--tb-hist', action='store_true',
+                           help='If present, save histograms to TB')
+
+def build_args_tb_(args):
+    args.tb_kwargs = {
+        'histogram': args.tb_hist,
+    }
+
+
+def add_args_hw(parser, num_workers=4):
+    hw_group = parser.add_argument_group('Hardware params')
+    hw_group.add_argument('--multiple-gpu', action='store_true',
+                          help='Use multiple gpus')
+    hw_group.add_argument('--cpu', action='store_true',
+                          help='Use CPU only')
+    hw_group.add_argument('--num-workers', type=int, default=num_workers,
+                          help='Number of workers for dataloader')
+    hw_group.add_argument('--num-threads', type=int, default=1,
+                          help='Number of threads for pytorch')

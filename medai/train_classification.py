@@ -148,12 +148,13 @@ def train_model(run_name,
                 loss_kwargs={},
                 debug=True,
                 dryrun=False,
+                tb_kwargs={},
                 print_metrics=['loss', 'acc'],
                 device='cuda',
                 ):
     # Prepare run
     print('Training run: ', run_name)
-    tb_writer = TBWriter(run_name, task='cls', debug=debug, dryrun=dryrun)
+    tb_writer = TBWriter(run_name, task='cls', debug=debug, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         print('Resuming from epoch: ', initial_epoch)
@@ -267,6 +268,7 @@ def resume_training(run_name,
                     batch_size=None,
                     post_evaluation=True,
                     print_metrics=None,
+                    tb_kwargs={},
                     debug=True,
                     multiple_gpu=False,
                     device='cuda',
@@ -323,6 +325,7 @@ def resume_training(run_name,
                 loss_name=loss_name,
                 loss_kwargs=loss_kwargs,
                 print_metrics=_choose_print_metrics(dataset_name, print_metrics),
+                tb_kwargs=tb_kwargs,
                 debug=debug,
                 device=device,
                 )
@@ -379,6 +382,7 @@ def train_from_scratch(run_name,
                        augment_class=None,
                        augment_times=1,
                        augment_kwargs={},
+                       tb_kwargs={},
                        post_evaluation=True,
                        debug=True,
                        multiple_gpu=False,
@@ -529,6 +533,7 @@ def train_from_scratch(run_name,
                 loss_name=loss_name,
                 loss_kwargs=loss_kwargs,
                 print_metrics=_choose_print_metrics(dataset_name, print_metrics),
+                tb_kwargs=tb_kwargs,
                 debug=debug,
                 device=device,
                 )
@@ -627,15 +632,9 @@ def parse_args():
     sampl_group.add_argument('-us', '--undersample', default=None,
                              help='Undersample from the majority class with a given label (str/int)')
 
-    hw_group = parser.add_argument_group('Hardware params')
-    hw_group.add_argument('--multiple-gpu', action='store_true',
-                          help='Use multiple gpus')
-    hw_group.add_argument('--cpu', action='store_true',
-                          help='Use CPU only')
-    hw_group.add_argument('--num-workers', type=int, default=2,
-                          help='Number of workers for dataloader')
-    hw_group.add_argument('--num-threads', type=int, default=1,
-                          help='Number of threads for pytorch')
+    parsers.add_args_tb(parser)
+
+    parsers.add_args_hw(parser, num_workers=2)
 
     args = parser.parse_args()
 
@@ -667,6 +666,9 @@ def parse_args():
     args.debug = not args.no_debug
     args.post_evaluation = not args.no_eval
 
+    # TB params
+    parsers.build_args_tb_(args)
+
     return args
 
 
@@ -690,6 +692,7 @@ if __name__ == '__main__':
                         batch_size=args.batch_size,
                         print_metrics=args.print_metrics,
                         post_evaluation=args.post_evaluation,
+                        tb_kwargs=args.tb_kwargs,
                         debug=args.debug,
                         multiple_gpu=args.multiple_gpu,
                         device=device)
@@ -728,6 +731,7 @@ if __name__ == '__main__':
             undersample_label=args.undersample,
             post_evaluation=args.post_evaluation,
             debug=args.debug,
+            tb_kwargs=args.tb_kwargs,
             multiple_gpu=args.multiple_gpu,
             num_workers=args.num_workers,
             device=device,

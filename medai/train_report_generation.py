@@ -49,8 +49,14 @@ from medai.utils import (
     duration_to_str,
     print_hw_options,
     parsers,
+    config_logging,
 )
 from medai.utils.handlers import attach_log_metrics
+
+
+config_logging()
+LOGGER = logging.getLogger('rg')
+LOGGER.setLevel(logging.INFO)
 
 
 def evaluate_model(run_name,
@@ -141,12 +147,13 @@ def train_model(run_name,
                 debug=True,
                 save_model=True,
                 dryrun=False,
+                tb_kwargs={},
                 print_metrics=['loss', 'bleu', 'ciderD'],
                 device='cuda',
                ):
     # Prepare run stuff
     print('Run: ', run_name)
-    tb_writer = TBWriter(run_name, task='rg', debug=debug, dryrun=dryrun)
+    tb_writer = TBWriter(run_name, task='rg', debug=debug, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         print(f'Resuming from epoch {initial_epoch}')
@@ -179,7 +186,7 @@ def train_model(run_name,
                        val_dataloader,
                        tb_writer,
                        timer,
-                       # logger=LOGGER,
+                       logger=LOGGER,
                        initial_epoch=initial_epoch,
                        print_metrics=print_metrics,
                        )
@@ -214,6 +221,7 @@ def train_model(run_name,
 def resume_training(run_name,
                     n_epochs=10,
                     max_samples=None,
+                    tb_kwargs={},
                     debug=True,
                     multiple_gpu=False,
                     post_evaluation=True,
@@ -269,6 +277,7 @@ def resume_training(run_name,
                 val_dataloader,
                 hierarchical=hierarchical,
                 n_epochs=n_epochs,
+                tb_kwargs=tb_kwargs,
                 device=device,
                 debug=debug)
 
@@ -318,6 +327,7 @@ def train_from_scratch(run_name,
                        augment_class=None,
                        augment_times=1,
                        augment_kwargs={},
+                       tb_kwargs={},
                        debug=True,
                        multiple_gpu=False,
                        post_evaluation=True,
@@ -457,6 +467,7 @@ def train_from_scratch(run_name,
                 val_dataloader,
                 hierarchical=hierarchical,
                 n_epochs=n_epochs,
+                tb_kwargs=tb_kwargs,
                 device=device,
                 debug=debug)
 
@@ -529,17 +540,11 @@ def parse_args():
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                         help='Run name of a pretrained CNN')
 
+    parsers.add_args_tb(parser)
+
     parsers.add_args_augment(parser)
 
-    hw_group = parser.add_argument_group('Hardware params')
-    hw_group.add_argument('--multiple-gpu', action='store_true',
-                          help='Use multiple gpus')
-    hw_group.add_argument('--cpu', action='store_true',
-                          help='Use CPU only')
-    hw_group.add_argument('--num-workers', type=int, default=4,
-                          help='Number of workers for dataloader')
-    hw_group.add_argument('--num-threads', type=int, default=1,
-                          help='Number of threads for pytorch')
+    parsers.add_args_hw(parser, num_workers=4)
 
     args = parser.parse_args()
 
@@ -550,6 +555,9 @@ def parse_args():
             parser.error('Must choose one of cnn or cnn_pretrained')
 
     parsers.build_args_augment_(args)
+
+    # TB params
+    parsers.build_args_tb_(args)
 
     return args
 
@@ -572,6 +580,7 @@ if __name__ == '__main__':
         resume_training(args.resume,
                         n_epochs=args.epochs,
                         max_samples=args.max_samples,
+                        tb_kwargs=args.tb_kwargs,
                         debug=not args.no_debug,
                         multiple_gpu=args.multiple_gpu,
                         device=device,
@@ -598,6 +607,7 @@ if __name__ == '__main__':
                            augment_class=args.augment_class,
                            augment_times=args.augment_times,
                            augment_kwargs=args.augment_kwargs,
+                           tb_kwargs=args.tb_kwargs,
                            debug=not args.no_debug,
                            multiple_gpu=args.multiple_gpu,
                            num_workers=args.num_workers,
