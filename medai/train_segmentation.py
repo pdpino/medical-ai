@@ -31,6 +31,7 @@ from medai.utils import (
     duration_to_str,
     print_hw_options,
     parsers,
+    config_logging,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -39,11 +40,7 @@ from medai.utils.handlers import (
 )
 
 
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(levelname)s(%(asctime)s) %(message)s',
-    datefmt='%m-%d %H:%M',
-)
+config_logging()
 LOGGER = logging.getLogger('seg')
 LOGGER.setLevel(logging.INFO)
 

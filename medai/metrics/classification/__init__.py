@@ -17,17 +17,18 @@ from ignite.utils import to_onehot
 from medai.metrics.classification.accuracy import MultilabelAccuracy
 from medai.metrics.classification.hamming import Hamming
 from medai.metrics.classification.roc_auc import RocAucMetric
+from medai.metrics.classification.pr_auc import PRAucMetric
 from medai.metrics.classification.specificity import Specificity
 
 
 def _get_transform_one_label(label_index, use_round=True):
     """Creates a transform function to extract one label from a multilabel output.
-    
+
     Works only for multilabel=True.
     """
     def transform_fn(output):
         """Transform multilabel arrays into binary class arrays.
-        
+
         Args:
             y_pred shape: batch_size, n_labels
             y_true shape: batch_size, n_labels
@@ -37,10 +38,10 @@ def _get_transform_one_label(label_index, use_round=True):
             y_true shape: batch_size
         """
         _, y_pred, y_true = output
-        
+
         y_pred = y_pred[:, label_index]
         y_true = y_true[:, label_index]
-        
+
         if use_round:
             y_pred = torch.round(y_pred)
 
@@ -66,7 +67,7 @@ def _get_transform_one_class(label_index):
             y_true shape: batch_size
         """
         _, y_pred, y_true = output
-        
+
         _, y_pred = y_pred.max(dim=1)
         y_pred = (y_pred == label_index).long()
         y_true = (y_true == label_index).long()
@@ -77,7 +78,7 @@ def _get_transform_one_class(label_index):
 
 def _get_transform_cm_multilabel(label_index):
     """Creates a transform function to prepare the input for the ConfusionMatrix metric.
-    
+
     Works for multilabel outputs only.
     The metric will have a 2x2 confusion-matrix, with positive and negative for the
         selected label.
@@ -89,7 +90,7 @@ def _get_transform_cm_multilabel(label_index):
 
     def transform_fn(output):
         """Transform multilabel arrays into one-hot and indices array, respectively.
-        
+
         Args:
             y_pred shape: batch_size, n_labels
             y_true shape: batch_size, n_labels
@@ -104,7 +105,7 @@ def _get_transform_cm_multilabel(label_index):
         y_true = y_true[:, label_index].long()
 
         return y_pred, y_true
-    
+
     return transform_fn
 
 
@@ -147,13 +148,13 @@ def _transform_remove_loss_and_round(output):
 
 def attach_metrics_classification(engine, labels, multilabel=True, include_cm=False):
     """Attach classification metrics to an engine, to use during training.
-    
+
     Note: most multilabel metrics are treated as binary,
         i.e. the metrics are computed separately for each label.
     """
     loss = RunningAverage(output_transform=lambda x: x[0], alpha=1)
     loss.attach(engine, 'loss')
-    
+
     if multilabel:
         acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round)
         acc.attach(engine, 'acc')
@@ -171,6 +172,8 @@ def attach_metrics_classification(engine, labels, multilabel=True, include_cm=Fa
         _attach_binary_metrics(engine, labels, 'spec', Specificity, True)
         _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False,
                                include_macro=True)
+        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric, False,
+                               include_macro=True)
     else:
         acc = Accuracy(output_transform=_transform_remove_loss)
         acc.attach(engine, 'acc')
@@ -184,7 +187,7 @@ def attach_metrics_classification(engine, labels, multilabel=True, include_cm=Fa
 
 def attach_metric_cm(engine, labels, multilabel=True):
     """Attach ConfusionMatrix metrics to an engine.
-    
+
     Note that CMs are not attached during training, since they are not easily visualized (e.g. TB).
     """
     if multilabel:

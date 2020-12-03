@@ -10,7 +10,7 @@ import numpy as np
 from pprint import pprint
 
 from medai.utils import TMP_DIR, duration_to_str
-from medai.metrics.files import get_results_folder
+from medai.utils.files import get_results_folder
 
 
 MIRQI_FOLDER = '~/software/MIRQI'

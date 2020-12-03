@@ -1,6 +1,7 @@
 import time
 import argparse
 import os
+import logging
 
 import torch
 from torch import nn
@@ -37,8 +38,14 @@ from medai.utils import (
     parse_str_or_int,
     print_hw_options,
     parsers,
+    config_logging,
 )
 from medai.utils.handlers import attach_log_metrics
+
+config_logging()
+
+LOGGER = logging.getLogger('cl')
+LOGGER.setLevel(logging.INFO)
 
 
 def _choose_print_metrics(dataset_name, additional=None):
@@ -193,7 +200,7 @@ def train_model(run_name,
                        val_dataloader,
                        tb_writer,
                        timer,
-                       # logger=LOGGER,
+                       logger=LOGGER,
                        initial_epoch=initial_epoch,
                        print_metrics=print_metrics,
                        )

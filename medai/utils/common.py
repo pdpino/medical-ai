@@ -1,6 +1,7 @@
 from datetime import datetime
 import time
 import os
+import logging
 import numpy as np
 
 WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
@@ -101,3 +102,10 @@ def print_hw_options(device, args):
     }
     info_str = ' '.join(f'{k}={v}' for k, v in d.items())
     print(f'Using {info_str}')
+
+def config_logging():
+    logging.basicConfig(
+        level=logging.WARNING,
+        format='%(levelname)s(%(asctime)s) %(message)s',
+        datefmt='%m-%d %H:%M',
+    )
