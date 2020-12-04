@@ -107,8 +107,15 @@ def load_compiled_model_classification(run_name,
         model = nn.DataParallel(model)
     optimizer = optim.Adam(model.parameters(), **metadata['opt_kwargs'])
 
-    lr_sch = None
-    compiled_model = CompiledModel(model, optimizer, lr_sch, metadata)
+    # Create LR scheduler
+    lr_scheduler_kwargs = metadata.get('lr_scheduler_kwargs', None)
+    if lr_scheduler_kwargs is not None:
+        lr_scheduler = ReduceLROnPlateau(optimizer, **lr_scheduler_kwargs)
+    else:
+        lr_scheduler = None
+
+    # Compile model
+    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)
@@ -202,9 +209,15 @@ def load_compiled_model_report_generation(run_name,
     opt_kwargs = metadata['opt_kwargs']
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
+    # Create LR scheduler
+    lr_scheduler_kwargs = metadata.get('lr_scheduler_kwargs', None)
+    if lr_scheduler_kwargs is not None:
+        lr_scheduler = ReduceLROnPlateau(optimizer, **lr_scheduler_kwargs)
+    else:
+        lr_scheduler = None
+
     # Compiled model
-    lr_sch = None
-    compiled_model = CompiledModel(model, optimizer, lr_sch, metadata)
+    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)

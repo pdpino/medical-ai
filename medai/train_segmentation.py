@@ -330,7 +330,7 @@ def train_from_scratch(run_name,
         run_name += '_normD'
     if image_size != 512:
         run_name += f'_size{image_size}'
-    if loss_weights is not None:
+    if loss_weights:
         ws = '-'.join(str(int(w*10)) for w in loss_weights)
         run_name += f'_wce{ws}'
     if augment:
@@ -460,33 +460,17 @@ def parse_args():
     #                     choices=AVAILABLE_SEGMENTATION_MODELS,
     #                     help='Choose FCN to use')
 
-    es_group = parser.add_argument_group('Early stopping params')
-    es_group.add_argument('--no-early-stopping', action='store_true',
-                          help='If present, dont early stop the training')
-    es_group.add_argument('--es-patience', type=int, default=10,
-                          help='Patience value for early-stopping')
-    es_group.add_argument('--es-metric', type=str, default='iou',
-                          help='Metric to monitor for early-stopping')
-    es_group.add_argument('--es-min-delta', type=float, default=0,
-                          help='Min delta to use for early-stopping')
-
-    lr_group = parser.add_argument_group('LR scheduler params')
-    lr_group.add_argument('-lr', '--learning-rate', type=float, default=0.0001,
-                          help='Initial learning rate')
-    lr_group.add_argument('--lr-metric', type=str, default='iou',
-                          help='Select the metric to regulate the LR')
-    lr_group.add_argument('--lr-patience', type=int, default=5,
-                          help='Patience value for LR-scheduler')
-    lr_group.add_argument('--lr-factor', type=float, default=0.1,
-                          help='Factor to multiply the LR on each update')
-
-    parsers.add_args_augment(parser)
-
     images_group = parser.add_argument_group('Images params')
     images_group.add_argument('--image-size', type=int, default=512,
                               help='Image size in pixels')
     images_group.add_argument('--norm-by-sample', action='store_true',
                               help='If present, normalize each sample (instead of using dataset stats)')
+
+    parsers.add_args_early_stopping(parser, metric='iou')
+
+    parsers.add_args_lr_sch(parser, lr=0.0001, metric='iou')
+
+    parsers.add_args_augment(parser)
 
     parsers.add_args_tb(parser)
 
@@ -502,27 +486,13 @@ def parse_args():
         # args.weight_ce = [0.1, 0.3, 0.3, 0.3]
         # args.weight_ce = [0.1, 0.4, 0.3, 0.3]
         args.weight_ce = [0.1, 0.6, 0.3, 0.3]
+    else:
+        args.weight_ce = None
 
-    # Build early-stopping parameters
-    args.early_stopping = not args.no_early_stopping
-    args.early_stopping_kwargs = {
-        'patience': args.es_patience,
-        'metric': args.es_metric,
-        'min_delta': args.es_min_delta,
-    }
-
-    # Build LR scheduler parameters
-    args.lr_sch_kwargs = {
-        'mode': 'min' if args.lr_metric == 'loss' else 'max',
-        'threshold_mode': 'abs',
-        'factor': args.lr_factor,
-        'patience': args.lr_patience,
-        'verbose': True,
-    }
-
+    # Build parameters
+    parsers.build_args_early_stopping_(args)
+    parsers.build_args_lr_sch_(args)
     parsers.build_args_augment_(args)
-
-    # TB params
     parsers.build_args_tb_(args)
 
     return args

@@ -1,10 +1,12 @@
 import time
 import argparse
 import os
+import logging
 
 import torch
 from torch import nn
 from torch import optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
 
@@ -18,8 +20,9 @@ from medai.metrics.report_generation import (
     attach_report_writer,
 )
 from medai.models.classification import (
-    AVAILABLE_CLASSIFICATION_MODELS,
     create_cnn,
+    AVAILABLE_CLASSIFICATION_MODELS,
+    DEPRECATED_CNNS,
 )
 from medai.models.report_generation import (
     is_decoder_hierarchical,
@@ -51,7 +54,11 @@ from medai.utils import (
     parsers,
     config_logging,
 )
-from medai.utils.handlers import attach_log_metrics
+from medai.utils.handlers import (
+    attach_log_metrics,
+    attach_early_stopping,
+    attach_lr_scheduler_handler,
+)
 
 
 config_logging()
@@ -148,6 +155,9 @@ def train_model(run_name,
                 save_model=True,
                 dryrun=False,
                 tb_kwargs={},
+                early_stopping=True,
+                early_stopping_kwargs={},
+                lr_sch_metric='loss',
                 print_metrics=['loss', 'bleu', 'ciderD'],
                 device='cuda',
                ):
@@ -159,7 +169,7 @@ def train_model(run_name,
         print(f'Resuming from epoch {initial_epoch}')
 
     # Unwrap stuff
-    model, optimizer, _ = compiled_model.get_elements()
+    model, optimizer, lr_scheduler = compiled_model.get_elements()
 
     # Flat vs hierarchical step_fn
     if hierarchical:
@@ -197,9 +207,16 @@ def train_model(run_name,
                             trainer,
                             validator,
                             task='rg',
+                            metric=early_stopping_kwargs['metric'] if early_stopping else None,
                             debug=debug,
                             dryrun=dryrun or (not save_model),
                            )
+
+    if early_stopping:
+        attach_early_stopping(trainer, validator, **early_stopping_kwargs)
+
+    if lr_scheduler is not None:
+        attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
 
     # Train!
     print('-' * 50)
@@ -271,6 +288,7 @@ def resume_training(run_name,
     )
 
     # Train
+    other_train_kwargs = metadata.get('other_train_kwargs', {})
     train_model(run_name,
                 compiled_model,
                 train_dataloader,
@@ -279,7 +297,9 @@ def resume_training(run_name,
                 n_epochs=n_epochs,
                 tb_kwargs=tb_kwargs,
                 device=device,
-                debug=debug)
+                debug=debug,
+                **other_train_kwargs,
+                )
 
     print(f'Finished training: {run_name}')
 
@@ -322,6 +342,10 @@ def train_from_scratch(run_name,
                        cnn_freeze=False,
                        max_samples=None,
                        image_size=512,
+                       early_stopping=True,
+                       early_stopping_kwargs={},
+                       lr_sch_metric='loss',
+                       lr_sch_kwargs={},
                        augment=False,
                        augment_label=None,
                        augment_class=None,
@@ -353,6 +377,13 @@ def train_from_scratch(run_name,
             run_name += f'-{augment_label}'
             if augment_class is not None:
                 run_name += f'-cls{augment_class}'
+    if lr_sch_metric:
+        factor = lr_sch_kwargs['factor']
+        patience = lr_sch_kwargs['patience']
+        run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+    if not early_stopping:
+        run_name += '_noes'
+
 
     # Decide hierarchical
     hierarchical = is_decoder_hierarchical(decoder_name)
@@ -408,6 +439,8 @@ def train_from_scratch(run_name,
         cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
     else:
         # Create new
+        if cnn_model_name in DEPRECATED_CNNS:
+            raise Exception(f'CNN is deprecated: {cnn_model_name}')
         cnn_kwargs = {
             'model_name': cnn_model_name,
             'labels': [], # headless
@@ -440,11 +473,27 @@ def train_from_scratch(run_name,
     }
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
+    # Create lr_scheduler
+    if lr_sch_metric:
+        lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs)
+        LOGGER.info('Using ReduceLROnPlateau')
+    else:
+        LOGGER.info('Not using a LR scheduler')
+        lr_scheduler = None
+
+    # Other training params
+    other_train_kwargs = {
+        'early_stopping': early_stopping,
+        'early_stopping_kwargs': early_stopping_kwargs,
+        'lr_sch_metric': lr_sch_metric,
+    }
+
     # Save metadata
     metadata = {
         'cnn_kwargs': cnn_kwargs,
         'decoder_kwargs': decoder_kwargs,
         'opt_kwargs': opt_kwargs,
+        'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
         'vocab': vocab,
@@ -453,12 +502,12 @@ def train_from_scratch(run_name,
             'pretrained_cnn': cnn_run_name,
             'batch_size': batch_size,
         },
+        'other_train_kwargs': other_train_kwargs,
     }
     save_metadata(metadata, run_name, task='rg', debug=debug)
 
     # Compiled model
-    lr_sch = None
-    compiled_model = CompiledModel(model, optimizer, lr_sch, metadata)
+    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Train
     train_model(run_name,
@@ -469,7 +518,9 @@ def train_from_scratch(run_name,
                 n_epochs=n_epochs,
                 tb_kwargs=tb_kwargs,
                 device=device,
-                debug=debug)
+                debug=debug,
+                **other_train_kwargs,
+                )
 
 
     print(f'Finished run: {run_name}')
@@ -504,8 +555,6 @@ def parse_args():
                         help='Resume from a previous run')
     parser.add_argument('-dec', '--decoder', type=str,
                         choices=AVAILABLE_DECODERS, help='Choose Decoder')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0001,
-                        help='Learning rate')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
@@ -540,8 +589,9 @@ def parse_args():
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                         help='Run name of a pretrained CNN')
 
+    parsers.add_args_early_stopping(parser)
+    parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
     parsers.add_args_tb(parser)
-
     parsers.add_args_augment(parser)
 
     parsers.add_args_hw(parser, num_workers=4)
@@ -554,9 +604,10 @@ def parse_args():
         if args.cnn is None and args.cnn_pretrained is None:
             parser.error('Must choose one of cnn or cnn_pretrained')
 
+    # Build params
+    parsers.build_args_early_stopping_(args)
+    parsers.build_args_lr_sch_(args)
     parsers.build_args_augment_(args)
-
-    # TB params
     parsers.build_args_tb_(args)
 
     return args
@@ -602,6 +653,10 @@ if __name__ == '__main__':
                            cnn_imagenet=not args.no_imagenet,
                            cnn_freeze=args.freeze,
                            max_samples=args.max_samples,
+                           early_stopping=args.early_stopping,
+                           early_stopping_kwargs=args.early_stopping_kwargs,
+                           lr_sch_metric=args.lr_metric,
+                           lr_sch_kwargs=args.lr_sch_kwargs,
                            augment=args.augment,
                            augment_label=args.augment_label,
                            augment_class=args.augment_class,

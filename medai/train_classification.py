@@ -6,6 +6,7 @@ import logging
 import torch
 from torch import nn
 from torch import optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
@@ -23,6 +24,7 @@ from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.classification import (
     create_cnn,
     AVAILABLE_CLASSIFICATION_MODELS,
+    DEPRECATED_CNNS,
 )
 from medai.models.checkpoint import (
     CompiledModel,
@@ -40,7 +42,11 @@ from medai.utils import (
     parsers,
     config_logging,
 )
-from medai.utils.handlers import attach_log_metrics
+from medai.utils.handlers import (
+    attach_log_metrics,
+    attach_early_stopping,
+    attach_lr_scheduler_handler,
+)
 
 config_logging()
 
@@ -146,6 +152,9 @@ def train_model(run_name,
                 n_epochs=1,
                 loss_name='wbce',
                 loss_kwargs={},
+                early_stopping=True,
+                early_stopping_kwargs={},
+                lr_sch_metric='loss',
                 debug=True,
                 dryrun=False,
                 tb_kwargs={},
@@ -160,7 +169,7 @@ def train_model(run_name,
         print('Resuming from epoch: ', initial_epoch)
 
     # Unwrap stuff
-    model, optimizer, _ = compiled_model.get_elements()
+    model, optimizer, lr_scheduler = compiled_model.get_elements()
 
     # Classification description
     labels = train_dataloader.dataset.labels
@@ -212,9 +221,16 @@ def train_model(run_name,
                             trainer,
                             validator,
                             task='cls',
+                            metric=early_stopping_kwargs['metric'] if early_stopping else None,
                             debug=debug,
                             dryrun=dryrun,
                             )
+
+    if early_stopping:
+        attach_early_stopping(trainer, validator, **early_stopping_kwargs)
+
+    if lr_scheduler is not None:
+        attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
 
     # Train!
     print('-' * 50)
@@ -314,12 +330,14 @@ def resume_training(run_name,
 
     # Override previous LR
     if lr is not None:
+        # FIXME: delete this hack??
         old_lr = metadata['opt_kwargs']['lr']
         print(f'Changing learning rate to {lr}, was {old_lr}')
         for param_group in compiled_model.optimizer.param_groups:
             param_group['lr'] = lr
 
     # Train
+    other_train_kwargs = metadata.get('other_train_kwargs', {})
     train_model(run_name, compiled_model, train_dataloader, val_dataloader,
                 n_epochs=n_epochs,
                 loss_name=loss_name,
@@ -328,6 +346,7 @@ def resume_training(run_name,
                 tb_kwargs=tb_kwargs,
                 debug=debug,
                 device=device,
+                **other_train_kwargs,
                 )
 
     print('Finished training: ', run_name)
@@ -369,6 +388,10 @@ def train_from_scratch(run_name,
                        batch_size=None,
                        norm_by_sample=False,
                        n_epochs=10,
+                       early_stopping=True,
+                       early_stopping_kwargs={},
+                       lr_sch_metric='loss',
+                       lr_sch_kwargs={},
                        frontal_only=False,
                        oversample=False,
                        oversample_label=None,
@@ -436,6 +459,12 @@ def train_from_scratch(run_name,
         run_name += '_e0'
     if fc_layers and len(fc_layers) > 0:
         run_name += '_fc' + '-'.join(str(l) for l in fc_layers)
+    if lr_sch_metric:
+        factor = lr_sch_kwargs['factor']
+        patience = lr_sch_kwargs['patience']
+        run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+    if not early_stopping:
+        run_name += '_noes'
 
 
     # Load data
@@ -484,6 +513,8 @@ def train_from_scratch(run_name,
 
 
     # Create model
+    if cnn_name in DEPRECATED_CNNS:
+        raise Exception(f'CNN is deprecated: {cnn_name}')
     model_kwargs = {
         'model_name': cnn_name,
         'labels': train_dataloader.dataset.labels,
@@ -505,15 +536,27 @@ def train_from_scratch(run_name,
     }
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
+    # Create lr_scheduler
+    lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
+
+    other_train_kwargs = {
+        'early_stopping': early_stopping,
+        'early_stopping_kwargs': early_stopping_kwargs,
+        'lr_sch_metric': lr_sch_metric,
+    }
+
+
     # Save model metadata
     metadata = {
         'model_kwargs': model_kwargs,
         'opt_kwargs': opt_kwargs,
+        'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
         'hparams': {
             'loss_name': loss_name,
             'loss_kwargs': loss_kwargs,
             'batch_size': batch_size,
         },
+        'other_train_kwargs': other_train_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
     }
@@ -521,8 +564,7 @@ def train_from_scratch(run_name,
 
 
     # Create compiled_model
-    lr_sch = None
-    compiled_model = CompiledModel(model, optimizer, lr_sch, metadata)
+    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Train!
     train_model(run_name,
@@ -536,6 +578,7 @@ def train_from_scratch(run_name,
                 tb_kwargs=tb_kwargs,
                 debug=debug,
                 device=device,
+                **other_train_kwargs,
                 )
 
     print('Finished training: ', run_name)
@@ -568,8 +611,6 @@ def parse_args():
                         help='Choose dataset to train on')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
-    parser.add_argument('-lr', '--learning-rate', type=float, default=None,
-                        help='Learning rate')
     parser.add_argument('-bs', '--batch-size', type=int, default=None,
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
@@ -633,6 +674,8 @@ def parse_args():
                              help='Undersample from the majority class with a given label (str/int)')
 
     parsers.add_args_tb(parser)
+    parsers.add_args_early_stopping(parser, metric='acc')
+    parsers.add_args_lr_sch(parser, lr=None, metric='acc')
 
     parsers.add_args_hw(parser, num_workers=2)
 
@@ -653,9 +696,6 @@ def parse_args():
     else:
         args.loss_kwargs = {}
 
-    # Build augment params
-    parsers.build_args_augment_(args)
-
     # Enable passing str or int for oversample labels
     if args.oversample is not None:
         args.oversample = parse_str_or_int(args.oversample)
@@ -666,8 +706,11 @@ def parse_args():
     args.debug = not args.no_debug
     args.post_evaluation = not args.no_eval
 
-    # TB params
+    # Build params
+    parsers.build_args_early_stopping_(args)
+    parsers.build_args_lr_sch_(args)
     parsers.build_args_tb_(args)
+    parsers.build_args_augment_(args)
 
     return args
 
@@ -717,6 +760,10 @@ if __name__ == '__main__':
             batch_size=args.batch_size,
             norm_by_sample=args.norm_by_sample,
             n_epochs=args.epochs,
+            early_stopping=args.early_stopping,
+            early_stopping_kwargs=args.early_stopping_kwargs,
+            lr_sch_metric=args.lr_metric,
+            lr_sch_kwargs=args.lr_sch_kwargs,
             oversample=args.oversample is not None,
             oversample_label=args.oversample,
             oversample_class=args.os_class,
