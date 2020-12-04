@@ -1,3 +1,4 @@
+from functools import partial
 from medai.models.classification import (
     resnet,
     densenet,
@@ -5,6 +6,7 @@ from medai.models.classification import (
     vgg,
     mobilenet,
 )
+from medai.models.classification.load_imagenet import ImageNetModel
 
 _MODELS_DEF = {
     'resnet-50': resnet.Resnet50CNN,
@@ -15,7 +17,14 @@ _MODELS_DEF = {
     'tfs-tiny': transfusion.class_wrapper('tiny'),
     'vgg-19': vgg.VGG19CNN,
     'mobilenet': mobilenet.MobileNetV2CNN,
+    'resnet-50-v2': partial(ImageNetModel, model_name='resnet-50'),
+    'densenet-121-v2': partial(ImageNetModel, model_name='densenet-121'),
+    'mobilenet-v2': partial(ImageNetModel, model_name='mobilenet'),
 }
+
+DEPRECATED_CNNS = set([
+    'resnet-50', 'densenet-121', 'mobilenet', # Use v2 instead
+])
 
 AVAILABLE_CLASSIFICATION_MODELS = list(_MODELS_DEF)
 
