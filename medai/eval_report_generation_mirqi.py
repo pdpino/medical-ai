@@ -11,6 +11,7 @@ from pprint import pprint
 
 from medai.utils import TMP_DIR, duration_to_str
 from medai.utils.files import get_results_folder
+from medai.metrics import load_rg_outputs
 
 
 MIRQI_FOLDER = '~/software/MIRQI'

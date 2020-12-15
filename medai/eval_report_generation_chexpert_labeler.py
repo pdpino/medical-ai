@@ -14,7 +14,10 @@ from medai.utils import TMP_DIR
 from medai.utils.files import get_results_folder
 from medai.metrics import load_rg_outputs
 
+_NEGBIO_PATH_KEY = 'NEGBIO_PATH'
+assert _NEGBIO_PATH_KEY in os.environ, f'You must export {_NEGBIO_PATH_KEY}'
 
+NEGBIO_PATH = os.environ[_NEGBIO_PATH_KEY] # '~/chexpert/NegBio'
 CHEXPERT_FOLDER = '~/chexpert/chexpert-labeler'
 CHEXPERT_PYTHON = '~/software/miniconda3/envs/chexpert-label/bin/python'
 
@@ -56,7 +59,7 @@ def _get_custom_env():
     """Adds a necessary environment variable to run the labeler."""
     custom_env = os.environ.copy()
     prev = custom_env.get('PYTHONPATH', '')
-    custom_env['PYTHONPATH'] = f'~/chexpert/NegBio:{prev}'
+    custom_env['PYTHONPATH'] = f'{NEGBIO_PATH}:{prev}'
 
     return custom_env
 
@@ -68,7 +71,8 @@ def _concat_df_matrix(df, results, suffix=None):
                      axis=1, join='inner')
 
 
-def _apply_labeler_to_column(dataframe, column_name):
+def _apply_labeler_to_column(dataframe, column_name,
+                             fill_empty=None, fill_uncertain=None):
     """Apply chexpert-labeler to a column of a dataframe."""
     # Grab reports
     reports_only = dataframe[column_name]
@@ -93,17 +97,21 @@ def _apply_labeler_to_column(dataframe, column_name):
                                            env=_get_custom_env(),
                                            )
     except subprocess.CalledProcessError as e:
-        print('Labeler failed: ', e.stderr)
+        print('Labeler failed, stdout and stderr:')
+        print(e.stdout)
+        print(e.stderr)
         raise
 
     # Read chexpert-labeler output
     out_df = pd.read_csv(output_path)
 
-    # Nan are unknown: mark as negative
-    out_df = out_df.fillna(0)
+    if fill_empty is not None:
+        # Mark nan as -2
+        out_df = out_df.fillna(fill_empty)
 
-    # -1 are Uncertain, mark as negative (REVIEW)
-    out_df = out_df.replace(-1, 0)
+    if fill_uncertain is not None and fill_uncertain != -1:
+        # -1 are Uncertain, mark as positive
+        out_df = out_df.replace(-1, fill_uncertain)
 
     return out_df[CHEXPERT_LABELS].to_numpy()
 
@@ -114,7 +122,9 @@ def _apply_labeler_to_df(df):
     ground_truth = _load_gt_labels(df)
 
     # Calculate labels for generated
-    generated = _apply_labeler_to_column(df, 'generated')
+    generated = _apply_labeler_to_column(df, 'generated',
+                                         fill_empty=0,
+                                         fill_uncertain=1)
 
     # Concat in main dataframe
     df = _concat_df_matrix(df, ground_truth, 'gt')

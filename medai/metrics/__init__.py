@@ -1,6 +1,7 @@
 import json
 import os
 import torch
+import pandas as pd
 
 from medai.utils.files import get_results_folder
 

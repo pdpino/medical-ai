@@ -14,6 +14,7 @@ from medai.utils.nlp import (
 )
 
 DATASET_DIR = os.environ.get('DATASET_DIR_IU_XRAY')
+_REPORTS_FNAME = 'reports.clean.v2.json'
 
 _AVAILABLE_SPLITS = ['train', 'val', 'test', 'all']
 
@@ -56,7 +57,7 @@ class IUXRayDataset(Dataset):
         self._preprocess_labels(labels)
 
         # Load reports
-        reports_fname = os.path.join(self.reports_dir, 'reports.clean.json')
+        reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME)
         with open(reports_fname, 'r') as f:
             reports = list(json.load(f).values())
 
