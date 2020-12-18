@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms
 from PIL import Image
 import os
 import json
@@ -33,6 +34,7 @@ class IUXRayDataset(Dataset):
                  frontal_only=False, image_size=(512, 512),
                  norm_by_sample=False,
                  image_format='RGB',
+                 masks=False,
                  vocab=None, recompute_vocab=False, **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_IU_XRAY not found in env variables')
@@ -52,6 +54,13 @@ class IUXRayDataset(Dataset):
 
         self.images_dir = os.path.join(DATASET_DIR, 'images')
         self.reports_dir = os.path.join(DATASET_DIR, 'reports')
+
+        self.masks_dir = os.path.join(DATASET_DIR, 'masks')
+        self.enable_masks = masks and frontal_only # NOTE: only frontal masks are available
+        self.transform_mask = transforms.Compose([
+            transforms.Resize(image_size),
+            transforms.ToTensor(),
+        ])
 
         self.multilabel = True
         self._preprocess_labels(labels)
@@ -83,16 +92,20 @@ class IUXRayDataset(Dataset):
     def __getitem__(self, idx):
         report = self.reports[idx]
 
-        filename = report['filename']
-        image = self.load_image(report['image_name'])
+        report_filename = report['filename']
+        image_name = report['image_name']
+        image = self.load_image(image_name)
 
-        labels = self.labels_by_report[filename]
+        labels = self.labels_by_report[report_filename]
+
+        mask = self.load_mask(image_name) if self.enable_masks else None
 
         return BatchItem(
             image=image,
             labels=labels,
             report=report['tokens_idxs'],
-            filename=filename,
+            filename=image_name,
+            masks=mask,
             )
 
     def load_image(self, image_name):
@@ -106,6 +119,21 @@ class IUXRayDataset(Dataset):
 
         image = self.transform(image)
         return image
+
+    def load_mask(self, image_name):
+        filepath = os.path.join(self.masks_dir, f'{image_name}.png')
+
+        if not os.path.isfile(filepath):
+            return None
+
+        mask = Image.open(filepath).convert('L')
+        mask = self.transform_mask(mask)
+        # shape: n_channels=1, height, width
+
+        mask = (mask * 255).long().squeeze(0)
+        # shape: height, width
+
+        return mask
 
     def get_vocab(self):
         return self.word_to_idx
@@ -182,7 +210,6 @@ class IUXRayDataset(Dataset):
             #     labels[0] = 1
 
             self.labels_by_report[filename] = torch.tensor(labels)
-
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a

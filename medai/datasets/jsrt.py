@@ -13,10 +13,15 @@ DATASET_DIR = os.environ.get('DATASET_DIR_JSRT', None)
 _DATASET_MEAN = 0.5946
 _DATASET_STD = 0.2733
 
+ORGAN_BACKGROUND = 'background'
+ORGAN_HEART = 'heart'
+ORGAN_RIGHT_LUNG = 'right lung'
+ORGAN_LEFT_LUNG = 'left lung'
+
 ORGANS = [
-    'heart',
-    'right lung',
-    'left lung',
+    ORGAN_HEART,
+    ORGAN_RIGHT_LUNG,
+    ORGAN_LEFT_LUNG,
     ## Not used for now:
     # 'right clavicle',
     # 'left clavicle',
@@ -60,7 +65,7 @@ class JSRTDataset(Dataset):
             transforms.ToTensor(),
         ])
 
-        self.seg_labels = ['background'] + list(ORGANS)
+        self.seg_labels = [ORGAN_BACKGROUND] + list(ORGANS)
 
 
     def __len__(self):
@@ -97,7 +102,7 @@ class JSRTDataset(Dataset):
         overall_mask = torch.zeros(*self.image_size).long()
 
         for index, organ in enumerate(self.seg_labels):
-            if organ == 'background':
+            if organ == ORGAN_BACKGROUND:
                 continue
 
             fpath = os.path.join(masks_folder, organ, image_name_gif)

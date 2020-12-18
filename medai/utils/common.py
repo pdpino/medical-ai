@@ -43,17 +43,21 @@ def arr_to_range(arr, min_value=0, max_value=1):
 
 
 def tensor_to_range01(arr, eps=1e-8):
-    # arr shape: batch_size, n_channels, height, width
+    # arr shape: *, height, width
 
-    arr_min = arr.min(-1)[0].min(-1)[0]
-    # shape: batch_size, n_channels
+    shape = arr.size()
+    flatten = arr.view(*shape[:-2], -1)
+    # shape: *, height*width
 
-    arr_max = arr.max(-1)[0].max(-1)[0]
-    # shape: batch_size, n_channels
+    arr_min = flatten.min(-1)[0]
+    # shape: *
+
+    arr_max = flatten.max(-1)[0]
+    # shape: *
 
     arr_min = arr_min.unsqueeze(-1).unsqueeze(-1)
     arr_max = arr_max.unsqueeze(-1).unsqueeze(-1)
-    # shape: batch_size, n_channels, 1, 1
+    # shape: *, 1, 1
 
     arr_range = (arr_max - arr_min) + eps
     return (arr - arr_min) / arr_range

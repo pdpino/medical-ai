@@ -61,7 +61,7 @@ def create_hierarchical_dataloader(dataset, **kwargs):
 
 def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
     """Flattens generated reports.
-    
+
     generated_words -- tensor of shape (batch_size, max_n_sentences, max_n_words, vocab_size)
     stops_prediction -- tensor of shape (batch_size, max_n_sentences)
 
@@ -139,11 +139,11 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
         # Reports (hierarchical), as word ids
         reports = data_batch.reports.to(device).long()
         # shape: batch_size, max_n_sentences, max_n_words
-        
+
         # Stop ground-truth
         stop_ground_truth = data_batch.stops.to(device)
         # shape: batch_size, n_sentences
-        
+
         # Enable training
         model.train(training)
         torch.set_grad_enabled(training) # enable recording gradients
@@ -165,10 +165,10 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
             # Calculate word loss
             vocab_size = generated_words.size()[-1]
             word_loss = word_loss_fn(generated_words.view(-1, vocab_size), reports.view(-1))
-            
+
             # Calculate stop loss
             stop_loss = stop_loss_fn(stop_prediction, stop_ground_truth)
-            
+
             # Calculate full loss
             total_loss = word_loss + stop_loss
             batch_loss = total_loss.item()
@@ -186,11 +186,6 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
 
         flat_reports_gen = _flatten_gen_reports(generated_words, stop_prediction)
         flat_reports = _flatten_gt_reports(reports)
-
-        # print('AAA: ', generated_words.size())
-        # print('BBB: ', reports.size())
-        # print('CCC: ', flat_reports_gen.size())
-        # print('DDD: ', flat_reports.size())
 
         return {
             'loss': batch_loss,

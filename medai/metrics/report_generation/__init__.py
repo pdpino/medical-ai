@@ -58,7 +58,7 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False):
         word_acc.attach(engine, 'word_acc')
 
     # Attach multiple bleu
-    _attach_bleu(engine, 4) # , output_transform=output_transform)
+    _attach_bleu(engine, 4)
 
     rouge = RougeL(output_transform=_get_flat_reports)
     rouge.attach(engine, 'rougeL')
