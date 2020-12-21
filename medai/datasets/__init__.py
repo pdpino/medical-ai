@@ -144,7 +144,9 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    augment=False,
                                    augment_label=None, augment_class=None,
                                    augment_times=1, augment_kwargs={},
-                                   num_workers=2):
+                                   num_workers=2,
+                                   **kwargs,
+                                   ):
     print(f'Loading {dataset_name}/{dataset_type} dataset...')
 
     assert dataset_name in _RG_DATASETS, f'Dataset not found: {dataset_name}'
@@ -155,6 +157,7 @@ def prepare_data_report_generation(create_dataloader_fn,
                            vocab=vocab,
                            image_size=image_size,
                            sort_samples=sort_samples,
+                           **kwargs,
                            )
 
     if augment:
