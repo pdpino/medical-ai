@@ -65,7 +65,7 @@ def split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX):
     report = torch.tensor(report)
 
     # Index positions of end-of-sentence tokens
-    end_positions = (report == end_of_sentence_idx).nonzero().view(-1)
+    end_positions = (report == end_of_sentence_idx).nonzero(as_tuple=False).view(-1)
 
     # Transform it to count of items
     end_counts = end_positions + 1

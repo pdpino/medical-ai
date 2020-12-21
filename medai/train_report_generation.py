@@ -28,6 +28,7 @@ from medai.models.report_generation import (
     is_decoder_hierarchical,
     create_decoder,
     AVAILABLE_DECODERS,
+    DEPRECATED_DECODERS,
 )
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.checkpoint import (
@@ -384,6 +385,9 @@ def train_from_scratch(run_name,
     if not early_stopping:
         run_name += '_noes'
 
+    # Is deprecated
+    if decoder_name in DEPRECATED_DECODERS:
+        raise Exception(f'RG model is deprecated: {decoder_name}')
 
     # Decide hierarchical
     hierarchical = is_decoder_hierarchical(decoder_name)

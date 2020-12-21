@@ -10,13 +10,7 @@ from medai.models.report_generation.att_no_att import NoAttention
 from medai.utils.nlp import PAD_IDX, START_IDX, END_OF_SENTENCE_IDX, END_IDX
 
 
-def h_lstm_wrapper_v2(attention=True):
-    def constructor(*args, **kwargs):
-        return HierarchicalLSTMAttDecoder(*args, attention=attention, **kwargs)
-    return constructor
-
-
-class HierarchicalLSTMAttDecoder(nn.Module):
+class HierarchicalLSTMAttDecoderV2(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size, teacher_forcing=True, stop_threshold=0.5,
                  attention=True, **kwargs):
@@ -47,7 +41,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
             nn.Linear(hidden_size, 1),
             nn.Sigmoid(),
         )
-        
+
         # Word LSTM
         self.word_embeddings = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
         self.word_lstm = nn.LSTMCell(embedding_size, hidden_size)
@@ -101,7 +95,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
 
             # Generate topic vector
             topic = h_t
-            
+
             # Generate sentence with topic
             words = self.generate_sentence(topic,
                                            sentence_i,
@@ -111,7 +105,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
                                            max_words=max_words,
                                           )
             seq_out.append(words)
-            
+
             # Decide stop
             stop = self.stop_control(h_t).squeeze(-1) # shape: batch_size
             stops_out.append(stop)
@@ -133,7 +127,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
 
         stops_out = torch.stack(stops_out, dim=1)
         # shape: batch_size, n_sentences
-        
+
         if self._use_attention and len(scores_out) > 0:
             scores_out = torch.stack(scores_out, dim=1)
         else:
@@ -141,7 +135,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
         # shape: batch_size, n_sentences, height, width (or None)
 
         return seq_out, stops_out, scores_out
-    
+
     def generate_sentence(self, topic, sentence_i,
                           reports=None, teacher_forcing=True, free=False, max_words=1000):
         # REVIEW: re-use this logic with a WordDecoder ???
@@ -149,18 +143,18 @@ class HierarchicalLSTMAttDecoder(nn.Module):
         # topic shape: batch_size, hidden_size
         batch_size = topic.size()[0]
         device = topic.device
-        
+
         # Build initial state
         initial_h_state = topic
         initial_c_state = torch.zeros(batch_size, self.hidden_size).to(device)
         state = (initial_h_state, initial_c_state)
-        
+
         # Build initial input
         start_idx = self.start_idx.to(device).repeat(batch_size)
         input_t = self.word_embeddings(start_idx)
 
         words_out = []
-        
+
 
         # Set iteration maximum
         if free:
@@ -178,11 +172,11 @@ class HierarchicalLSTMAttDecoder(nn.Module):
             state = self.word_lstm(input_t, state)
             h_t, c_t = state
             # shapes: batch_size, hidden_size
-            
+
             # Predict words
             prediction_t = self.word_fc(h_t) # shape: batch_size, vocab_size
             words_out.append(prediction_t)
-            
+
             # Decide if stop
             if free:
                 is_end_prediction = prediction_t.argmax(dim=-1) == END_IDX # shape: batch_size
@@ -198,11 +192,11 @@ class HierarchicalLSTMAttDecoder(nn.Module):
             else:
                 _, next_words_indices = prediction_t.max(dim=1)
                 # shape: batch_size
-            
+
             input_t = self.word_embeddings(next_words_indices)
             # shape: batch_size, embedding_size
 
         words_out = torch.stack(words_out, dim=1)
         # shape: batch_size, max_n_words, vocab_size
-        
+
         return words_out
