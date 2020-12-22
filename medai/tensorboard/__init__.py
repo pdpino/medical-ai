@@ -38,6 +38,7 @@ class TBWriter:
             'roc_auc': 'Roc_auc', # Macro averaged
             'word_loss': 'Loss_word',
             'stop_loss': 'Loss_stop',
+            'att_loss': 'Loss_att',
         }
 
         self._histogram = histogram

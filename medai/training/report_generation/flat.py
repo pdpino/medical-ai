@@ -9,7 +9,7 @@ from medai.utils.nlp import END_IDX
 
 def create_flat_dataloader(dataset, **kwargs):
     """Creates a dataloader from a images-report dataset, considering flat word sequences.
-    
+
     Outputed reports have shape (batch_size, n_words)
     Adds END_TOKEN to the end of the sentences, and pads the output sequence.
     """
@@ -34,7 +34,7 @@ def create_flat_dataloader(dataset, **kwargs):
 
 
 def get_step_fn_flat(model, optimizer=None, training=True, free=False,
-                     device='cuda', max_words=200):
+                     device='cuda', max_words=200, **unused):
     """Creates a step function for an Engine."""
     loss_fn = nn.CrossEntropyLoss()
 
@@ -48,7 +48,7 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
         # Reports, as word ids
         reports = data_batch.reports.to(device).long()
         # shape: batch_size, max_sentence_len
-        
+
         # Enable training
         model.train(training)
         torch.set_grad_enabled(training) # enable recording gradients
@@ -67,7 +67,7 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
         if not free:
             # Compute word classification loss
             loss = loss_fn(generated_words.view(-1, vocab_size), reports.view(-1))
-            
+
             batch_loss = loss.item()
         else:
             batch_loss = -1

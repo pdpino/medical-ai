@@ -5,27 +5,17 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
 
-from medai.datasets.common import BatchItem
+from medai.datasets.common import (
+    BatchItem,
+    ORGAN_BACKGROUND,
+    JSRT_ORGANS,
+)
 from medai.utils.images import get_default_image_transform
 
 DATASET_DIR = os.environ.get('DATASET_DIR_JSRT', None)
 
 _DATASET_MEAN = 0.5946
 _DATASET_STD = 0.2733
-
-ORGAN_BACKGROUND = 'background'
-ORGAN_HEART = 'heart'
-ORGAN_RIGHT_LUNG = 'right lung'
-ORGAN_LEFT_LUNG = 'left lung'
-
-ORGANS = [
-    ORGAN_HEART,
-    ORGAN_RIGHT_LUNG,
-    ORGAN_LEFT_LUNG,
-    ## Not used for now:
-    # 'right clavicle',
-    # 'left clavicle',
-]
 
 class JSRTDataset(Dataset):
     def __init__(self, dataset_type='all', image_size=(512, 512), norm_by_sample=False, image_format='L', **unused):
@@ -65,7 +55,7 @@ class JSRTDataset(Dataset):
             transforms.ToTensor(),
         ])
 
-        self.seg_labels = [ORGAN_BACKGROUND] + list(ORGANS)
+        self.seg_labels = list(JSRT_ORGANS)
 
 
     def __len__(self):

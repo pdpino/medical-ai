@@ -42,10 +42,13 @@ def _attach_bleu(engine, up_to_n=4,
     bleu_avg.attach(engine, 'bleu')
 
 
-def attach_metrics_report_generation(engine, hierarchical=False, free=False):
+def attach_metrics_report_generation(engine, hierarchical=False, free=False,
+                                     supervise_attention=False):
     losses = ['loss']
     if hierarchical:
         losses.extend(['word_loss', 'stop_loss'])
+    if supervise_attention:
+        losses.append('att_loss')
 
     # Attach losses
     for loss_name in losses:

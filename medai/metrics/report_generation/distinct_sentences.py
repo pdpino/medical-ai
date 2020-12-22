@@ -6,11 +6,13 @@ from medai.utils.nlp import PAD_IDX, END_OF_SENTENCE_IDX
 
 def _sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
     """Splits a flat_report into sentences, iterating on the fly.
-    
+
     Args:
         flat_report: tensor of shape (n_words)
 
-    Not very efficient!!
+    Not very efficient for the hierarchical-decoder:
+        - sentences were already separated
+        - sentences were flattened into a flat report, to comply with flat-decoder
     """
     sentence_so_far = []
     for word in flat_report:
@@ -19,7 +21,7 @@ def _sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
         if word == end_idx:
             yield sentence_so_far
             sentence_so_far = []
-    
+
     if len(sentence_so_far) > 0:
         sentence_so_far.append(end_idx)
         yield sentence_so_far

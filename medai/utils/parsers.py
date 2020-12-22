@@ -89,7 +89,7 @@ def build_args_lr_sch_(args):
 
 def add_args_early_stopping(parser, metric='loss'):
     es_group = parser.add_argument_group('Early stopping params')
-    es_group.add_argument('--no-early-stopping', action='store_true',
+    es_group.add_argument('-noes', '--no-early-stopping', action='store_true',
                           help='If present, dont early stop the training')
     es_group.add_argument('--es-patience', type=int, default=10,
                           help='Patience value for early-stopping')

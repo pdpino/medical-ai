@@ -97,15 +97,65 @@ class ReportReader:
         return ' '.join([self._idx_to_word[int(g)] for g in report])
 
     def text_to_idx(self, report):
+        assert isinstance(report, (list, str)), f'Report must be list or str, got: {type(report)}'
+
         if isinstance(report, str):
             report = report.split()
-
-        assert isinstance(report, list), f'Report must be list, got: {type(report)}'
 
         return [
             self._vocab.get(word, UNKNOWN_IDX)
             for word in report
         ]
+
+
+class SentenceToOrgans:
+    def __init__(self, dataset):
+        needed_attrs = ['organs_by_sentence_df', 'get_vocab', 'organs']
+        for attr_name in needed_attrs:
+            if not hasattr(dataset, attr_name):
+                raise Exception(f'dataset must have a {attr_name} attribute')
+
+        report_reader = ReportReader(dataset.get_vocab())
+
+        self._sentence_to_organ_mapping = dict()
+
+        organs_df = dataset.organs_by_sentence_df
+        organs_names = dataset.organs
+
+        # Save these to notify sentences that are not found
+        self.report_reader = report_reader
+        self.n_organs = len(organs_names)
+
+        for _, sample in organs_df.iterrows():
+            sentence_str = sample['sentences']
+            organs = sample[organs_names].tolist()
+
+            sentence_idxs = report_reader.text_to_idx(sentence_str)
+            sentence_hash = self._sentence_to_hash(sentence_idxs)
+
+            self._sentence_to_organ_mapping[sentence_hash] = organs
+
+    def _sentence_to_hash(self, sentence):
+        sentence = trim_rubbish(sentence)
+        return ','.join(str(word_idx) for word_idx in sentence)
+
+    def get_organs(self, sentence):
+        """Returns a one-hot list of organs for a sentence.
+
+        Args:
+            sentence -- tensor of word indices, shape n_words
+        """
+        sentence = sentence.tolist()
+
+        sentence_hash = self._sentence_to_hash(sentence)
+
+        if sentence_hash not in self._sentence_to_organ_mapping:
+            self._sentence_to_organ_mapping[sentence_hash] = [1] * self.n_organs
+            sentence_str = self.report_reader.idx_to_text(sentence)
+            print(f'Organs not found for sentence: {sentence_str}')
+
+        return self._sentence_to_organ_mapping[sentence_hash]
+
 
 
 def trim_rubbish(report):

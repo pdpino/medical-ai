@@ -72,6 +72,7 @@ def evaluate_model(run_name,
                    dataloader,
                    n_epochs=1,
                    hierarchical=False,
+                   supervise_attention=False,
                    free=False,
                    debug=True,
                    device='cuda'):
@@ -85,8 +86,16 @@ def evaluate_model(run_name,
     else:
         get_step_fn = get_step_fn_flat
 
-    engine = Engine(get_step_fn(model, training=False, free=free, device=device))
-    attach_metrics_report_generation(engine, hierarchical=hierarchical, free=free)
+    engine = Engine(get_step_fn(model,
+                                training=False,
+                                supervise_attention=supervise_attention,
+                                free=free,
+                                device=device))
+    attach_metrics_report_generation(engine,
+                                     hierarchical=hierarchical,
+                                     free=free,
+                                     supervise_attention=supervise_attention,
+                                     )
     attach_report_writer(engine, dataset.get_vocab(), run_name, free=free,
                          debug=debug)
 
@@ -102,6 +111,7 @@ def evaluate_and_save(run_name,
                       model,
                       dataloaders,
                       hierarchical=False,
+                      supervise_attention=False,
                       free='both',
                       debug=True,
                       device='cuda',
@@ -110,6 +120,7 @@ def evaluate_and_save(run_name,
     kwargs = {
         'hierarchical': hierarchical,
         'device': device,
+        'supervise_attention': supervise_attention,
         'debug': debug,
     }
 
@@ -151,6 +162,7 @@ def train_model(run_name,
                 train_dataloader,
                 val_dataloader,
                 n_epochs=1,
+                supervise_attention=False,
                 hierarchical=False,
                 debug=True,
                 save_model=True,
@@ -180,12 +192,25 @@ def train_model(run_name,
 
 
     # Create validator engine
-    validator = Engine(get_step_fn(model, training=False, device=device))
-    attach_metrics_report_generation(validator, hierarchical=hierarchical)
+    validator = Engine(get_step_fn(model,
+                                   training=False,
+                                   supervise_attention=supervise_attention,
+                                   device=device))
+    attach_metrics_report_generation(validator,
+                                     hierarchical=hierarchical,
+                                     supervise_attention=supervise_attention,
+                                     )
 
     # Create trainer engine
-    trainer = Engine(get_step_fn(model, optimizer=optimizer, training=True, device=device))
-    attach_metrics_report_generation(trainer, hierarchical=hierarchical)
+    trainer = Engine(get_step_fn(model,
+                                 optimizer=optimizer,
+                                 training=True,
+                                 supervise_attention=supervise_attention,
+                                 device=device))
+    attach_metrics_report_generation(trainer,
+                                     hierarchical=hierarchical,
+                                     supervise_attention=supervise_attention,
+                                     )
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
@@ -208,7 +233,7 @@ def train_model(run_name,
                             trainer,
                             validator,
                             task='rg',
-                            metric=early_stopping_kwargs['metric'] if early_stopping else None,
+                            metric=early_stopping_kwargs.get('metric') if early_stopping else None,
                             debug=debug,
                             dryrun=dryrun or (not save_model),
                            )
@@ -233,7 +258,7 @@ def train_model(run_name,
     # Close stuff
     tb_writer.close()
 
-    return trainer.state.metrics, validator.state.metrics
+    return trainer, validator
 
 
 def resume_training(run_name,
@@ -329,9 +354,11 @@ def resume_training(run_name,
 
 def train_from_scratch(run_name,
                        decoder_name='lstm',
+                       supervise_attention=False,
                        batch_size=15,
                        sort_samples=True,
                        shuffle=False,
+                       frontal_only=False,
                        teacher_forcing=True,
                        embedding_size=100,
                        hidden_size=100,
@@ -362,6 +389,8 @@ def train_from_scratch(run_name,
     """Train a model from scratch."""
     # Create run name
     run_name = f'{run_name}_{decoder_name}_lr{lr}'
+    if supervise_attention:
+        run_name += '_satt'
     if cnn_run_name:
         run_name += '_precnn'
     else:
@@ -384,6 +413,8 @@ def train_from_scratch(run_name,
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
     if not early_stopping:
         run_name += '_noes'
+    if frontal_only and not supervise_attention: # If supervise attention, frontal_only is implied
+        run_name += '_front'
 
     # Is deprecated
     if decoder_name in DEPRECATED_DECODERS:
@@ -396,6 +427,13 @@ def train_from_scratch(run_name,
     else:
         create_dataloader = create_flat_dataloader
 
+    if supervise_attention:
+        if not hierarchical:
+            raise Exception('Attention supervision is only available for hierarchical decoders')
+        if not frontal_only:
+            raise Exception('Attention supervision is only available with frontal_only images')
+
+
     # Load data
     image_size = (image_size, image_size)
     dataset_kwargs = {
@@ -404,6 +442,8 @@ def train_from_scratch(run_name,
         'image_size': image_size,
         'batch_size': batch_size,
         'num_workers': num_workers,
+        'masks': supervise_attention,
+        'frontal_only': frontal_only,
     }
     dataset_train_kwargs = {
         'sort_samples': sort_samples,
@@ -490,6 +530,7 @@ def train_from_scratch(run_name,
         'early_stopping': early_stopping,
         'early_stopping_kwargs': early_stopping_kwargs,
         'lr_sch_metric': lr_sch_metric,
+        'supervise_attention': supervise_attention,
     }
 
     # Save metadata
@@ -559,6 +600,8 @@ def parse_args():
                         help='Resume from a previous run')
     parser.add_argument('-dec', '--decoder', type=str,
                         choices=AVAILABLE_DECODERS, help='Choose Decoder')
+    parser.add_argument('--superv-att', action='store_true',
+                        help='If present, supervise the attention')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
                         help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
@@ -581,6 +624,8 @@ def parse_args():
                             help='Do not sort samples')
     data_group.add_argument('--shuffle', action='store_true',
                             help='Shuffle samples on training')
+    data_group.add_argument('--frontal-only', action='store_true',
+                            help='Use only frontal images')
 
     cnn_group = parser.add_argument_group('CNN')
     cnn_group.add_argument('-c', '--cnn', type=str, default=None,
@@ -643,9 +688,11 @@ if __name__ == '__main__':
     else:
         train_from_scratch(run_name,
                            decoder_name=args.decoder,
+                           supervise_attention=args.superv_att,
                            batch_size=args.batch_size,
                            sort_samples=not args.no_sort,
                            shuffle=args.shuffle,
+                           frontal_only=args.frontal_only,
                            teacher_forcing=not args.no_teacher_forcing,
                            embedding_size=args.embedding_size,
                            hidden_size=args.hidden_size,

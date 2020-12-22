@@ -20,7 +20,7 @@ class DistinctWords(Metric):
     @reinit__is_reduced
     def update(self, output):
         """Update on each step.
-        
+
         output:
             generated_words -- array of generated words,
                 shape (batch_size, *)
@@ -30,10 +30,13 @@ class DistinctWords(Metric):
 
         for word in generated_words.view(-1):
             word = int(word.item())
-            if self.ignore_pad and word == PAD_IDX:
-                continue
             self.words_seen[word] += 1
 
     @sync_all_reduce('words_seen')
     def compute(self):
-        return len(self.words_seen)
+        if self.ignore_pad and PAD_IDX in self.words_seen:
+            remove_ignored = 1
+        else:
+            remove_ignored = 0
+
+        return len(self.words_seen) - remove_ignored

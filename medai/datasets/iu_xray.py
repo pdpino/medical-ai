@@ -1,12 +1,13 @@
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
+from ignite.utils import to_onehot
 from PIL import Image
 import os
 import json
 import pandas as pd
 
-from medai.datasets.common import BatchItem, CHEXPERT_LABELS
+from medai.datasets.common import BatchItem, CHEXPERT_LABELS, JSRT_ORGANS
 from medai.datasets.vocab import load_vocab
 from medai.utils.images import get_default_image_transform
 from medai.utils.nlp import (
@@ -55,12 +56,22 @@ class IUXRayDataset(Dataset):
         self.images_dir = os.path.join(DATASET_DIR, 'images')
         self.reports_dir = os.path.join(DATASET_DIR, 'reports')
 
+        # Only frontal masks are available
+        assert not masks or frontal_only, 'if masks is True, set frontal_only=True'
+
         self.masks_dir = os.path.join(DATASET_DIR, 'masks')
-        self.enable_masks = masks and frontal_only # NOTE: only frontal masks are available
+        self.enable_masks = masks
         self.transform_mask = transforms.Compose([
             transforms.Resize(image_size),
             transforms.ToTensor(),
         ])
+        if self.enable_masks:
+            fpath = os.path.join(self.reports_dir, 'sentences_with_organs.csv')
+            self.organs_by_sentence_df = pd.read_csv(fpath)
+            self.organs = list(JSRT_ORGANS)
+        else:
+            self.organs_by_sentence_df = None
+            self.organs = None
 
         self.multilabel = True
         self._preprocess_labels(labels)
@@ -130,8 +141,14 @@ class IUXRayDataset(Dataset):
         mask = self.transform_mask(mask)
         # shape: n_channels=1, height, width
 
-        mask = (mask * 255).long().squeeze(0)
-        # shape: height, width
+        mask = (mask * 255).long()
+        # shape: 1, height, width
+
+        mask = to_onehot(mask, len(self.organs))
+        # shape: 1, n_organs, height, width
+
+        mask = mask.squeeze(0)
+        # shape: n_organs, height, width
 
         return mask
 

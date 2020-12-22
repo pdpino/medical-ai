@@ -58,13 +58,6 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         initial_h_state = initial_state[:, :self.hidden_size]
         initial_c_state = initial_state[:, self.hidden_size:]
             # shapes: batch_size, hidden_size
-        state = (initial_h_state, initial_c_state)
-
-        # Build initial input
-        att_features, att_scores = self.attention_layer(features, initial_h_state)
-            # att_features shape: batch_size, features_size
-            # att_scores features: batch_size, height, width (or None)
-        sentence_input_t = att_features
 
         # Decide teacher forcing
         teacher_forcing = self.teacher_forcing \
@@ -82,12 +75,25 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
             sentences_iterator = range(actual_n_sentences)
             should_stop = None
 
+        # Build initial inputs
+        h_t = initial_h_state
+        state = (initial_h_state, initial_c_state)
+
         # Iterate over sentences
         seq_out = []
         stops_out = []
-        scores_out = [] # REVIEW: should add the first scores??
+        scores_out = []
 
         for sentence_i in sentences_iterator:
+            # Get next input
+            att_features, att_scores = self.attention_layer(features, h_t)
+                # att_features shape: batch_size, features_size
+                # att_scores features: (batch_size, features-height, features-width), or None
+            sentence_input_t = att_features
+
+            if self._use_attention:
+                scores_out.append(att_scores)
+
             # Pass thru LSTM
             state = self.sentence_lstm(sentence_input_t, state)
             h_t, c_t = state
@@ -115,13 +121,6 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
                 if should_stop.all():
                     break
 
-            # Get next input
-            att_features, att_scores = self.attention_layer(features, h_t)
-            sentence_input_t = att_features
-
-            if self._use_attention:
-                scores_out.append(att_scores)
-
         seq_out = torch.stack(seq_out, dim=1)
         # shape: batch_size, n_sentences, max_n_words, vocab_size
 
@@ -130,9 +129,9 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
 
         if self._use_attention and len(scores_out) > 0:
             scores_out = torch.stack(scores_out, dim=1)
+            # shape: batch_size, n_sentences, height, width
         else:
             scores_out = None
-        # shape: batch_size, n_sentences, height, width (or None)
 
         return seq_out, stops_out, scores_out
 

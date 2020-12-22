@@ -47,26 +47,12 @@ class LSTMAttDecoderV2(nn.Module):
         initial_c_state = initial_state[:, self.hidden_size:]
             # shapes: batch_size, hidden_size
 
-        state = (initial_h_state, initial_c_state)
-
-        # Pass h0 thru attention
-        att_features, att_scores = self.attention(image_features, initial_h_state)
-            # att_features shape: batch_size, features_size
-            # att_scores shape: batch_size, height, width
-
-        # Build initial input
-        start_idx = self.start_idx.to(device).repeat(batch_size) # shape: batch_size
-        input_words = self.embeddings_table(start_idx)
-            # shape: batch_size, embedding_size
-        input_t = torch.cat((input_words, att_features), dim=1)
-            # shape: batch_size, embedding_size + features_size
-
         # Decide teacher forcing
         teacher_forcing = self.teacher_forcing \
             and self.training \
             and reports is not None \
             and not free
-        
+
         # Set iteration maximum
         if free:
             words_iterator = range(max_words) if max_words else count()
@@ -77,11 +63,31 @@ class LSTMAttDecoderV2(nn.Module):
             words_iterator = range(actual_max_len)
             should_stop = None
 
+        # Build initial inputs
+        state = (initial_h_state, initial_c_state)
+        next_words_indices = self.start_idx.to(device).repeat(batch_size) # shape: batch_size
+        h_t = initial_h_state
+
         # Generate word by word
         seq_out = []
         scores_out = []
 
         for word_i in words_iterator:
+            # Pass state through attention
+            att_features, att_scores = self.attention(image_features, h_t)
+                # att_features shape: batch_size, features_size
+                # att_scores shape: batch_size, height, width
+            scores_out.append(att_scores)
+
+            # Embed words
+            input_words = self.embeddings_table(next_words_indices)
+                # shape: batch_size, embedding_size
+
+            # Concat words and attended image-features
+            input_t = torch.cat((input_words, att_features), dim=1)
+                # shape: batch_size, embedding_size + features_size
+
+
             # Pass thru LSTM
             state = self.lstm_cell(input_t, state)
             h_t, c_t = state
@@ -91,9 +97,6 @@ class LSTMAttDecoderV2(nn.Module):
             prediction_t = self.W_vocab(h_t) # shape: batch_size, vocab_size
             seq_out.append(prediction_t)
 
-            # Pass state thru attention
-            att_features, att_scores = self.attention(image_features, h_t)
-            scores_out.append(att_scores)
 
             # Decide if should stop
             # Remember if each element in the batch has outputted the END token
@@ -111,11 +114,6 @@ class LSTMAttDecoderV2(nn.Module):
             else:
                 _, next_words_indices = prediction_t.max(dim=1)
                 # shape: batch_size
-
-            input_words = self.embeddings_table(next_words_indices)
-                # shape: batch_size, embedding_size
-            input_t = torch.cat((input_words, att_features), dim=1)
-                # shape: batch_size, embedding_size + features_size
 
         seq_out = torch.stack(seq_out, dim=1)
         # shape: batch_size, max_sentence_len, vocab_size
