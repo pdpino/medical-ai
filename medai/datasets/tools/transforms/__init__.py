@@ -1,3 +1,5 @@
+from functools import reduce
+
 import torch
 import numpy as np
 from torchvision import transforms
@@ -15,13 +17,13 @@ def apply_to_many(transform_fn, images):
         return [
             transform_fn(image) for image in images
         ]
-    elif isinstance(images, Image.Image):
+    elif isinstance(images, (Image.Image, torch.Tensor)):
         return transform_fn(images)
     raise Exception(f'images type not supported: {type(images)}')
 
 
 def get_first(images):
-    if isinstance(images, Image.Image):
+    if isinstance(images, (Image.Image, torch.Tensor)):
         return images
     elif isinstance(images, (list, tuple)):
         return images[0]
@@ -31,8 +33,15 @@ def get_first(images):
     raise Exception(f'images type not supported: {type(images)}')
 
 
+### NOTE:
+### Transform functions implemented for many images at the same time are implemented
+### for torch version 1.7.1, copying the implementation of the base-class' forward() method.
+### If the forward() methods change in a future pytorch/torchvision version,
+### the many-re-implementation may produce a wrong output or fail.
+
+
 class RandomRotationMany(transforms.RandomRotation):
-    def __call__(self, images):
+    def forward(self, images):
         angle = self.get_params(self.degrees)
         transform_fn = lambda image: F.rotate(
             image, angle, self.resample, self.expand, self.center, self.fill)
@@ -41,7 +50,7 @@ class RandomRotationMany(transforms.RandomRotation):
 
 
 class RandomResizedCropMany(transforms.RandomResizedCrop):
-    def __call__(self, images):
+    def forward(self, images):
         first_image = get_first(images)
         i, j, h, w = self.get_params(first_image, self.scale, self.ratio)
         transform_fn = lambda image: F.resized_crop(
@@ -51,7 +60,7 @@ class RandomResizedCropMany(transforms.RandomResizedCrop):
 
 
 class RandomAffineMany(transforms.RandomAffine):
-    def __call__(self, images):
+    def forward(self, images):
         first_image = get_first(images)
         ret = self.get_params(self.degrees, self.translate, self.scale, self.shear, first_image.size)
 
@@ -62,9 +71,45 @@ class RandomAffineMany(transforms.RandomAffine):
 
 
 class ColorJitterMany(transforms.ColorJitter):
+    def _build_transform_function(self):
+        """Builds a function that transforms an image.
+
+        Copied from ColorJitter.forward() method."""
+        fn_idx = torch.randperm(4)
+
+        transformations_to_apply = []
+
+        for fn_id in fn_idx:
+            if fn_id == 0 and self.brightness is not None:
+                brightness = self.brightness
+                brightness_factor = torch.tensor(1.0).uniform_(brightness[0], brightness[1]).item()
+                transformations_to_apply.append((F.adjust_brightness, brightness_factor))
+
+            if fn_id == 1 and self.contrast is not None:
+                contrast = self.contrast
+                contrast_factor = torch.tensor(1.0).uniform_(contrast[0], contrast[1]).item()
+                transformations_to_apply.append((F.adjust_contrast, contrast_factor))
+
+            if fn_id == 2 and self.saturation is not None:
+                saturation = self.saturation
+                saturation_factor = torch.tensor(1.0).uniform_(saturation[0], saturation[1]).item()
+                transformations_to_apply.append((F.adjust_saturation, saturation_factor))
+
+            if fn_id == 3 and self.hue is not None:
+                hue = self.hue
+                hue_factor = torch.tensor(1.0).uniform_(hue[0], hue[1]).item()
+                transformations_to_apply.append((F.adjust_hue, hue_factor))
+
+        def _apply_transform(value, tup):
+            transform_fn, arg = tup
+            return transform_fn(value, arg)
+        transform = lambda img: reduce(_apply_transform, transformations_to_apply, img)
+
+        return transform
+
     def __call__(self, images):
-        transform_fn = self.get_params(self.brightness, self.contrast,
-                                       self.saturation, self.hue)
+        transform_fn = self._build_transform_function()
+
         return apply_to_many(transform_fn, images)
 
 
