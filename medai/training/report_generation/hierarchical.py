@@ -11,7 +11,6 @@ from medai.utils.nlp import (
     PAD_IDX,
     END_OF_SENTENCE_IDX,
     split_sentences_and_pad,
-    SentenceToOrgans,
 )
 from medai.losses.out_of_target import OutOfTargetSumLoss
 
@@ -21,8 +20,9 @@ def create_hierarchical_dataloader(dataset, **kwargs):
 
     Outputted reports have shape (batch_size, n_sentences, n_words)
     """
-    # FIXME: this logic will be moved to dataset.
-    sentence_to_organ = SentenceToOrgans(dataset)
+    # TODO: enable/disable masks with a parameter?
+    if not hasattr(dataset, 'get_mask_for_sentence'):
+        raise Exception(f'dataset must have a get_mask_for_sentence method')
 
     def _collate_fn(batch_tuples):
         images = []
@@ -44,37 +44,19 @@ def create_hierarchical_dataloader(dataset, **kwargs):
             # shape: n_sentences, n_words
 
             max_sentence_len = max(max_sentence_len, report.size(-1))
+            max_n_sentences = max(max_n_sentences, report.size(0))
 
             reports.append(report)
 
-            # Collate masks
-            sample_masks = []
+            # Get masks for each sentence of the report
             image_masks = tup.masks # shape: n_organs, height, width
-            for sentence in report:
-                organs = sentence_to_organ.get_organs(sentence)
-                # shape: n_organs (one-hot encoded)
-
-                organ_indeces = torch.tensor([
-                    organ_idx
-                    for organ_idx, organ_presence in enumerate(organs)
-                    if organ_presence
-                ])
-                # shape: n_selected_organs
-
-                sentence_mask = image_masks.index_select(dim=0, index=organ_indeces)
-                # shape: n_selected_organs, height, width
-
-                sentence_mask = sentence_mask.sum(dim=0) # NOTE: assumes organs do not overlap
-                # shape: height, width
-
-                sample_masks.append(sentence_mask)
-
-            max_n_sentences = max(max_n_sentences, report.size(0))
-
-            sample_masks = torch.stack(sample_masks)
+            sample_mask = torch.stack([
+                dataset.get_mask_for_sentence(sentence, image_masks) # shape: height, width
+                for sentence in report
+            ])
             # shape: n_sentences, height, width
 
-            masks.append(sample_masks)
+            masks.append(sample_mask)
 
         # Pad reports to the max_sentence_len across all reports
         padded_reports = [
@@ -89,7 +71,7 @@ def create_hierarchical_dataloader(dataset, **kwargs):
         reports = pad_sequence(padded_reports, batch_first=True)
         # shape: batch_size, n_sentences, n_words
 
-        # Pad masks
+        # Pad masks (n_sentences dimension)
         masks = [
             pad(mask, (0, 0, 0, 0, 0, max_n_sentences - mask.size(0)))
             if mask.size(0) < max_n_sentences else mask

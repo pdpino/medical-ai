@@ -1,6 +1,7 @@
 import torch
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
+import pandas as pd
 
 # Common tokens
 PAD_TOKEN = 'PAD'
@@ -109,18 +110,12 @@ class ReportReader:
 
 
 class SentenceToOrgans:
-    def __init__(self, dataset):
-        needed_attrs = ['organs_by_sentence_df', 'get_vocab', 'organs']
-        for attr_name in needed_attrs:
-            if not hasattr(dataset, attr_name):
-                raise Exception(f'dataset must have a {attr_name} attribute')
-
-        report_reader = ReportReader(dataset.get_vocab())
+    def __init__(self, organs_by_sentence_fpath, organs_names, vocab):
+        report_reader = ReportReader(vocab)
 
         self._sentence_to_organ_mapping = dict()
 
-        organs_df = dataset.organs_by_sentence_df
-        organs_names = dataset.organs
+        organs_df = pd.read_csv(organs_by_sentence_fpath)
 
         # Save these to notify sentences that are not found
         self.report_reader = report_reader

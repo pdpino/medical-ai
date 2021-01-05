@@ -13,6 +13,7 @@ from medai.utils.images import get_default_image_transform
 from medai.utils.nlp import (
     UNKNOWN_IDX,
     compute_vocab,
+    SentenceToOrgans,
 )
 
 DATASET_DIR = os.environ.get('DATASET_DIR_IU_XRAY')
@@ -65,13 +66,6 @@ class IUXRayDataset(Dataset):
             transforms.Resize(image_size),
             transforms.ToTensor(),
         ])
-        if self.enable_masks:
-            fpath = os.path.join(self.reports_dir, 'sentences_with_organs.csv')
-            self.organs_by_sentence_df = pd.read_csv(fpath)
-            self.organs = list(JSRT_ORGANS)
-        else:
-            self.organs_by_sentence_df = None
-            self.organs = None
 
         self.multilabel = True
         self._preprocess_labels(labels)
@@ -92,10 +86,21 @@ class IUXRayDataset(Dataset):
         if max_samples is not None:
             reports = reports[:max_samples]
 
-        # Save amounts
+        # Prepare reports for getter calls
         self._preprocess_reports(reports, sort_samples=sort_samples,
                                  vocab=vocab, recompute_vocab=recompute_vocab,
                                  frontal_only=frontal_only)
+
+        if self.enable_masks:
+            fpath = os.path.join(self.reports_dir, 'sentences_with_organs.csv')
+            self.organs = list(JSRT_ORGANS)
+
+            self._sentence_to_organ = SentenceToOrgans(fpath, self.organs, self.get_vocab())
+        else:
+            self.organs = None
+
+            self._sentence_to_organ = None
+
 
     def __len__(self):
         return len(self.reports)
@@ -151,6 +156,33 @@ class IUXRayDataset(Dataset):
         # shape: n_organs, height, width
 
         return mask
+
+    def get_mask_for_sentence(self, sentence, image_masks):
+        """Returns the presence-mask for a given sentence.
+
+        Args:
+            sentence -- tensor of word indices, shape n_words
+            image_masks -- tensor of shape n_organs, height, width
+        Returns:
+            mask -- tensor of shape height, width (binary)
+        """
+        organs = self._sentence_to_organ.get_organs(sentence)
+        # shape: n_organs (one-hot encoded)
+
+        organ_indeces = torch.tensor([
+            organ_idx
+            for organ_idx, organ_presence in enumerate(organs)
+            if organ_presence
+        ])
+        # shape: n_selected_organs
+
+        sentence_mask = image_masks.index_select(dim=0, index=organ_indeces)
+        # shape: n_selected_organs, height, width
+
+        sentence_mask = sentence_mask.sum(dim=0) # NOTE: assumes organs do not overlap
+        # shape: height, width
+
+        return sentence_mask
 
     def get_vocab(self):
         return self.word_to_idx
