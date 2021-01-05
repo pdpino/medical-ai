@@ -30,6 +30,9 @@ _DATASET_STD = 0.2374
 
 
 class IUXRayDataset(Dataset):
+    _sentence_to_organ = None
+    organs = list(JSRT_ORGANS)
+
     def __init__(self, dataset_type='train', max_samples=None,
                  labels=None,
                  sort_samples=True,
@@ -92,14 +95,7 @@ class IUXRayDataset(Dataset):
                                  frontal_only=frontal_only)
 
         if self.enable_masks:
-            fpath = os.path.join(self.reports_dir, 'sentences_with_organs.csv')
-            self.organs = list(JSRT_ORGANS)
-
-            self._sentence_to_organ = SentenceToOrgans(fpath, self.organs, self.get_vocab())
-        else:
-            self.organs = None
-
-            self._sentence_to_organ = None
+            self._init_sentence_to_organ()
 
 
     def __len__(self):
@@ -186,6 +182,13 @@ class IUXRayDataset(Dataset):
 
     def get_vocab(self):
         return self.word_to_idx
+
+    def _init_sentence_to_organ(self):
+        # Only create once (for any train-val-test split)
+        if IUXRayDataset._sentence_to_organ is None:
+            fpath = os.path.join(self.reports_dir, 'sentences_with_organs.csv')
+
+            IUXRayDataset._sentence_to_organ = SentenceToOrgans(fpath, self.organs, self.get_vocab())
 
     def _preprocess_reports(self, reports, sort_samples=True, vocab=None,
                             recompute_vocab=False, frontal_only=False):
