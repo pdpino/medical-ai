@@ -4,7 +4,8 @@ BatchItem = namedtuple('BatchItem', [
     'image',
     'labels',
     'report',
-    'filename',
+    'image_fname',
+    'report_fname',
     'bboxes',
     'bboxes_valid',
     'masks',
@@ -16,7 +17,8 @@ BatchItems = namedtuple('BatchItems', [
     'images',
     'labels',
     'reports',
-    'filenames',
+    'report_fnames',
+    'image_fnames',
     'stops', # Stop signals for hierarchical decoders
     'masks',
 ])

@@ -67,7 +67,7 @@ class CovidActualDataset(Dataset):
         return BatchItem(
             image=image,
             labels=label,
-            filename=image_name,
+            image_fname=image_name,
         )
 
     def get_labels_presence_for(self, target_label):

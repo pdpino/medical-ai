@@ -74,7 +74,7 @@ class JSRTDataset(Dataset):
 
         return BatchItem(
             image=image,
-            filename=image_name,
+            image_fname=image_name,
             masks=masks,
         )
 

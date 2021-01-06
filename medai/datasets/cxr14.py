@@ -153,7 +153,7 @@ class CXR14Dataset(Dataset):
             labels=labels,
             bboxes=bboxes,
             bboxes_valid=bboxes_valid,
-            filename=image_name,
+            image_fname=image_name,
         )
 
     def get_labels_presence_for(self, target_label):

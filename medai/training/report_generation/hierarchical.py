@@ -28,7 +28,7 @@ def create_hierarchical_dataloader(dataset, **kwargs):
         images = []
         reports = []
         masks = []
-        filenames = []
+        report_fnames = []
         max_sentence_len = -1
         max_n_sentences = -1
 
@@ -36,7 +36,7 @@ def create_hierarchical_dataloader(dataset, **kwargs):
         for tup in batch_tuples:
             # Collate images and filename
             images.append(tup.image)
-            filenames.append(tup.filename)
+            report_fnames.append(tup.report_fname)
 
             # Collate report
             report = tup.report # shape(list): n_words
@@ -89,7 +89,7 @@ def create_hierarchical_dataloader(dataset, **kwargs):
             images=images,
             reports=reports,
             stops=stops,
-            filenames=filenames,
+            report_fnames=report_fnames,
             masks=masks,
         )
 

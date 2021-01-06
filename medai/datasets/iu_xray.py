@@ -104,19 +104,20 @@ class IUXRayDataset(Dataset):
     def __getitem__(self, idx):
         report = self.reports[idx]
 
-        report_filename = report['filename']
-        image_name = report['image_name']
-        image = self.load_image(image_name)
+        report_fname = report['filename']
+        image_fname = report['image_name']
+        image = self.load_image(image_fname)
 
-        labels = self.labels_by_report[report_filename]
+        labels = self.labels_by_report[report_fname]
 
-        mask = self.load_mask(image_name) if self.enable_masks else None
+        mask = self.load_mask(image_fname) if self.enable_masks else None
 
         return BatchItem(
             image=image,
             labels=labels,
             report=report['tokens_idxs'],
-            filename=image_name,
+            image_fname=image_fname,
+            report_fname=report_fname,
             masks=mask,
             )
 
