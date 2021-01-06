@@ -31,7 +31,7 @@ class LSTMDecoderV2(nn.Module):
 
     def forward(self, features, reports=None, free=False, max_words=10000):
         """Forward pass.
-        
+
         Args:
             features: tensor of shape (batch_size, n_features, height, width)
             reports: tensor of shape (batch_size, n_words), or None
@@ -60,8 +60,6 @@ class LSTMDecoderV2(nn.Module):
 
         # Build initial input
         start_idx = self.start_idx.to(device).repeat(batch_size) # shape: batch_size
-        input_t = self.embeddings_table(start_idx)
-            # shape: batch_size, embedding_size
 
         # Decide teacher forcing
         teacher_forcing = self.teacher_forcing \
@@ -81,8 +79,13 @@ class LSTMDecoderV2(nn.Module):
 
         # Generate word by word
         seq_out = []
+        next_words_indices = start_idx
 
         for word_i in words_iterator:
+            # Pass words thru embedding
+            input_t = self.embeddings_table(next_words_indices)
+            # shape: batch_size, embedding_size
+
             # Pass thru LSTM
             state = self.lstm_cell(input_t, state)
             h_t, c_t = state
@@ -108,9 +111,6 @@ class LSTMDecoderV2(nn.Module):
             else:
                 _, next_words_indices = prediction_t.max(dim=1)
                 # shape: batch_size
-
-            input_t = self.embeddings_table(next_words_indices)
-            # shape: batch_size, embedding_size
 
         seq_out = torch.stack(seq_out, dim=1)
         # shape: batch_size, max_sentence_len, vocab_size
