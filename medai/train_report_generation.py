@@ -17,6 +17,7 @@ from medai.datasets import prepare_data_report_generation
 from medai.metrics import save_results
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
+    attach_medical_correctness,
     attach_report_writer,
 )
 from medai.models.classification import (
@@ -98,6 +99,7 @@ def evaluate_model(run_name,
                                      )
     attach_report_writer(engine, dataset.get_vocab(), run_name, free=free,
                          debug=debug)
+    attach_medical_correctness(engine, None, dataset.get_vocab())
 
     # Catch errors, specially for free=True case
     engine.add_event_handler(Events.EXCEPTION_RAISED, lambda _, err: print(err))
@@ -171,7 +173,7 @@ def train_model(run_name,
                 early_stopping=True,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
-                print_metrics=['loss', 'bleu', 'ciderD'],
+                print_metrics=['loss', 'bleu', 'ciderD', 'chex_timer'],
                 device='cuda',
                ):
     # Prepare run stuff
@@ -211,6 +213,10 @@ def train_model(run_name,
                                      hierarchical=hierarchical,
                                      supervise_attention=supervise_attention,
                                      )
+
+    # Attach medical correctness metrics
+    vocab = train_dataloader.dataset.get_vocab()
+    attach_medical_correctness(trainer, validator, vocab)
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)

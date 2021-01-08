@@ -1,6 +1,7 @@
 """Tensorboard util functions."""
 import os
 import re
+import numbers
 from tensorboardX import SummaryWriter
 from torch import nn
 
@@ -8,7 +9,8 @@ from medai import utils
 from medai.utils.files import get_tb_log_folder
 
 IGNORE_METRICS = [
-    'cm', # Confusion-matrix, no sense to put it in TB
+    '\Acm', # Confusion-matrix, no sense to put it in TB
+    '_timer', # Medical correctness timers, return strings
 ]
 
 class TBWriter:
@@ -25,8 +27,7 @@ class TBWriter:
                                     **kwargs)
 
         self.ignore_regex = '|'.join(ignore_metrics)
-        self.ignore_regex = re.compile(f'\A({self.ignore_regex})')
-        # NOTE: Consider starting patterns, as metrics are written as <metric>_<disease>
+        self.ignore_regex = re.compile(f'({self.ignore_regex})')
 
 
         # Capitalize so in TB appears first
@@ -61,7 +62,7 @@ class TBWriter:
 
     def write_metrics(self, metrics, run_type, epoch, wall_time):
         for name, value in metrics.items():
-            if self.ignore_regex.search(name):
+            if self.ignore_regex.search(name) or not isinstance(value, numbers.Number):
                 continue
 
             name = self._name_mappings.get(name, name)
