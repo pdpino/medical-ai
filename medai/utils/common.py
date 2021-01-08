@@ -6,6 +6,8 @@ import numpy as np
 
 WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
 TMP_DIR = os.path.join(WORKSPACE_DIR, 'tmp')
+CACHE_DIR = os.path.join(WORKSPACE_DIR, 'cache')
+
 
 def get_timestamp(short=True):
     now = datetime.fromtimestamp(time.time())
@@ -17,13 +19,17 @@ def get_timestamp(short=True):
 
 def duration_to_str(all_seconds):
     all_seconds = int(all_seconds)
-    seconds = all_seconds % 60
+    seconds = int(all_seconds % 60)
     minutes = all_seconds // 60
     hours = minutes // 60
 
     minutes = minutes % 60
 
-    return '{}h {}m {}s'.format(hours, minutes, int(seconds))
+    if hours > 0:
+        return f'{hours}h {minutes}m {seconds}s'
+    elif minutes > 0:
+        return f'{minutes}m {seconds}s'
+    return f'{seconds}s'
 
 
 def labels_to_str(values, labels, thresh=0.5, sort_values=False, show_value=False):
@@ -74,6 +80,18 @@ def divide_tensors(a, b):
     b[dont_use] = 1
 
     return a.true_divide(b)
+
+def divide_arrays(a, b):
+    """Divide two np.arrays element-wise, avoiding NaN values in the result."""
+    dont_use = b == 0
+
+    a = a.copy()
+    a[dont_use] = 0
+
+    b = b.copy()
+    b[dont_use] = 1
+
+    return a / b
 
 
 def num_trainable_parameters(model):

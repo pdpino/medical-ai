@@ -1,9 +1,10 @@
 import os
 
 class CSVWriter:
-    def __init__(self, filepath, columns=None):
-        folder = os.path.dirname(filepath)
-        os.makedirs(folder, exist_ok=True)
+    def __init__(self, filepath, columns=None, assert_folder=True):
+        if assert_folder:
+            folder = os.path.dirname(filepath)
+            os.makedirs(folder, exist_ok=True)
 
         self.csv_file = None
         self.filepath = filepath
@@ -21,7 +22,6 @@ class CSVWriter:
         if not already_exists and self.columns:
             self.write(*self.columns, quote=False)
 
-
     def write(self, *values, quote=False):
         if self.csv_file is None:
             return
@@ -35,3 +35,11 @@ class CSVWriter:
             return
 
         self.csv_file.close()
+
+    def __enter__(self):
+        self.open()
+
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()

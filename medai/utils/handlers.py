@@ -1,10 +1,19 @@
 """Common handlers for any engine."""
 import time
 import logging
+import numbers
 from ignite.engine import Engine, Events
 from ignite.handlers import EarlyStopping
 
 from medai.utils import duration_to_str
+
+def _prettify(value):
+    """Prettify a metric value."""
+    if value is None:
+        return -1
+    if isinstance(value, numbers.Number):
+        return str(round(value, 4))
+    return value
 
 def attach_log_metrics(trainer,
                        validator,
@@ -41,13 +50,14 @@ def attach_log_metrics(trainer,
         tb_writer.write_metrics(val_metrics, 'val', epoch, wall_time)
 
         # Log to stdout
-        metrics_str = ''
-        for metric in print_metrics:
-            train_value = train_metrics.get(metric, -1)
-            val_value = val_metrics.get(metric, -1)
-            metrics_str += f' {metric} {train_value:.4f} {val_value:.4f},'
+        metrics_str = ', '.join(
+            f'{metric} {_prettify(train_metrics.get(metric))} {_prettify(val_metrics.get(metric))}'
+            for metric in print_metrics
+        )
 
-        logger.info(f'Finished epoch {epoch}/{max_epochs}, {metrics_str} {duration_to_str(timer._elapsed())}')
+        duration = duration_to_str(timer._elapsed())
+
+        logger.info(f'Finished epoch {epoch}/{max_epochs}, {metrics_str}, {duration}')
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, log_metrics)
 

@@ -47,12 +47,13 @@ def count_sentences(report):
     return n_sentences
 
 
-def split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX):
+def split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX, pad=True):
     """Splits a report into sentences and pads them.
 
     Args:
         report -- list of shape (n_words)
         end_of_sentence_idx -- int indicating idx of the end-of-sentence token
+        pad -- if False, do not pad splitted sentences
     Returns:
         report (tensor) of shape (n_sentences, n_words)
     """
@@ -78,7 +79,10 @@ def split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX):
     # Split into sentences
     sentences = torch.split(report, split_sizes)
 
-    return pad_sequence(sentences, batch_first=True)
+    if pad:
+        sentences = pad_sequence(sentences, batch_first=True)
+
+    return sentences
 
 
 class ReportReader:
@@ -86,7 +90,7 @@ class ReportReader:
 
     def __init__(self, vocab):
         self._idx_to_word = {v: k for k, v in vocab.items()}
-        self._vocab = dict(vocab)
+        self._word_to_idx = dict(vocab)
 
     def idx_to_text(self, report):
         if isinstance(report, torch.Tensor):
@@ -95,7 +99,7 @@ class ReportReader:
         if not isinstance(report, (list, np.ndarray)):
             return 'ERROR'
 
-        return ' '.join([self._idx_to_word[int(g)] for g in report])
+        return ' '.join(self._idx_to_word[int(g)] for g in report)
 
     def text_to_idx(self, report):
         assert isinstance(report, (list, str)), f'Report must be list or str, got: {type(report)}'
@@ -104,7 +108,7 @@ class ReportReader:
             report = report.split()
 
         return [
-            self._vocab.get(word, UNKNOWN_IDX)
+            self._word_to_idx.get(word, UNKNOWN_IDX)
             for word in report
         ]
 
@@ -193,3 +197,29 @@ def indexes_to_strings(candidate, ground_truth):
     ground_truth = ' '.join(str(val) for val in ground_truth)
 
     return candidate, ground_truth
+
+
+def sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
+    """Splits a flat_report into sentences, iterating on the fly.
+
+    Args:
+        flat_report: tensor of shape (n_words)
+
+    Yields:
+        Sentence as list of word indexes
+    """
+    sentence_so_far = []
+    for word in flat_report:
+        word = word.item()
+        if word == PAD_IDX:
+            continue
+
+        sentence_so_far.append(word)
+
+        if word == end_idx:
+            yield sentence_so_far
+            sentence_so_far = []
+
+    if len(sentence_so_far) > 0:
+        sentence_so_far.append(end_idx)
+        yield sentence_so_far

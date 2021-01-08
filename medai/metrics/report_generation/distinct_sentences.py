@@ -2,33 +2,18 @@ from collections import Counter
 from ignite.metrics import Metric
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
-from medai.utils.nlp import PAD_IDX, END_OF_SENTENCE_IDX
-
-def _sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
-    """Splits a flat_report into sentences, iterating on the fly.
-
-    Args:
-        flat_report: tensor of shape (n_words)
-
-    Not very efficient for the hierarchical-decoder:
-        - sentences were already separated
-        - sentences were flattened into a flat report, to comply with flat-decoder
-    """
-    sentence_so_far = []
-    for word in flat_report:
-        word = word.item()
-        sentence_so_far.append(word)
-        if word == end_idx:
-            yield sentence_so_far
-            sentence_so_far = []
-
-    if len(sentence_so_far) > 0:
-        sentence_so_far.append(end_idx)
-        yield sentence_so_far
+from medai.utils.nlp import sentence_iterator
 
 
 class DistinctSentences(Metric):
-    """Counts amount of different sentences generated."""
+    """Counts amount of different sentences generated.
+
+    Note:
+        The use of sentence_iterator() is not very efficient for the hierarchical-decoder:
+            - sentences were already separated in the model output
+            - sentences were flattened into a flat report, to comply with flat-decoder
+            - the flat report is split with sentence_iterator() again
+    """
     @reinit__is_reduced
     def reset(self):
         self.sentences_seen = Counter()
@@ -47,7 +32,7 @@ class DistinctSentences(Metric):
         reports_gen, _ = output
 
         for report in reports_gen:
-            for sentence in _sentence_iterator(report):
+            for sentence in sentence_iterator(report):
                 sentence = ' '.join(str(word) for word in sentence)
                 self.sentences_seen[sentence] += 1
 
