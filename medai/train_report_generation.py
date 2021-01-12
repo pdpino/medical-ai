@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
 
 from ignite.engine import Engine, Events
-from ignite.handlers import Timer, Checkpoint, DiskSaver
+from ignite.handlers import Timer
 
 from medai.datasets import prepare_data_report_generation
 from medai.metrics import save_results

@@ -15,14 +15,13 @@ from medai.utils.nlp import (
 from medai.losses.out_of_target import OutOfTargetSumLoss
 
 
-def create_hierarchical_dataloader(dataset, **kwargs):
+def create_hierarchical_dataloader(dataset, include_masks=False, **kwargs):
     """Creates a dataloader from a images-report dataset, considering hierarchical sequences (sentence-words).
 
     Outputted reports have shape (batch_size, n_sentences, n_words)
     """
-    # TODO: enable/disable masks with a parameter?
-    if not hasattr(dataset, 'get_mask_for_sentence'):
-        raise Exception(f'dataset must have a get_mask_for_sentence method')
+    if include_masks and not hasattr(dataset, 'get_mask_for_sentence'):
+        raise Exception(f'dataset with masks must have a get_mask_for_sentence method')
 
     def _collate_fn(batch_tuples):
         images = []
@@ -48,15 +47,16 @@ def create_hierarchical_dataloader(dataset, **kwargs):
 
             reports.append(report)
 
-            # Get masks for each sentence of the report
-            image_masks = tup.masks # shape: n_organs, height, width
-            sample_mask = torch.stack([
-                dataset.get_mask_for_sentence(sentence, image_masks) # shape: height, width
-                for sentence in report
-            ])
-            # shape: n_sentences, height, width
+            if include_masks:
+                # Get masks for each sentence of the report
+                image_masks = tup.masks # shape: n_organs, height, width
+                sample_mask = torch.stack([
+                    dataset.get_mask_for_sentence(sentence, image_masks) # shape: height, width
+                    for sentence in report
+                ])
+                # shape: n_sentences, height, width
 
-            masks.append(sample_mask)
+                masks.append(sample_mask)
 
         # Pad reports to the max_sentence_len across all reports
         padded_reports = [
@@ -71,14 +71,17 @@ def create_hierarchical_dataloader(dataset, **kwargs):
         reports = pad_sequence(padded_reports, batch_first=True)
         # shape: batch_size, n_sentences, n_words
 
-        # Pad masks (n_sentences dimension)
-        masks = [
-            pad(mask, (0, 0, 0, 0, 0, max_n_sentences - mask.size(0)))
-            if mask.size(0) < max_n_sentences else mask
-            for mask in masks
-        ]
-        masks = torch.stack(masks, dim=0)
-        # shape: batch_size, n_sentences, height, width
+        if include_masks:
+            # Pad masks (n_sentences dimension)
+            masks = [
+                pad(mask, (0, 0, 0, 0, 0, max_n_sentences - mask.size(0)))
+                if mask.size(0) < max_n_sentences else mask
+                for mask in masks
+            ]
+            masks = torch.stack(masks, dim=0)
+            # shape: batch_size, n_sentences, height, width
+        else:
+            masks = None
 
         # Compute stops
         stops = [torch.zeros(report.size(0)) for report in padded_reports]

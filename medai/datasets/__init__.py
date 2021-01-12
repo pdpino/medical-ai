@@ -145,6 +145,7 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    augment_label=None, augment_class=None,
                                    augment_times=1, augment_kwargs={},
                                    num_workers=2,
+                                   masks=False,
                                    **kwargs,
                                    ):
     print(f'Loading {dataset_name}/{dataset_type} dataset...')
@@ -157,6 +158,7 @@ def prepare_data_report_generation(create_dataloader_fn,
                            vocab=vocab,
                            image_size=image_size,
                            sort_samples=sort_samples,
+                           masks=masks,
                            **kwargs,
                            )
 
@@ -168,6 +170,7 @@ def prepare_data_report_generation(create_dataloader_fn,
                               **augment_kwargs)
 
     dataloader = create_dataloader_fn(dataset,
+                                      include_masks=masks,
                                       batch_size=batch_size,
                                       shuffle=shuffle,
                                       num_workers=num_workers,
