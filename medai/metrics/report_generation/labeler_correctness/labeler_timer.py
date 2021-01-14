@@ -18,4 +18,9 @@ class LabelerTimerMetric(Metric):
         labeler_minutes = round(self.labeler.timer.total / 60, 1)
         global_minutes = round(self.labeler.global_timer.total / 60, 1)
 
+        # DEBUG:
+        # a = duration_to_str(self.labeler.timer.total)
+        # b = duration_to_str(self.labeler.global_timer.total)
+        # print(f'Labeler took: {a}/{b}')
+
         return f'{labeler_minutes}/{global_minutes}'

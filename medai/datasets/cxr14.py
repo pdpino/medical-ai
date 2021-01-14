@@ -1,12 +1,14 @@
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms
+from ignite.utils import to_onehot
 import pandas as pd
 from PIL import Image
 import os
 import json
 import random
 
-from medai.datasets.common import BatchItem
+from medai.datasets.common import BatchItem, JSRT_ORGANS
 from medai.utils.images import get_default_image_transform
 
 CXR14_DISEASES = [
@@ -32,8 +34,12 @@ _DATASET_MEAN = 0.5058
 _DATASET_STD = 0.232
 
 class CXR14Dataset(Dataset):
+    organs = list(JSRT_ORGANS)
+
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
-                 image_size=(512, 512), norm_by_sample=False, image_format='RGB', **unused):
+                 image_size=(512, 512), norm_by_sample=False, image_format='RGB',
+                 masks=False,
+                 **unused):
         if DATASET_DIR is None:
             raise Exception(f'DATASET_DIR_CXR14 not found in env variables')
 
@@ -48,6 +54,7 @@ class CXR14Dataset(Dataset):
         )
 
         self.image_dir = os.path.join(DATASET_DIR, 'images')
+        self.masks_dir = os.path.join(DATASET_DIR, 'masks')
 
         # Load split images
         SPLITS_DIR = os.path.join(DATASET_DIR, 'splits')
@@ -104,6 +111,13 @@ class CXR14Dataset(Dataset):
 
         self.label_index.reset_index(drop=True, inplace=True)
 
+        self.enable_masks = masks
+        if self.enable_masks:
+            self.transform_mask = transforms.Compose([
+                transforms.Resize(image_size),
+                transforms.ToTensor(),
+            ])
+
     def __len__(self):
         n_samples, _ = self.label_index.shape
         return n_samples
@@ -131,6 +145,8 @@ class CXR14Dataset(Dataset):
 
         image = self.transform(image)
 
+        masks = self.load_mask(image_name) if self.enable_masks else None
+
         # Load bboxes # REVIEW: precompute this?
         raw_bboxes = self.bboxes_by_image.get(image_name, {})
         bboxes = []
@@ -151,10 +167,36 @@ class CXR14Dataset(Dataset):
         return BatchItem(
             image=image,
             labels=labels,
+            masks=masks,
             bboxes=bboxes,
             bboxes_valid=bboxes_valid,
             image_fname=image_name,
         )
+
+    def load_mask(self, image_name):
+        if not self.enable_masks:
+            return None
+
+        filepath = os.path.join(self.masks_dir, image_name)
+
+        if not os.path.isfile(filepath):
+            print('No such file: ', filepath)
+            return None
+
+        mask = Image.open(filepath).convert('L')
+        mask = self.transform_mask(mask)
+        # shape: n_channels=1, height, width
+
+        mask = (mask * 255).long()
+        # shape: 1, height, width
+
+        mask = to_onehot(mask, len(self.organs))
+        # shape: 1, n_organs, height, width
+
+        mask = mask.squeeze(0)
+        # shape: n_organs, height, width
+
+        return mask
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
