@@ -6,16 +6,18 @@ from medai.utils import divide_tensors
 
 class IoU(Metric):
     """Computes intersection-over-union in images."""
-    def __init__(self, n_labels=14, output_transform=lambda x: x, device='cuda'):
-        self.n_labels = n_labels
-        self._device = device # REVIEW: isn't there an internal device attribute?
+    def __init__(self, reduce_sum=False, **kwargs):
+        if reduce_sum:
+            self._reduction = torch.sum
+        else:
+            self._reduction = None
 
-        super().__init__(output_transform=output_transform, device=device)
+        super().__init__(**kwargs)
 
     @reinit__is_reduced
     def reset(self):
-        self._added_iou = torch.zeros(self.n_labels).to(self._device)
-        self._n_samples = torch.zeros(self.n_labels).to(self._device)
+        self._added_iou = 0
+        self._n_samples = 0
 
     @reinit__is_reduced
     def update(self, output):
@@ -28,14 +30,14 @@ class IoU(Metric):
         """
         activations, gt_map, gt_valid = output
 
-        intersection = (gt_map * activations).sum(dim=-1).sum(dim=-1)
+        intersection = (gt_map * activations).sum(dim=(-2, -1))
         # shape: (batch_size, n_labels)
 
         union = (gt_map + activations).clamp(max=1)
         # shape: (batch_size, n_labels, height, width)
         # assert ((union == 1) | (union == 0)).all(), 'Union wrong: all should be 0 or 1'
 
-        union = union.sum(dim=-1).sum(dim=-1)
+        union = union.sum(dim=(-2, -1))
         # shape: (batch_size, n_labels)
 
         iou = divide_tensors(intersection, union)
@@ -51,6 +53,10 @@ class IoU(Metric):
             n_samples = torch.ones(n_labels).to(gt_map.device) * batch_size
 
         added_iou = iou.sum(dim=0) # shape: n_labels
+
+        if self._reduction:
+            added_iou = self._reduction(added_iou) # shape: 1
+            n_samples = self._reduction(n_samples) # shape: 1
 
         self._added_iou += added_iou
         self._n_samples += n_samples

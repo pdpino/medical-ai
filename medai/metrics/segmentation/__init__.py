@@ -49,8 +49,8 @@ def attach_metrics_segmentation(engine, labels, multilabel=False, device='cuda')
     else:
         transform = _transform_max_onehot
 
-    iou = IoU(n_labels=len(labels), output_transform=transform, device=device)
+    iou = IoU(reduce_sum=False, output_transform=transform, device=device)
     _attach_metric_for_label(engine, labels, iou, 'iou')
 
-    dice = Dice(n_labels=len(labels), output_transform=transform, device=device)
+    dice = Dice(output_transform=transform, device=device)
     _attach_metric_for_label(engine, labels, dice, 'dice')

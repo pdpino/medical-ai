@@ -6,16 +6,10 @@ from medai.utils import divide_tensors
 
 class Dice(Metric):
     """Computes Dice coefficient in images."""
-    def __init__(self, n_labels=14, output_transform=lambda x: x, device='cuda'):
-        self.n_labels = n_labels
-        self._device = device
-
-        super().__init__(output_transform=output_transform, device=device)
-
     @reinit__is_reduced
     def reset(self):
-        self._added_dice = torch.zeros(self.n_labels).to(self._device)
-        self._n_samples = torch.zeros(self.n_labels).to(self._device)
+        self._added_dice = 0
+        self._n_samples = 0
 
     @reinit__is_reduced
     def update(self, output):
