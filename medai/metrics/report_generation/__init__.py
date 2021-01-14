@@ -50,7 +50,7 @@ def _attach_bleu(engine, up_to_n=4,
     bleu_avg.attach(engine, 'bleu')
 
 
-def _attach_attention_metrics(engine):
+def attach_attention_vs_masks(engine):
     """Attaches metrics that evaluate attention scores vs gt-masks."""
     def _get_masks_and_attention(outputs):
         """Extracts generated and GT masks.
@@ -111,10 +111,6 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False,
     if not free:
         word_acc = WordAccuracy(output_transform=_get_flat_reports)
         word_acc.attach(engine, 'word_acc')
-
-    # Attach sentence-masks vs attention metrics
-    if hierarchical:
-        _attach_attention_metrics(engine)
 
     # Attach multiple bleu
     _attach_bleu(engine, 4)

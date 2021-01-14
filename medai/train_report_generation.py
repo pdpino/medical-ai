@@ -18,6 +18,7 @@ from medai.metrics import save_results
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_medical_correctness,
+    attach_attention_vs_masks,
     attach_report_writer,
 )
 from medai.models.classification import (
@@ -219,6 +220,11 @@ def train_model(run_name,
     if medical_correctness:
         vocab = train_dataloader.dataset.get_vocab()
         attach_medical_correctness(trainer, validator, vocab)
+
+    decoder_name = compiled_model.metadata['decoder_kwargs']['decoder_name']
+    if decoder_name.startswith('h-lstm-att'):
+        attach_attention_vs_masks(trainer)
+        attach_attention_vs_masks(validator)
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
