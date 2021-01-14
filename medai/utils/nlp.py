@@ -151,7 +151,7 @@ class SentenceToOrgans:
         if sentence_hash not in self._sentence_to_organ_mapping:
             self._sentence_to_organ_mapping[sentence_hash] = [1] * self.n_organs
             sentence_str = self.report_reader.idx_to_text(sentence)
-            print(f'Organs not found for sentence: {sentence_str}')
+            print(f'Organs not found for sentence: {sentence_str}, {sentence_hash}')
 
         return self._sentence_to_organ_mapping[sentence_hash]
 

@@ -1,25 +1,19 @@
 import time
 import argparse
-import os
 import logging
 
 import torch
 from torch import nn
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import DataLoader
-from torch.utils.data.dataset import Subset
-
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
 from medai.datasets import prepare_data_report_generation
-from medai.metrics import save_results
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_medical_correctness,
     attach_attention_vs_masks,
-    attach_report_writer,
 )
 from medai.models.classification import (
     create_cnn,
@@ -39,7 +33,6 @@ from medai.models.checkpoint import (
     load_compiled_model_classification,
     load_compiled_model_report_generation,
     save_metadata,
-    load_metadata,
 )
 from medai.tensorboard import TBWriter
 from medai.training.report_generation.flat import (
@@ -69,97 +62,6 @@ LOGGER = logging.getLogger('rg')
 LOGGER.setLevel(logging.INFO)
 
 
-def evaluate_model(run_name,
-                   model,
-                   dataloader,
-                   n_epochs=1,
-                   hierarchical=False,
-                   supervise_attention=False,
-                   free=False,
-                   debug=True,
-                   device='cuda'):
-    """Evaluate a report-generation model on a dataloader."""
-    dataset = dataloader.dataset
-    if isinstance(dataset, Subset): dataset = dataset.dataset # HACK
-    print(f'Evaluating model in {dataset.dataset_type}, free={free}...')
-
-    if hierarchical:
-        get_step_fn = get_step_fn_hierarchical
-    else:
-        get_step_fn = get_step_fn_flat
-
-    engine = Engine(get_step_fn(model,
-                                training=False,
-                                supervise_attention=supervise_attention,
-                                free=free,
-                                device=device))
-    attach_metrics_report_generation(engine,
-                                     hierarchical=hierarchical,
-                                     free=free,
-                                     supervise_attention=supervise_attention,
-                                     )
-    attach_report_writer(engine, dataset.get_vocab(), run_name, free=free,
-                         debug=debug)
-    attach_medical_correctness(engine, None, dataset.get_vocab())
-
-    # Catch errors, specially for free=True case
-    engine.add_event_handler(Events.EXCEPTION_RAISED, lambda _, err: print(err))
-
-    engine.run(dataloader, n_epochs)
-
-    return engine.state.metrics
-
-
-def evaluate_and_save(run_name,
-                      model,
-                      dataloaders,
-                      hierarchical=False,
-                      supervise_attention=False,
-                      free='both',
-                      debug=True,
-                      device='cuda',
-                      suffix='',
-                      ):
-    kwargs = {
-        'hierarchical': hierarchical,
-        'device': device,
-        'supervise_attention': supervise_attention,
-        'debug': debug,
-    }
-
-    if free == 'both':
-        free_values = [False, True]
-    elif free:
-        free_values = [True]
-    else:
-        free_values = [False]
-
-    for free in free_values:
-        # Add a suffix
-        more_suffix = 'free' if free else 'notfree'
-        if suffix:
-            used_suffix = f'{suffix}-{more_suffix}'
-        else:
-            used_suffix = more_suffix
-
-        metrics = {}
-
-        kwargs['free'] = free
-
-        for dataloader in dataloaders:
-            if dataloader is None:
-                continue
-            name = dataloader.dataset.dataset_type
-            metrics[name] = evaluate_model(run_name, model, dataloader, **kwargs)
-
-        save_results(metrics,
-                     run_name,
-                     task='rg',
-                     debug=debug,
-                     suffix=used_suffix,
-                     )
-
-
 def train_model(run_name,
                 compiled_model,
                 train_dataloader,
@@ -179,11 +81,11 @@ def train_model(run_name,
                 device='cuda',
                ):
     # Prepare run stuff
-    print('Run: ', run_name)
+    LOGGER.info('Run: %s', run_name)
     tb_writer = TBWriter(run_name, task='rg', debug=debug, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
-        print(f'Resuming from epoch {initial_epoch}')
+        LOGGER.info('Resuming from epoch %s', initial_epoch)
 
     # Unwrap stuff
     model, optimizer, lr_scheduler = compiled_model.get_elements()
@@ -259,15 +161,14 @@ def train_model(run_name,
         attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
 
     # Train!
-    print('-' * 50)
-    print('Training...')
+    LOGGER.info('-' * 51)
+    LOGGER.info('Training...')
     trainer.run(train_dataloader, n_epochs)
 
     # Capture time
     secs_per_epoch = timer.value()
-    duration_per_epoch = duration_to_str(secs_per_epoch)
-    print('Average time per epoch: ', duration_per_epoch)
-    print('-'*50)
+    LOGGER.info('Average time per epoch: %s', duration_to_str(secs_per_epoch))
+    LOGGER.info('-'*50)
 
     # Close stuff
     tb_writer.close()
@@ -281,7 +182,6 @@ def resume_training(run_name,
                     tb_kwargs={},
                     debug=True,
                     multiple_gpu=False,
-                    post_evaluation=True,
                     device='cuda',
                     ):
     """Resume training."""
@@ -341,32 +241,7 @@ def resume_training(run_name,
                 **other_train_kwargs,
                 )
 
-    print(f'Finished training: {run_name}')
-
-
-    # TODO: move evaluation to a different script
-    return
-
-    if post_evaluation:
-        test_dataloader = prepare_data_report_generation(
-            create_dataloader,
-            dataset_type='test',
-            **dataset_kwargs,
-        )
-
-        dataloaders = [
-            train_dataloader,
-            val_dataloader,
-            test_dataloader,
-        ]
-
-        evaluate_and_save(run_name,
-                          compiled_model.model,
-                          dataloaders,
-                          hierarchical=hierarchical,
-                          debug=debug,
-                          device=device,
-                          )
+    LOGGER.info('Finished training: %s', run_name)
 
 
 def train_from_scratch(run_name,
@@ -400,7 +275,6 @@ def train_from_scratch(run_name,
                        tb_kwargs={},
                        debug=True,
                        multiple_gpu=False,
-                       post_evaluation=True,
                        num_workers=2,
                        device='cuda',
                        ):
@@ -587,32 +461,7 @@ def train_from_scratch(run_name,
                 )
 
 
-    print(f'Finished run: {run_name}')
-
-
-    # TODO: move evaluation to a different script
-    return
-
-    if post_evaluation:
-        test_dataloader = prepare_data_report_generation(
-            create_dataloader,
-            dataset_type='test',
-            **dataset_kwargs,
-        )
-
-        dataloaders = [
-            train_dataloader,
-            val_dataloader,
-            test_dataloader,
-        ]
-
-        evaluate_and_save(run_name,
-                          compiled_model.model,
-                          dataloaders,
-                          hierarchical=hierarchical,
-                          debug=debug,
-                          device=device,
-                          )
+    LOGGER.info('Finished run: %s', run_name)
 
 
 def parse_args():
@@ -687,64 +536,62 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    ARGS = parse_args()
 
-    if args.num_threads > 0:
-        torch.set_num_threads(args.num_threads)
+    if ARGS.num_threads > 0:
+        torch.set_num_threads(ARGS.num_threads)
 
-    device = torch.device('cuda' if not args.cpu and torch.cuda.is_available() else 'cpu')
+    DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
 
-    print_hw_options(device, args)
-
-    run_name = get_timestamp()
+    print_hw_options(DEVICE, ARGS)
 
     start_time = time.time()
 
-    if args.resume:
-        resume_training(args.resume,
-                        n_epochs=args.epochs,
-                        max_samples=args.max_samples,
-                        tb_kwargs=args.tb_kwargs,
-                        debug=not args.no_debug,
-                        multiple_gpu=args.multiple_gpu,
-                        device=device,
+    if ARGS.resume:
+        resume_training(ARGS.resume,
+                        n_epochs=ARGS.epochs,
+                        max_samples=ARGS.max_samples,
+                        tb_kwargs=ARGS.tb_kwargs,
+                        debug=not ARGS.no_debug,
+                        multiple_gpu=ARGS.multiple_gpu,
+                        device=DEVICE,
                         )
     else:
-        train_from_scratch(run_name,
-                           decoder_name=args.decoder,
-                           supervise_attention=args.superv_att,
-                           batch_size=args.batch_size,
-                           sort_samples=not args.no_sort,
-                           shuffle=args.shuffle,
-                           frontal_only=args.frontal_only,
-                           teacher_forcing=not args.no_teacher_forcing,
-                           embedding_size=args.embedding_size,
-                           hidden_size=args.hidden_size,
-                           lr=args.learning_rate,
-                           n_epochs=args.epochs,
-                           medical_correctness=not args.no_med,
-                           image_size=args.image_size,
-                           cnn_run_name=args.cnn_pretrained,
-                           cnn_model_name=args.cnn,
-                           cnn_imagenet=not args.no_imagenet,
-                           cnn_freeze=args.freeze,
-                           max_samples=args.max_samples,
-                           early_stopping=args.early_stopping,
-                           early_stopping_kwargs=args.early_stopping_kwargs,
-                           lr_sch_metric=args.lr_metric,
-                           lr_sch_kwargs=args.lr_sch_kwargs,
-                           augment=args.augment,
-                           augment_label=args.augment_label,
-                           augment_class=args.augment_class,
-                           augment_times=args.augment_times,
-                           augment_kwargs=args.augment_kwargs,
-                           tb_kwargs=args.tb_kwargs,
-                           debug=not args.no_debug,
-                           multiple_gpu=args.multiple_gpu,
-                           num_workers=args.num_workers,
-                           device=device,
+        train_from_scratch(get_timestamp(),
+                           decoder_name=ARGS.decoder,
+                           supervise_attention=ARGS.superv_att,
+                           batch_size=ARGS.batch_size,
+                           sort_samples=not ARGS.no_sort,
+                           shuffle=ARGS.shuffle,
+                           frontal_only=ARGS.frontal_only,
+                           teacher_forcing=not ARGS.no_teacher_forcing,
+                           embedding_size=ARGS.embedding_size,
+                           hidden_size=ARGS.hidden_size,
+                           lr=ARGS.learning_rate,
+                           n_epochs=ARGS.epochs,
+                           medical_correctness=not ARGS.no_med,
+                           image_size=ARGS.image_size,
+                           cnn_run_name=ARGS.cnn_pretrained,
+                           cnn_model_name=ARGS.cnn,
+                           cnn_imagenet=not ARGS.no_imagenet,
+                           cnn_freeze=ARGS.freeze,
+                           max_samples=ARGS.max_samples,
+                           early_stopping=ARGS.early_stopping,
+                           early_stopping_kwargs=ARGS.early_stopping_kwargs,
+                           lr_sch_metric=ARGS.lr_metric,
+                           lr_sch_kwargs=ARGS.lr_sch_kwargs,
+                           augment=ARGS.augment,
+                           augment_label=ARGS.augment_label,
+                           augment_class=ARGS.augment_class,
+                           augment_times=ARGS.augment_times,
+                           augment_kwargs=ARGS.augment_kwargs,
+                           tb_kwargs=ARGS.tb_kwargs,
+                           debug=not ARGS.no_debug,
+                           multiple_gpu=ARGS.multiple_gpu,
+                           num_workers=ARGS.num_workers,
+                           device=DEVICE,
                            )
 
     total_time = time.time() - start_time
-    print(f'Total time: {duration_to_str(total_time)}')
-    print('=' * 80)
+    LOGGER.info('Total time: %s', duration_to_str(total_time))
+    LOGGER.info('=' * 80)
