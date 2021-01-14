@@ -170,6 +170,7 @@ def train_model(run_name,
                 save_model=True,
                 dryrun=False,
                 tb_kwargs={},
+                medical_correctness=True,
                 early_stopping=True,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
@@ -215,8 +216,9 @@ def train_model(run_name,
                                      )
 
     # Attach medical correctness metrics
-    vocab = train_dataloader.dataset.get_vocab()
-    attach_medical_correctness(trainer, validator, vocab)
+    if medical_correctness:
+        vocab = train_dataloader.dataset.get_vocab()
+        attach_medical_correctness(trainer, validator, vocab)
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
@@ -336,6 +338,9 @@ def resume_training(run_name,
     print(f'Finished training: {run_name}')
 
 
+    # TODO: move evaluation to a different script
+    return
+
     if post_evaluation:
         test_dataloader = prepare_data_report_generation(
             create_dataloader,
@@ -370,6 +375,7 @@ def train_from_scratch(run_name,
                        hidden_size=100,
                        lr=0.0001,
                        n_epochs=10,
+                       medical_correctness=True,
                        cnn_run_name=None,
                        cnn_model_name='resnet-50',
                        cnn_imagenet=True,
@@ -448,7 +454,7 @@ def train_from_scratch(run_name,
         'image_size': image_size,
         'batch_size': batch_size,
         'num_workers': num_workers,
-        'masks': supervise_attention,
+        'masks': hierarchical,
         'frontal_only': frontal_only,
     }
     dataset_train_kwargs = {
@@ -537,6 +543,7 @@ def train_from_scratch(run_name,
         'early_stopping_kwargs': early_stopping_kwargs,
         'lr_sch_metric': lr_sch_metric,
         'supervise_attention': supervise_attention,
+        'medical_correctness': medical_correctness,
     }
 
     # Save metadata
@@ -576,6 +583,9 @@ def train_from_scratch(run_name,
 
     print(f'Finished run: {run_name}')
 
+
+    # TODO: move evaluation to a different script
+    return
 
     if post_evaluation:
         test_dataloader = prepare_data_report_generation(
@@ -620,6 +630,8 @@ def parse_args():
                         help='If present, does not use teacher forcing')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--no-med', action='store_true',
+                        help='If present, do not use medical-correctness metrics')
 
     data_group = parser.add_argument_group('Data')
     data_group.add_argument('--image-size', type=int, default=512,
@@ -704,6 +716,7 @@ if __name__ == '__main__':
                            hidden_size=args.hidden_size,
                            lr=args.learning_rate,
                            n_epochs=args.epochs,
+                           medical_correctness=not args.no_med,
                            image_size=args.image_size,
                            cnn_run_name=args.cnn_pretrained,
                            cnn_model_name=args.cnn,

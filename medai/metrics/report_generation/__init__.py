@@ -4,9 +4,12 @@ from functools import partial
 import operator
 import numpy as np
 import torch
+from torch.nn.functional import interpolate
 from ignite.engine import Events
 from ignite.metrics import RunningAverage, MetricsLambda
 
+from medai.metrics.segmentation.iou import IoU
+from medai.metrics.segmentation.iobb import IoBB
 from medai.metrics.report_generation.word_accuracy import WordAccuracy
 from medai.metrics.report_generation.bleu import Bleu
 from medai.metrics.report_generation.rouge import RougeL
@@ -47,6 +50,50 @@ def _attach_bleu(engine, up_to_n=4,
     bleu_avg.attach(engine, 'bleu')
 
 
+def _attach_attention_metrics(engine):
+    """Attaches metrics that evaluate attention scores vs gt-masks."""
+    def _get_masks_and_attention(outputs):
+        """Extracts generated and GT masks.
+
+        Args:
+            outputs: dict with tensors:
+                ['gen_masks']: shape batch_size, n_sentences, features-height, features-width
+                ['gt_masks']: shape batch_size, n_sentences, original-height, original-width
+                ['gt_stops']: shape batch_size, n_sentences (optional)
+
+            Notice features-* sizes will probably be smaller than original-* sizes, as the former are extracted from the last layer of a CNN, and the latter are the original GT masks.
+
+        Returns:
+            tuple with two (optional three) tensors
+        """
+        gen_masks = outputs['gen_masks']
+        gt_masks = outputs['gt_masks']
+
+        # Reduce gt_masks to gen_masks size
+        features_dimensions = gen_masks.size()[-2:]
+        gt_masks = interpolate(gt_masks.float(), features_dimensions, mode='nearest').long()
+
+        # Include stops if present
+        if 'gt_stops' in outputs:
+            gt_stops = outputs['gt_stops']
+
+            # Transform stops into valid
+            # stop == 1 indicates stopping --> sentence not valid --> valid == 0
+            # stop == 0 indicates dont-stop --> sentence valid --> valid == 1
+            gt_valid = 1 - gt_stops
+        else:
+            gt_valid = None
+
+        return gen_masks, gt_masks, gt_valid
+
+
+    iou = IoU(reduce_sum=True, output_transform=_get_masks_and_attention)
+    iou.attach(engine, 'att_iou')
+
+    iobb = IoBB(reduce_sum=True, output_transform=_get_masks_and_attention)
+    iobb.attach(engine, 'att_iobb')
+
+
 def attach_metrics_report_generation(engine, hierarchical=False, free=False,
                                      supervise_attention=False):
     losses = ['loss']
@@ -64,6 +111,10 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False,
     if not free:
         word_acc = WordAccuracy(output_transform=_get_flat_reports)
         word_acc.attach(engine, 'word_acc')
+
+    # Attach sentence-masks vs attention metrics
+    if hierarchical:
+        _attach_attention_metrics(engine)
 
     # Attach multiple bleu
     _attach_bleu(engine, 4)

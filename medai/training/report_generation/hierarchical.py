@@ -201,6 +201,13 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
         generated_words = output_tuple[0] # shape: batch_size, max_n_sentences, max_n_words, vocab_size
         stop_prediction = output_tuple[1] # shape: batch_size, max_n_sentences
 
+        if data_batch.masks is not None:
+            gt_masks = data_batch.masks.to(device) # shape: batch_size, n_sentences, height, width
+        else:
+            gt_masks = None
+
+        gen_masks = output_tuple[2] # shape: batch_size, n_sentences, features-height, features-width
+
         if not free:
             # If free, outputs will have different sizes
             # TODO: pad output arrays to be able to calculate loss anyway
@@ -214,8 +221,6 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
 
             # Calculate full loss
             if supervise_attention:
-                gt_masks = data_batch.masks.to(device) # shape: batch_size, n_sentences, height, width
-                gen_masks = output_tuple[2] # shape: batch_size, n_sentences, features-height, features-width
                 att_loss = att_loss_fn(gen_masks, gt_masks, stop_ground_truth)
                 total_loss = word_loss + stop_loss + att_loss
             else:
@@ -248,6 +253,9 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
             # 'reports': reports,
             'flat_reports_gen': flat_reports_gen, # shape: batch_size, n_words
             'flat_reports': flat_reports, # shape: batch_size, n_words
+            'gt_masks': gt_masks,
+            'gen_masks': gen_masks,
+            'gt_stops': stop_ground_truth,
         }
 
     return step_fn
