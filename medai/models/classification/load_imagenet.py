@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from torchvision import models
 
@@ -37,7 +36,7 @@ class ImageNetModel(nn.Module):
     def __init__(self, labels=[], model_name='densenet-121',
                  imagenet=True, freeze=False,
                  pretrained_cnn=None, gpool='max', fc_layers=(),
-                 **unused):
+                 **unused_kwargs):
         super().__init__()
         # Config by model
         model_constructor, extractor = _LOADERS[model_name]

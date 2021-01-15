@@ -1,19 +1,24 @@
 import argparse
 import time
+import logging
 from pprint import pprint
 import torch
 from torch import nn
-from ignite.engine import Engine, Events
-import captum
-from captum.attr import LayerGradCam
 from torch.nn.functional import interpolate
+from ignite.engine import Engine
+from captum.attr import LayerGradCam
 
 from medai.datasets import prepare_data_classification
 from medai.metrics import save_results
-from medai.metrics.segmentation import attach_metrics_segmentation
+from medai.metrics.segmentation import attach_metrics_image_saliency
 from medai.models.checkpoint import load_compiled_model_classification
-from medai.utils import tensor_to_range01, duration_to_str, print_hw_options
-
+from medai.utils import (
+    config_logging,
+    tensor_to_range01,
+    duration_to_str,
+    print_hw_options,
+    parsers,
+)
 
 class ModelWrapper(nn.Module):
     """Wraps a model to pass it through captum.LayerGradCam."""
@@ -36,7 +41,7 @@ def _calculate_image_scale(image_size, device='cuda'):
     scale_height = ORIGINAL_SIZE / height
     scale_width = ORIGINAL_SIZE / width
 
-    return torch.tensor((scale_height, scale_width, scale_height, scale_width)).to(device)
+    return torch.tensor((scale_height, scale_width, scale_height, scale_width)).to(device) # pylint: disable=not-callable
 
 
 def _get_last_layer(compiled_model):
@@ -46,6 +51,14 @@ def _get_last_layer(compiled_model):
     if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
         model = model.module
 
+    if model_name == 'mobilenet-v2':
+        return model.features[-1][-1]
+    if model_name == 'densenet-121-v2':
+        return model.features.norm5
+    if model_name == 'resnet-50-v2':
+        return model.features.layer4[-1].relu
+
+    # DEPRECATED MODELS
     if model_name == 'mobilenet':
         # return model.base_cnn.features[-1][0] # Last conv
         return model.base_cnn.features[-1][-1] # Actual last
@@ -135,11 +148,13 @@ def run_evaluation(run_name,
         'labels': compiled_model.metadata.get('dataset_kwargs', {}).get('labels', None),
         'max_samples': max_samples,
         'batch_size': batch_size,
+        'masks': True,
     }
     if image_size is not None:
         kwargs['image_size'] = (image_size, image_size)
 
     dataloader = prepare_data_classification(**kwargs)
+    dataset = dataloader.dataset
     image_size = dataloader.dataset.image_size
     labels = dataloader.dataset.labels
 
@@ -155,15 +170,24 @@ def run_evaluation(run_name,
     grad_cam = LayerGradCam(wrapped_model, layer)
 
     # Create engine
-    def step_fn(engine, batch):
-        ## Calculate bounding boxes
+    def step_fn(unused_engine, batch):
+        ## Images
         images = batch.image.to(device)
         images.requires_grad = True # Needed for Grad-CAM
         # shape: batch_size, 3, h, w
 
+        ## Bboxes
         bboxes_valid = batch.bboxes_valid.to(device) # shape: batch_size, n_labels
         bboxes = (batch.bboxes.to(device) / scale).long() # shape: batch_size, n_labels, 4
         bboxes_map = bbox_coordinates_to_map(bboxes, bboxes_valid, image_size)
+        # shape: batch_size, n_labels, height, width
+
+        ## Organ masks
+        batch_masks = batch.masks.to(device) # shape: batch_size, n_organs, height, width
+        masks = torch.stack([
+            dataset.reduce_masks_for_disease(label, batch_masks) # shape: batch_size, height, width
+            for label in labels
+        ], dim=1)
         # shape: batch_size, n_labels, height, width
 
         ## Calculate attributions
@@ -174,17 +198,22 @@ def run_evaluation(run_name,
         attributions = torch.stack(attributions, dim=1)
         # shape: batch_size, n_labels, h, w
 
-        attributions = threshold_attributions(attributions)
+        attributions = threshold_attributions(attributions, thresh=thresh)
         # shape: batch_size, n_labels, h, w
 
         return {
             'activations': attributions,
-            'gt_map': bboxes_map,
-            'gt_valid': bboxes_valid,
+            'bboxes_map': bboxes_map,
+            'bboxes_valid': bboxes_valid,
+            'masks': masks,
         }
 
     engine = Engine(step_fn)
-    attach_metrics_segmentation(engine, labels, multilabel=True, device=device)
+    keys = [
+        ('bbox', 'bboxes_map', 'bboxes_valid'),
+        ('masks', 'masks', None),
+    ]
+    attach_metrics_image_saliency(engine, labels, keys, multilabel=True, device=device)
 
     # Run!
     engine.run(dataloader, 1)
@@ -218,15 +247,7 @@ def parse_args():
     images_group.add_argument('--image-size', type=int, default=512,
                               help='Image size in pixels')
 
-    hw_group = parser.add_argument_group('Hardware params')
-    hw_group.add_argument('--multiple-gpu', action='store_true',
-                          help='Use multiple gpus')
-    hw_group.add_argument('--cpu', action='store_true',
-                          help='Use CPU only')
-    hw_group.add_argument('--num-workers', type=int, default=2,
-                          help='Number of workers for dataloader')
-    hw_group.add_argument('--num-threads', type=int, default=1,
-                          help='Number of threads for pytorch')
+    parsers.add_args_hw(parser, num_workers=2)
 
     args = parser.parse_args()
 
@@ -234,34 +255,38 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    config_logging()
+    LOGGER = logging.getLogger('cl-eval-saliency')
+    LOGGER.setLevel(logging.INFO)
 
-    if args.num_threads > 0:
-        torch.set_num_threads(args.num_threads)
+    ARGS = parse_args()
 
-    device = torch.device('cuda' if not args.cpu and torch.cuda.is_available() else 'cpu')
+    if ARGS.num_threads > 0:
+        torch.set_num_threads(ARGS.num_threads)
 
-    print_hw_options(device, args)
+    DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
+
+    print_hw_options(DEVICE, ARGS)
 
     start_time = time.time()
 
-    if args.multiple_gpu:
-        print('Warning: --multiple-gpu option is not working with Grad-CAM')
+    if ARGS.multiple_gpu:
+        LOGGER.warning('--multiple-gpu option is not working with Grad-CAM')
 
-    run_evaluation(args.run_name,
-                   debug=not args.no_debug,
-                   device=device,
-                   max_samples=args.max_samples,
-                   batch_size=args.batch_size,
-                   thresh=args.thresh,
-                   image_size=args.image_size,
-                   quiet=args.quiet,
-                   multiple_gpu=False, # args.multiple_gpu, # FIXME: not working
+    run_evaluation(ARGS.run_name,
+                   debug=not ARGS.no_debug,
+                   device=DEVICE,
+                   max_samples=ARGS.max_samples,
+                   batch_size=ARGS.batch_size,
+                   thresh=ARGS.thresh,
+                   image_size=ARGS.image_size,
+                   quiet=ARGS.quiet,
+                   multiple_gpu=False, # ARGS.multiple_gpu, # FIXME: not working
                    )
 
     total_time = time.time() - start_time
-    print(f'Total time: {duration_to_str(total_time)}')
-    print('=' * 80)
+    LOGGER.info('Total time: %s', duration_to_str(total_time))
+    LOGGER.info('=' * 80)
 
     # --multiple-gpu error:
     # RuntimeError: All input tensors must be on the same device. Received cuda:0 and cuda:1

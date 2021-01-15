@@ -77,7 +77,7 @@ def train_model(run_name,
                 early_stopping=True,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
-                print_metrics=['loss', 'bleu', 'ciderD', 'chex_timer'],
+                print_metrics=['loss', 'bleu', 'ciderD', 'chex_f1'],
                 device='cuda',
                ):
     # Prepare run stuff

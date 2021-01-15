@@ -5,9 +5,8 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.nn.functional import pad
 import numpy as np
 
-from medai.datasets.common import BatchItems, JSRT_ORGANS
+from medai.datasets.common import BatchItems
 from medai.utils.nlp import (
-    END_IDX,
     PAD_IDX,
     END_OF_SENTENCE_IDX,
     split_sentences_and_pad,
@@ -16,12 +15,12 @@ from medai.losses.out_of_target import OutOfTargetSumLoss
 
 
 def create_hierarchical_dataloader(dataset, include_masks=False, **kwargs):
-    """Creates a dataloader from a images-report dataset, considering hierarchical sequences (sentence-words).
+    """Creates a dataloader from a images-report dataset with hierarchical sequences.
 
     Outputted reports have shape (batch_size, n_sentences, n_words)
     """
     if include_masks and not hasattr(dataset, 'get_mask_for_sentence'):
-        raise Exception(f'dataset with masks must have a get_mask_for_sentence method')
+        raise Exception('dataset with masks must have a get_mask_for_sentence method')
 
     def _collate_fn(batch_tuples):
         images = []
@@ -134,7 +133,7 @@ def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
         missing_words = target_len - len(text)
         if missing_words > 0:
             text += [PAD_IDX] * missing_words
-        text = torch.tensor(text) # shape: n_words
+        text = torch.tensor(text) # shape: n_words # pylint: disable=not-callable
 
         texts.append(text) # shape: batch_size, n_words
 
@@ -158,7 +157,7 @@ def _flatten_gt_reports(reports):
         if missing_words > 0:
             text += [PAD_IDX] * missing_words
 
-        texts.append(torch.tensor(text))
+        texts.append(torch.tensor(text)) # pylint: disable=not-callable
 
     return pad_sequence(texts, batch_first=True)
 
@@ -166,7 +165,7 @@ def _flatten_gt_reports(reports):
 def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
                              device='cuda',
                              supervise_attention=False,
-                             max_words=50, max_sentences=20, **unused):
+                             max_words=50, max_sentences=20, **unused_kwargs):
     """Creates a step function for an Engine, considering a hierarchical dataloader."""
     word_loss_fn = nn.CrossEntropyLoss()
     stop_loss_fn = nn.BCELoss()
@@ -174,7 +173,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
 
     assert not (free and training), 'Cant set training=True and free=True'
 
-    def step_fn(engine, data_batch):
+    def step_fn(unused_engine, data_batch):
         # Images
         images = data_batch.images.to(device)
         # shape: batch_size, 3, height, width
@@ -198,15 +197,15 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
         # Pass thru the model
         output_tuple = model(images, reports, free=free,
                              max_words=max_words, max_sentences=max_sentences)
-        generated_words = output_tuple[0] # shape: batch_size, max_n_sentences, max_n_words, vocab_size
-        stop_prediction = output_tuple[1] # shape: batch_size, max_n_sentences
+        generated_words = output_tuple[0] # batch_size, max_n_sentences, max_n_words, vocab_size
+        stop_prediction = output_tuple[1] # batch_size, max_n_sentences
 
         if data_batch.masks is not None:
             gt_masks = data_batch.masks.to(device) # shape: batch_size, n_sentences, height, width
         else:
             gt_masks = None
 
-        gen_masks = output_tuple[2] # shape: batch_size, n_sentences, features-height, features-width
+        gen_masks = output_tuple[2] # batch_size, n_sentences, features-height, features-width
 
         if not free:
             # If free, outputs will have different sizes

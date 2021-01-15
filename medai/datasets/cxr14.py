@@ -1,14 +1,20 @@
+import os
+import json
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 from ignite.utils import to_onehot
 import pandas as pd
 from PIL import Image
-import os
-import json
-import random
 
-from medai.datasets.common import BatchItem, JSRT_ORGANS
+from medai.datasets.common import (
+    BatchItem,
+    JSRT_ORGANS,
+    ORGAN_BACKGROUND,
+    ORGAN_HEART,
+    ORGAN_LEFT_LUNG,
+    ORGAN_RIGHT_LUNG,
+)
 from medai.utils.images import get_default_image_transform
 
 CXR14_DISEASES = [
@@ -28,6 +34,14 @@ CXR14_DISEASES = [
     'Hernia',
 ]
 
+_DISEASE_TO_ORGAN = {
+    disease: (ORGAN_RIGHT_LUNG, ORGAN_LEFT_LUNG)
+    for disease in CXR14_DISEASES
+}
+_DISEASE_TO_ORGAN['Cardiomegaly'] = (ORGAN_HEART,)
+_DISEASE_TO_ORGAN['Hernia'] = (ORGAN_BACKGROUND, ORGAN_HEART, ORGAN_RIGHT_LUNG, ORGAN_LEFT_LUNG)
+
+
 DATASET_DIR = os.environ.get('DATASET_DIR_CXR14')
 
 _DATASET_MEAN = 0.5058
@@ -35,13 +49,16 @@ _DATASET_STD = 0.232
 
 class CXR14Dataset(Dataset):
     organs = list(JSRT_ORGANS)
+    _disease_to_organs = _DISEASE_TO_ORGAN
 
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
                  masks=False,
-                 **unused):
+                 **unused_kwargs):
+        super().__init__()
+
         if DATASET_DIR is None:
-            raise Exception(f'DATASET_DIR_CXR14 not found in env variables')
+            raise Exception('DATASET_DIR_CXR14 not found in env variables')
 
         self.dataset_type = dataset_type
         self.image_format = image_format
@@ -145,7 +162,7 @@ class CXR14Dataset(Dataset):
 
         image = self.transform(image)
 
-        masks = self.load_mask(image_name) if self.enable_masks else None
+        masks = self.load_mask(image_name) if self.enable_masks else -1
 
         # Load bboxes # REVIEW: precompute this?
         raw_bboxes = self.bboxes_by_image.get(image_name, {})
@@ -161,6 +178,7 @@ class CXR14Dataset(Dataset):
                 bboxes_valid.append(1)
                 bboxes.append(bbox)
 
+        # pylint: disable=not-callable
         bboxes_valid = torch.tensor(bboxes_valid).float()
         bboxes = torch.tensor(bboxes).float()
 
@@ -206,3 +224,27 @@ class CXR14Dataset(Dataset):
             target_label = self.labels[target_label]
 
         return list(enumerate(self.label_index[target_label]))
+
+    def reduce_masks_for_disease(self, label, sample_masks):
+        """Reduce a tensor of organ masks for a given disease
+
+        Args:
+            label -- disease (str)
+            sample_masks -- tensor of shape (*, n_organs, height, width)
+                Notice it may be masks for a batch (i.e. batch_size at front), or for one sample
+        """
+        # Get organ idxs
+        organs_idxs = torch.tensor([ # pylint: disable=not-callable
+            self.organs.index(organ_name)
+            for organ_name in self._disease_to_organs[label]
+        ]).to(sample_masks.device)
+
+        # Select organs
+        mask = sample_masks.index_select(dim=-3, index=organs_idxs)
+        # shape: *, n_selected_organs, height, width
+
+        # Add-up (assume sum wont be more than 1)
+        mask = mask.sum(dim=-3)
+        # shape: *, height, width
+
+        return mask

@@ -1,11 +1,11 @@
+import os
+import json
+import pandas as pd
+from PIL import Image
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 from ignite.utils import to_onehot
-from PIL import Image
-import os
-import json
-import pandas as pd
 
 from medai.datasets.common import BatchItem, CHEXPERT_LABELS, JSRT_ORGANS
 from medai.datasets.vocab import load_vocab
@@ -40,9 +40,11 @@ class IUXRayDataset(Dataset):
                  norm_by_sample=False,
                  image_format='RGB',
                  masks=False,
-                 vocab=None, recompute_vocab=False, **unused):
+                 vocab=None, recompute_vocab=False, **unused_kwargs):
+        super().__init__()
+
         if DATASET_DIR is None:
-            raise Exception(f'DATASET_DIR_IU_XRAY not found in env variables')
+            raise Exception('DATASET_DIR_IU_XRAY not found in env variables')
 
         if dataset_type not in _AVAILABLE_SPLITS:
             raise ValueError(f'No such type, must be in {_AVAILABLE_SPLITS}')
@@ -166,6 +168,7 @@ class IUXRayDataset(Dataset):
         organs = self._sentence_to_organ.get_organs(sentence)
         # shape: n_organs (one-hot encoded)
 
+        # pylint: disable=not-callable
         organ_indeces = torch.tensor([
             organ_idx
             for organ_idx, organ_presence in enumerate(organs)
@@ -189,7 +192,11 @@ class IUXRayDataset(Dataset):
         if IUXRayDataset._sentence_to_organ is None:
             fpath = os.path.join(self.reports_dir, 'sentences_with_organs.csv')
 
-            IUXRayDataset._sentence_to_organ = SentenceToOrgans(fpath, self.organs, self.get_vocab())
+            IUXRayDataset._sentence_to_organ = SentenceToOrgans(
+                fpath,
+                self.organs,
+                self.get_vocab()
+            )
 
     def _preprocess_reports(self, reports, sort_samples=True, vocab=None,
                             recompute_vocab=False, frontal_only=False):
@@ -253,7 +260,7 @@ class IUXRayDataset(Dataset):
 
         # Save in a more convenient storage for __getitem__
         self.labels_by_report = dict()
-        for index, row in self.labels_df.iterrows():
+        for _, row in self.labels_df.iterrows():
             filename = row['filename']
             labels = row[self.labels].to_numpy().astype(int)
 
@@ -262,6 +269,7 @@ class IUXRayDataset(Dataset):
             # if labels[1:-1].sum() == 0 and labels[0] == 0:
             #     labels[0] = 1
 
+            # pylint: disable=not-callable
             self.labels_by_report[filename] = torch.tensor(labels)
 
     def get_labels_presence_for(self, target_label):

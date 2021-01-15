@@ -6,15 +6,16 @@ from torch.nn.utils.rnn import pad_sequence
 from medai.datasets.common import BatchItems
 from medai.utils.nlp import END_IDX
 
-
 def create_flat_dataloader(dataset, include_masks=False, **kwargs):
     """Creates a dataloader from a images-report dataset, considering flat word sequences.
 
     Outputed reports have shape (batch_size, n_words)
     Adds END_TOKEN to the end of the sentences, and pads the output sequence.
 
-    The include_masks parameter is ignored, only there to comply with create_hierarchical_dataloader API (FIXME?)
+    The include_masks parameter is ignored, only there to comply
+    with create_hierarchical_dataloader API (FIXME?).
     """
+    # pylint: disable=unused-argument
     def _collate_fn(batch_tuples):
         images = []
         reports = []
@@ -22,7 +23,7 @@ def create_flat_dataloader(dataset, include_masks=False, **kwargs):
         for tup in batch_tuples:
             images.append(tup.image)
             report_fnames.append(tup.report_fname)
-            reports.append(torch.tensor(tup.report + [END_IDX]))
+            reports.append(torch.tensor(tup.report + [END_IDX])) # pylint: disable=not-callable
 
         images = torch.stack(images)
         reports = pad_sequence(reports, batch_first=True)
@@ -36,13 +37,13 @@ def create_flat_dataloader(dataset, include_masks=False, **kwargs):
 
 
 def get_step_fn_flat(model, optimizer=None, training=True, free=False,
-                     device='cuda', max_words=200, **unused):
+                     device='cuda', max_words=200, **unused_kwargs):
     """Creates a step function for an Engine."""
     loss_fn = nn.CrossEntropyLoss()
 
     assert not (free and training), 'Cant set training=True and free=True'
 
-    def step_fn(engine, data_batch):
+    def step_fn(unused_engine, data_batch):
         # Images
         images = data_batch.images.to(device)
         # shape: batch_size, 3, height, width
