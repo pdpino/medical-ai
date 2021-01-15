@@ -81,6 +81,7 @@ def divide_tensors(a, b):
 
     return a.true_divide(b)
 
+
 def divide_arrays(a, b):
     """Divide two np.arrays element-wise, avoiding NaN values in the result."""
     dont_use = b == 0
@@ -109,7 +110,7 @@ def parse_str_or_int(s):
     """Parses as int if possible, else str."""
     try:
         return int(s)
-    except:
+    except ValueError:
         return s
 
 
@@ -125,9 +126,30 @@ def print_hw_options(device, args):
     info_str = ' '.join(f'{k}={v}' for k, v in d.items())
     print(f'Using {info_str}')
 
+
 def config_logging():
     logging.basicConfig(
         level=logging.WARNING,
         format='%(levelname)s(%(asctime)s) %(message)s',
         datefmt='%m-%d %H:%M',
     )
+
+
+def timeit_main(logger):
+    """Times a main function."""
+    def wrapper(fn):
+        def wrapped(*args, **kwargs):
+            """Wraps the function with a timer."""
+            start_time = time.time()
+
+            result = fn(*args, **kwargs)
+
+            total_time = time.time() - start_time
+            logger.info('Total time: %s', duration_to_str(total_time))
+            logger.info('=' * 50)
+
+            return result
+
+        return wrapped
+
+    return wrapper

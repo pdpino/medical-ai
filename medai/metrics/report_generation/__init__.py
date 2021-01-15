@@ -46,7 +46,7 @@ def _attach_bleu(engine, up_to_n=4,
         bleu_n = MetricsLambda(operator.itemgetter(i), bleu_up_to_n)
         bleu_n.attach(engine, f'bleu{i+1}')
 
-    bleu_avg = MetricsLambda(lambda x: np.mean(x), bleu_up_to_n)
+    bleu_avg = MetricsLambda(np.mean, bleu_up_to_n)
     bleu_avg.attach(engine, 'bleu')
 
 
@@ -61,7 +61,9 @@ def attach_attention_vs_masks(engine):
                 ['gt_masks']: shape batch_size, n_sentences, original-height, original-width
                 ['gt_stops']: shape batch_size, n_sentences (optional)
 
-            Notice features-* sizes will probably be smaller than original-* sizes, as the former are extracted from the last layer of a CNN, and the latter are the original GT masks.
+            Notice features-* sizes will probably be smaller than original-* sizes,
+            as the former are extracted from the last layer of a CNN,
+            and the latter are the original GT masks.
 
         Returns:
             tuple with two (optional three) tensors

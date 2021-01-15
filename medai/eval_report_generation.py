@@ -100,6 +100,7 @@ def evaluate_run(run_name,
                 #  image_size=None,
                 #  norm_by_sample=None,
                  ):
+    """Evaluates a saved run."""
     # Load model
     compiled_model = load_compiled_model_report_generation(run_name,
                                                            debug=debug,
