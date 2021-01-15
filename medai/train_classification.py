@@ -28,6 +28,7 @@ from medai.models.checkpoint import (
     load_compiled_model_classification,
 )
 from medai.training.classification import get_step_fn
+from medai.training.classification.grad_cam import create_grad_cam_evaluator
 from medai.tensorboard import TBWriter
 from medai.utils import (
     get_timestamp,
@@ -70,6 +71,8 @@ def train_model(run_name,
                 n_epochs=1,
                 loss_name='wbce',
                 loss_kwargs={},
+                grad_cam=True,
+                grad_cam_thresh=0.5,
                 early_stopping=True,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
@@ -117,6 +120,17 @@ def train_model(run_name,
                                  device=device,
                                  ))
     attach_metrics_classification(trainer, labels, multilabel=multilabel)
+
+    if grad_cam:
+        create_grad_cam_evaluator(
+            trainer,
+            compiled_model,
+            [train_dataloader, val_dataloader],
+            tb_writer,
+            thresh=grad_cam_thresh,
+            device=device,
+            multiple_gpu=False,
+            )
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
@@ -259,6 +273,8 @@ def train_from_scratch(run_name,
                        batch_size=None,
                        norm_by_sample=False,
                        n_epochs=10,
+                       grad_cam=True,
+                       grad_cam_thresh=0.5,
                        early_stopping=True,
                        early_stopping_kwargs={},
                        lr_sch_metric='loss',
@@ -347,6 +363,7 @@ def train_from_scratch(run_name,
         'frontal_only': frontal_only,
         'num_workers': num_workers,
         'norm_by_sample': norm_by_sample,
+        'masks': grad_cam,
     }
     dataset_train_kwargs = {
         'shuffle': shuffle,
@@ -413,6 +430,8 @@ def train_from_scratch(run_name,
         'early_stopping': early_stopping,
         'early_stopping_kwargs': early_stopping_kwargs,
         'lr_sch_metric': lr_sch_metric,
+        'grad_cam': grad_cam,
+        'grad_cam_thresh': grad_cam_thresh,
     }
 
 
@@ -508,6 +527,12 @@ def parse_args():
                               help='If present, normalize each sample \
                                     (instead of using dataset stats)')
 
+    grad_cam_group = parser.add_argument_group('Grad-CAM evaluation params')
+    grad_cam_group.add_argument('--grad-cam', action='store_true',
+                              help='Evaluate grad-cam vs masks')
+    grad_cam_group.add_argument('--grad-cam-thresh', type=float, default=0.5,
+                              help='Threshold to apply to activations')
+
     parsers.add_args_augment(parser)
 
     sampl_group = parser.add_argument_group('Data sampling params')
@@ -540,6 +565,10 @@ def parse_args():
             parser.error('A dataset must be selected')
         if args.model is None:
             parser.error('A model must be selected')
+
+    if args.grad_cam:
+        if not args.frontal_only:
+            parser.error('If grad_cam, frontal_only must be True')
 
 
     # Build loss params
@@ -609,6 +638,8 @@ if __name__ == '__main__':
             batch_size=ARGS.batch_size,
             norm_by_sample=ARGS.norm_by_sample,
             n_epochs=ARGS.epochs,
+            grad_cam=ARGS.grad_cam,
+            grad_cam_thresh=ARGS.grad_cam_thresh,
             early_stopping=ARGS.early_stopping,
             early_stopping_kwargs=ARGS.early_stopping_kwargs,
             lr_sch_metric=ARGS.lr_metric,

@@ -2,7 +2,7 @@
 import time
 import logging
 import numbers
-from ignite.engine import Engine, Events
+from ignite.engine import Events
 from ignite.handlers import EarlyStopping
 
 from medai.utils import duration_to_str
@@ -14,6 +14,7 @@ def _prettify(value):
     if isinstance(value, numbers.Number):
         return str(round(value, 4))
     return value
+
 
 def attach_log_metrics(trainer,
                        validator,
@@ -55,13 +56,11 @@ def attach_log_metrics(trainer,
             for metric in print_metrics
         )
 
-        duration = duration_to_str(timer._elapsed())
+        duration = duration_to_str(timer._elapsed()) # pylint: disable=protected-access
 
         logger.info(f'Finished epoch {epoch}/{max_epochs}, {metrics_str}, {duration}')
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, log_metrics)
-
-    return
 
 
 def attach_early_stopping(trainer,
@@ -73,8 +72,11 @@ def attach_early_stopping(trainer,
     """Attaches an early stopping handler to a trainer.
 
     NOTEs:
-        - The handler should be attached after every other handler, so those will get executed completely
-        - The handler is attached to the trainer, not the validator (as in most examples), so the stop signal is sent at the very end of the epoch (i.e. after every handler is run), and not after the `validator.run(...)` is run.
+        - The handler should be attached after every other handler,
+        so those will get executed completely
+        - The handler is attached to the trainer, not the validator (as in most examples),
+        so the stop signal is sent at the very end of the epoch (i.e. after every handler is run),
+        and not after the `validator.run(...)` is run.
     """
     # Set early-stopping to info level
     es_logger = logging.getLogger('ignite.handlers.early_stopping.EarlyStopping')
@@ -101,7 +103,7 @@ def attach_lr_scheduler_handler(lr_scheduler,
                                 target_metric='loss',
                                 ):
     """Attaches a callback that updates the lr_scheduler."""
-    def update_scheduler(unused):
+    def update_scheduler(unused_engine):
         val_metrics = validator.state.metrics
         lr_scheduler.step(val_metrics[target_metric])
 

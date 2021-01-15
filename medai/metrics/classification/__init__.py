@@ -1,5 +1,5 @@
 from functools import reduce
-
+import operator
 import torch
 from torch.nn.functional import binary_cross_entropy
 from ignite.metrics import (
@@ -37,7 +37,8 @@ def _get_transform_one_label(label_index, use_round=True):
             y_pred shape: batch_size
             y_true shape: batch_size
         """
-        _, y_pred, y_true = output
+        y_pred = output['pred_labels']
+        y_true = output['gt_labels']
 
         y_pred = y_pred[:, label_index]
         y_true = y_true[:, label_index]
@@ -66,7 +67,8 @@ def _get_transform_one_class(label_index):
             y_pred shape: batch_size
             y_true shape: batch_size
         """
-        _, y_pred, y_true = output
+        y_pred = output['pred_labels']
+        y_true = output['gt_labels']
 
         _, y_pred = y_pred.max(dim=1)
         y_pred = (y_pred == label_index).long()
@@ -98,7 +100,8 @@ def _get_transform_cm_multilabel(label_index):
             y_pred shape: batch_size, n_classes (one-hot)
             y_true shape: batch_size
         """
-        _, y_pred, y_true = output
+        y_pred = output['pred_labels']
+        y_true = output['gt_labels']
 
         y_pred = torch.round(y_pred[:, label_index]).long()
         y_pred = to_onehot(y_pred, n_classes)
@@ -136,23 +139,25 @@ def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
 
 def _transform_remove_loss(output):
     """Simple transform to remove the loss from the output."""
-    _, y_pred, y_true = output
+    y_pred = output['pred_labels']
+    y_true = output['gt_labels']
     return y_pred, y_true
 
 
 def _transform_remove_loss_and_round(output):
     """Simple transform to remove the loss from the output."""
-    _, y_pred, y_true = output
+    y_pred = output['pred_labels']
+    y_true = output['gt_labels']
     return torch.round(y_pred), y_true
 
 
-def attach_metrics_classification(engine, labels, multilabel=True, include_cm=False):
+def attach_metrics_classification(engine, labels, multilabel=True):
     """Attach classification metrics to an engine, to use during training.
 
     Note: most multilabel metrics are treated as binary,
         i.e. the metrics are computed separately for each label.
     """
-    loss = RunningAverage(output_transform=lambda x: x[0], alpha=1)
+    loss = RunningAverage(output_transform=operator.itemgetter('loss'), alpha=1)
     loss.attach(engine, 'loss')
 
     if multilabel:
@@ -184,6 +189,7 @@ def attach_metrics_classification(engine, labels, multilabel=True, include_cm=Fa
                            get_transform_fn=_get_transform_one_class)
         _attach_binary_metrics(engine, labels, 'spec', Specificity,
                            get_transform_fn=_get_transform_one_class)
+
 
 def attach_metric_cm(engine, labels, multilabel=True):
     """Attach ConfusionMatrix metrics to an engine.

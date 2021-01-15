@@ -1,6 +1,7 @@
 import os
 import json
 import torch
+import logging
 from torch.utils.data import Dataset
 from torchvision import transforms
 from ignite.utils import to_onehot
@@ -9,47 +10,31 @@ from PIL import Image
 
 from medai.datasets.common import (
     BatchItem,
+    CXR14_DISEASES,
     JSRT_ORGANS,
-    ORGAN_BACKGROUND,
-    ORGAN_HEART,
-    ORGAN_LEFT_LUNG,
-    ORGAN_RIGHT_LUNG,
 )
 from medai.utils.images import get_default_image_transform
-
-CXR14_DISEASES = [
-    'Atelectasis',
-    'Cardiomegaly',
-    'Effusion',
-    'Infiltration',
-    'Mass',
-    'Nodule',
-    'Pneumonia',
-    'Pneumothorax',
-    'Consolidation',
-    'Edema',
-    'Emphysema',
-    'Fibrosis',
-    'Pleural_Thickening',
-    'Hernia',
-]
-
-_DISEASE_TO_ORGAN = {
-    disease: (ORGAN_RIGHT_LUNG, ORGAN_LEFT_LUNG)
-    for disease in CXR14_DISEASES
-}
-_DISEASE_TO_ORGAN['Cardiomegaly'] = (ORGAN_HEART,)
-_DISEASE_TO_ORGAN['Hernia'] = (ORGAN_BACKGROUND, ORGAN_HEART, ORGAN_RIGHT_LUNG, ORGAN_LEFT_LUNG)
-
 
 DATASET_DIR = os.environ.get('DATASET_DIR_CXR14')
 
 _DATASET_MEAN = 0.5058
 _DATASET_STD = 0.232
 
+_ORIGINAL_IMAGE_SIZE = 1024
+
+def _calculate_bbox_scale(image_size):
+    height, width = image_size
+    if height == width:
+        return _ORIGINAL_IMAGE_SIZE // height
+
+    scale_height = _ORIGINAL_IMAGE_SIZE / height
+    scale_width = _ORIGINAL_IMAGE_SIZE / width
+
+    return torch.tensor((scale_height, scale_width, scale_height, scale_width)) # pylint: disable=not-callable
+
+
 class CXR14Dataset(Dataset):
     organs = list(JSRT_ORGANS)
-    _disease_to_organs = _DISEASE_TO_ORGAN
 
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
@@ -120,6 +105,11 @@ class CXR14Dataset(Dataset):
         available_images = set(split_images).intersection(set(os.listdir(self.image_dir)))
         available_images = set(self.label_index['FileName']).intersection(available_images)
 
+        if len(split_images) > len(available_images):
+            missing_images = set(split_images) - available_images
+            logging.warning('Warning: %s images are not available:\n%s',
+                            len(missing_images), missing_images)
+
         # Keep only max_samples images
         if max_samples:
             available_images = set(list(available_images)[:max_samples])
@@ -134,6 +124,9 @@ class CXR14Dataset(Dataset):
                 transforms.Resize(image_size),
                 transforms.ToTensor(),
             ])
+
+        self.bbox_scale = _calculate_bbox_scale(self.image_size)
+
 
     def __len__(self):
         n_samples, _ = self.label_index.shape
@@ -164,7 +157,21 @@ class CXR14Dataset(Dataset):
 
         masks = self.load_mask(image_name) if self.enable_masks else -1
 
-        # Load bboxes # REVIEW: precompute this?
+        bboxes, bboxes_valid = self.get_bboxes(image_name)
+
+        return BatchItem(
+            image=image,
+            labels=labels,
+            masks=masks,
+            bboxes=bboxes,
+            bboxes_valid=bboxes_valid,
+            image_fname=image_name,
+        )
+
+    def get_bboxes(self, image_name):
+        # REVIEW: precompute this?
+
+        # Load raw bboxes
         raw_bboxes = self.bboxes_by_image.get(image_name, {})
         bboxes = []
         bboxes_valid = []
@@ -179,17 +186,10 @@ class CXR14Dataset(Dataset):
                 bboxes.append(bbox)
 
         # pylint: disable=not-callable
-        bboxes_valid = torch.tensor(bboxes_valid).float()
-        bboxes = torch.tensor(bboxes).float()
+        bboxes_valid = torch.tensor(bboxes_valid).float() # shape: n_labels
+        bboxes = (torch.tensor(bboxes) / self.bbox_scale).float() # shape: n_labels, 4
 
-        return BatchItem(
-            image=image,
-            labels=labels,
-            masks=masks,
-            bboxes=bboxes,
-            bboxes_valid=bboxes_valid,
-            image_fname=image_name,
-        )
+        return bboxes, bboxes_valid
 
     def load_mask(self, image_name):
         if not self.enable_masks:
@@ -224,27 +224,3 @@ class CXR14Dataset(Dataset):
             target_label = self.labels[target_label]
 
         return list(enumerate(self.label_index[target_label]))
-
-    def reduce_masks_for_disease(self, label, sample_masks):
-        """Reduce a tensor of organ masks for a given disease
-
-        Args:
-            label -- disease (str)
-            sample_masks -- tensor of shape (*, n_organs, height, width)
-                Notice it may be masks for a batch (i.e. batch_size at front), or for one sample
-        """
-        # Get organ idxs
-        organs_idxs = torch.tensor([ # pylint: disable=not-callable
-            self.organs.index(organ_name)
-            for organ_name in self._disease_to_organs[label]
-        ]).to(sample_masks.device)
-
-        # Select organs
-        mask = sample_masks.index_select(dim=-3, index=organs_idxs)
-        # shape: *, n_selected_organs, height, width
-
-        # Add-up (assume sum wont be more than 1)
-        mask = mask.sum(dim=-3)
-        # shape: *, height, width
-
-        return mask

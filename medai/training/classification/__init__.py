@@ -42,6 +42,10 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
             # NOTE: multilabel metrics assume output is sigmoided
             outputs = torch.sigmoid(outputs)
 
-        return batch_loss, outputs, labels
+        return {
+            'loss': batch_loss,
+            'pred_labels': outputs,
+            'gt_labels': labels,
+        }
 
     return step_fn

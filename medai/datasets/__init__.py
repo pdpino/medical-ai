@@ -65,6 +65,11 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
     assert dataset_name in _CL_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _CL_DATASETS[dataset_name]
 
+    if kwargs.get('masks', False):
+        if dataset_name not in ('cxr14', 'iu-x-ray'):
+            raise NotImplementedError(f'Dataset {dataset_name} does not have \
+                                        masks yet (masks=True)')
+
     dataset = DatasetClass(dataset_type=dataset_type,
                            labels=labels,
                            image_size=image_size,

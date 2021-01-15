@@ -101,3 +101,29 @@ def get_default_image_transform(image_size=(512, 512),
         transforms.ToTensor(),
         norm_transform,
     ])
+
+
+def bbox_coordinates_to_map(bboxes, valid, image_size):
+    """Transform bbox (x,y,w,h) pairs to binary maps.
+
+    Args:
+      bboxes - tensor of shape (batch_size, n_diseases, 4)
+      valid - tensor of shape (batch_size, n_diseases)
+    Returns:
+      tensor of shape (batch_size, n_diseases, height, width)
+    """
+    batch_size, n_labels = valid.size()
+    bboxes_map = torch.zeros(batch_size, n_labels, *image_size).to(bboxes.device)
+
+    for i_batch in range(batch_size):
+        for j_label in range(n_labels):
+            if valid[i_batch, j_label].item() == 0:
+                continue
+
+            min_x, min_y, width, height = bboxes[i_batch, j_label].tolist()
+            max_x = min_x + width
+            max_y = min_y + height
+
+            bboxes_map[i_batch, j_label, min_y:max_y, min_x:max_x] = 1
+
+    return bboxes_map
