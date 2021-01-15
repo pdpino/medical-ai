@@ -32,7 +32,7 @@ from medai.utils import (
 
 
 config_logging()
-LOGGER = logging.getLogger('rg')
+LOGGER = logging.getLogger('rg-eval')
 LOGGER.setLevel(logging.INFO)
 
 

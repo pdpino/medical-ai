@@ -1,33 +1,71 @@
-import time
 import argparse
-import os
+import logging
 from pprint import pprint
 
 import torch
+from ignite.engine import Engine
 
-from medai.datasets import (
-    prepare_data_classification,
-    AVAILABLE_CLASSIFICATION_DATASETS,
+from medai.datasets import prepare_data_classification
+from medai.losses import get_loss_function
+from medai.metrics import save_results
+from medai.metrics.classification import (
+    attach_metrics_classification,
+    attach_metric_cm,
 )
 from medai.models.checkpoint import load_compiled_model_classification
-from medai.train_classification import evaluate_and_save
-from medai.utils import get_timestamp, duration_to_str
+from medai.training.classification import get_step_fn
+from medai.utils import (
+    print_hw_options,
+    parsers,
+    config_logging,
+    timeit_main,
+)
 
 
-def run_evaluation(run_name,
-                   dataset_name,
-                   eval_in=['train', 'val', 'test'],
-                   max_samples=None,
-                   batch_size=10,
+config_logging()
+LOGGER = logging.getLogger('cl-eval')
+LOGGER.setLevel(logging.INFO)
+
+
+def evaluate_model(model,
+                   dataloader,
+                   loss_name='wbce',
+                   loss_kwargs={},
                    n_epochs=1,
-                   frontal_only=False,
-                   labels=None,
-                   norm_by_sample=False,
-                   image_size=512,
-                   debug=True,
-                   multiple_gpu=False,
-                   device='cuda',
-                   ):
+                   device='cuda'):
+    """Evaluate a classification model on a dataloader."""
+    if dataloader is None:
+        return {}
+
+    LOGGER.info('Evaluating model in %s...', dataloader.dataset.dataset_type)
+    loss = get_loss_function(loss_name, **loss_kwargs)
+
+    labels = dataloader.dataset.labels
+    multilabel = dataloader.dataset.multilabel
+
+    engine = Engine(get_step_fn(model,
+                                loss,
+                                training=False,
+                                multilabel=multilabel,
+                                device=device,
+                               ))
+    attach_metrics_classification(engine, labels, multilabel=multilabel)
+    attach_metric_cm(engine, labels, multilabel=multilabel)
+
+    engine.run(dataloader, n_epochs)
+
+    return engine.state.metrics
+
+
+@timeit_main(LOGGER)
+def evaluate_run(run_name,
+                 dataset_types=['train', 'val', 'test'],
+                 n_epochs=1,
+                 max_samples=None,
+                 debug=True,
+                 multiple_gpu=False,
+                 device='cuda',
+                 ):
     """Evaluate a model."""
     # Load model
     compiled_model = load_compiled_model_classification(run_name,
@@ -39,19 +77,13 @@ def run_evaluation(run_name,
     metadata = compiled_model.metadata
 
     # Load data
-    dataset_kwargs = {
-        'dataset_name': dataset_name,
-        'labels': labels,
-        'max_samples': max_samples,
-        'batch_size': batch_size,
-        'image_size': (image_size, image_size),
-        'frontal_only': frontal_only,
-        'norm_by_sample': norm_by_sample,
-    }
+    dataset_kwargs = metadata['dataset_kwargs']
+    if max_samples is not None:
+        dataset_kwargs['max_samples'] = max_samples
 
     dataloaders = [
         prepare_data_classification(dataset_type=dataset_type, **dataset_kwargs)
-        for dataset_type in eval_in
+        for dataset_type in dataset_types
     ]
 
     # Load stuff from metadata
@@ -60,20 +92,26 @@ def run_evaluation(run_name,
     loss_kwargs = hparams.get('loss_kwargs', {})
 
     # Evaluate
-    suffix = f'{dataset_name}_size{image_size}'
-    if frontal_only:
-        suffix += '_frontal'
+    eval_kwargs = {
+        'loss_name': loss_name,
+        'loss_kwargs': loss_kwargs,
+        'device': device,
+        'n_epochs': n_epochs,
+    }
 
-    metrics = evaluate_and_save(run_name,
-                                compiled_model.model,
-                                dataloaders,
-                                loss_name,
-                                loss_kwargs=loss_kwargs,
-                                suffix=suffix,
-                                debug=debug,
-                                device=device)
+    metrics = {}
+
+    for dataloader in dataloaders:
+        if dataloader is None:
+            continue
+        dataset_type = dataloader.dataset.dataset_type
+        metrics[dataset_type] = evaluate_model(compiled_model.model, dataloader, **eval_kwargs)
+
+    save_results(metrics, run_name, task='cls', debug=debug)
 
     pprint(metrics)
+
+    return metrics
 
 
 def parse_args():
@@ -81,31 +119,16 @@ def parse_args():
 
     parser.add_argument('--run-name', type=str, default=None, required=True,
                         help='Run-name to load')
-    parser.add_argument('-d', '--dataset', type=str, default=None, required=True,
-                        choices=AVAILABLE_CLASSIFICATION_DATASETS,
-                        help='Choose dataset to evaluate on')
     parser.add_argument('--eval-in', nargs='*', default=['test', 'train', 'val'],
                         help='Eval in datasets')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
-    parser.add_argument('-bs', '--batch_size', type=int, default=10,
-                        help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
-    parser.add_argument('--image-size', type=int, default=512,
-                        help='Image size in pixels')
-    parser.add_argument('--labels', type=str, nargs='*', default=None,
-                        help='Subset of labels')
-    parser.add_argument('--frontal-only', action='store_true',
-                        help='Use only frontal images')
-    parser.add_argument('--norm-by-sample', action='store_true',
-                        help='If present, normalize each sample (instead of using dataset stats)')
-    parser.add_argument('--multiple-gpu', action='store_true',
-                        help='Use multiple gpus')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
-    parser.add_argument('--cpu', action='store_true',
-                        help='Use CPU only')
+
+    parsers.add_args_hw(parser)
 
     args = parser.parse_args()
 
@@ -113,29 +136,17 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    ARGS = parse_args()
 
-    device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() and not ARGS.cpu else 'cpu')
 
-    _CUDA_AVAIL = os.environ.get('CUDA_VISIBLE_DEVICES', '')
-    print('Using device: ', device, _CUDA_AVAIL)
+    print_hw_options(DEVICE, ARGS)
 
-    start_time = time.time()
-
-    run_evaluation(args.run_name,
-                   args.dataset,
-                   eval_in=args.eval_in,
-                   max_samples=args.max_samples,
-                   batch_size=args.batch_size,
-                   frontal_only=args.frontal_only,
-                   n_epochs=args.epochs,
-                   labels=args.labels,
-                   image_size=args.image_size,
-                   norm_by_sample=args.norm_by_sample,
-                   debug=not args.no_debug,
-                   multiple_gpu=args.multiple_gpu,
-                   device=device,
-                   )
-
-    total_time = time.time() - start_time
-    print(f'Total time: {duration_to_str(total_time)}')
+    evaluate_run(ARGS.run_name,
+                 dataset_types=ARGS.eval_in,
+                 max_samples=ARGS.max_samples,
+                 n_epochs=ARGS.epochs,
+                 debug=not ARGS.no_debug,
+                 multiple_gpu=ARGS.multiple_gpu,
+                 device=DEVICE,
+                )

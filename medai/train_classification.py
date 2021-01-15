@@ -1,6 +1,4 @@
-import time
 import argparse
-import os
 import logging
 
 import torch
@@ -15,11 +13,7 @@ from medai.datasets import (
     AVAILABLE_CLASSIFICATION_DATASETS,
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES
-from medai.metrics import save_results
-from medai.metrics.classification import (
-    attach_metrics_classification,
-    attach_metric_cm,
-)
+from medai.metrics.classification import attach_metrics_classification
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.classification import (
     create_cnn,
@@ -33,6 +27,7 @@ from medai.models.checkpoint import (
     # load_metadata,
     load_compiled_model_classification,
 )
+from medai.training.classification import get_step_fn
 from medai.tensorboard import TBWriter
 from medai.utils import (
     get_timestamp,
@@ -41,6 +36,7 @@ from medai.utils import (
     print_hw_options,
     parsers,
     config_logging,
+    timeit_main,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -49,7 +45,6 @@ from medai.utils.handlers import (
 )
 
 config_logging()
-
 LOGGER = logging.getLogger('cl')
 LOGGER.setLevel(logging.INFO)
 
@@ -66,83 +61,6 @@ def _choose_print_metrics(dataset_name, additional=None):
         print_metrics += [m for m in additional if m not in print_metrics]
 
     return print_metrics
-
-
-def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, device='cuda'):
-    """Creates a step function for an Engine."""
-    def step_fn(engine, data_batch):
-        # Move inputs to GPU
-        images = data_batch.image.to(device)
-        # shape: batch_size, channels=3, height, width
-
-        labels = data_batch.labels.to(device)
-        # shape(multilabel=True): batch_size, n_labels
-        # shape(multilabel=False): batch_size
-
-        # Enable training
-        model.train(training)
-        torch.set_grad_enabled(training)
-
-        # zero the parameter gradients
-        if training:
-            optimizer.zero_grad()
-
-        # Forward
-        output_tuple = model(images)
-        outputs = output_tuple[0]
-        # shape: batch_size, n_labels
-
-        if multilabel:
-            labels = labels.float()
-        else:
-            labels = labels.long()
-
-        # Compute classification loss
-        loss = loss_fn(outputs, labels)
-
-        batch_loss = loss.item()
-
-        if training:
-            loss.backward()
-            optimizer.step()
-
-        if multilabel:
-            # NOTE: multilabel metrics assume output is sigmoided
-            outputs = torch.sigmoid(outputs)
-
-        return batch_loss, outputs, labels
-
-    return step_fn
-
-
-def evaluate_model(model,
-                   dataloader,
-                   loss_name='wbce',
-                   loss_kwargs={},
-                   n_epochs=1,
-                   device='cuda'):
-    """Evaluate a classification model on a dataloader."""
-    if dataloader is None:
-        return {}
-
-    print(f'Evaluating model in {dataloader.dataset.dataset_type}...')
-    loss = get_loss_function(loss_name, **loss_kwargs)
-
-    labels = dataloader.dataset.labels
-    multilabel = dataloader.dataset.multilabel
-
-    engine = Engine(get_step_fn(model,
-                                loss,
-                                training=False,
-                                multilabel=multilabel,
-                                device=device,
-                               ))
-    attach_metrics_classification(engine, labels, multilabel=multilabel)
-    attach_metric_cm(engine, labels, multilabel=multilabel)
-
-    engine.run(dataloader, n_epochs)
-
-    return engine.state.metrics
 
 
 def train_model(run_name,
@@ -162,11 +80,11 @@ def train_model(run_name,
                 device='cuda',
                 ):
     # Prepare run
-    print('Training run: ', run_name)
+    LOGGER.info('Training run: %s', run_name)
     tb_writer = TBWriter(run_name, task='cls', debug=debug, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
-        print('Resuming from epoch: ', initial_epoch)
+        LOGGER.info('Resuming from epoch: %s', initial_epoch)
 
     # Unwrap stuff
     model, optimizer, lr_scheduler = compiled_model.get_elements()
@@ -179,7 +97,7 @@ def train_model(run_name,
     if loss_name == 'focal':
         loss_kwargs['multilabel'] = multilabel
     loss = get_loss_function(loss_name, **loss_kwargs)
-    print('Using loss: ', loss_name, loss_kwargs)
+    LOGGER.info('Using loss: %s, %s', loss_name, loss_kwargs)
 
     # Create validator engine
     validator = Engine(get_step_fn(model,
@@ -233,56 +151,26 @@ def train_model(run_name,
         attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
 
     # Train!
-    print('-' * 50)
-    print('Training...')
+    LOGGER.info('-' * 50)
+    LOGGER.info('Training...')
     trainer.run(train_dataloader, n_epochs)
 
     # Capture time per epoch
     secs_per_epoch = timer.value()
-    duration_per_epoch = duration_to_str(secs_per_epoch)
-    print('Average time per epoch: ', duration_per_epoch)
-    print('-'*50)
+    LOGGER.info('Average time per epoch: %s', duration_to_str(secs_per_epoch))
+    LOGGER.info('-'*50)
 
     tb_writer.close()
 
     return trainer.state.metrics, validator.state.metrics
 
 
-def evaluate_and_save(run_name,
-                      model,
-                      dataloaders,
-                      loss_name,
-                      loss_kwargs={},
-                      suffix='',
-                      debug=True,
-                      device='cuda',
-                      ):
-    """Evaluates a model on multiple dataloaders."""
-    kwargs = {
-        'loss_name': loss_name,
-        'loss_kwargs': loss_kwargs,
-        'device': device,
-    }
-
-    metrics = {}
-
-    for dataloader in dataloaders:
-        if dataloader is None:
-            continue
-        name = dataloader.dataset.dataset_type
-        metrics[name] = evaluate_model(model, dataloader, **kwargs)
-
-    save_results(metrics, run_name, task='cls', debug=debug, suffix=suffix)
-
-    return metrics
-
-
+@timeit_main(LOGGER)
 def resume_training(run_name,
                     max_samples=None,
                     n_epochs=10,
                     lr=None,
                     batch_size=None,
-                    post_evaluation=True,
                     print_metrics=None,
                     tb_kwargs={},
                     debug=True,
@@ -332,7 +220,7 @@ def resume_training(run_name,
     if lr is not None:
         # FIXME: delete this hack??
         old_lr = metadata['opt_kwargs']['lr']
-        print(f'Changing learning rate to {lr}, was {old_lr}')
+        LOGGER.info('Changing learning rate to %s, was %s', lr, old_lr)
         for param_group in compiled_model.optimizer.param_groups:
             param_group['lr'] = lr
 
@@ -349,27 +237,10 @@ def resume_training(run_name,
                 **other_train_kwargs,
                 )
 
-    print('Finished training: ', run_name)
-
-    if post_evaluation:
-        test_dataloader = prepare_data_classification(dataset_type='test',
-                                                      **metadata['dataset_kwargs'])
-
-        dataloaders = [
-            train_dataloader,
-            val_dataloader,
-            test_dataloader,
-        ]
-
-        evaluate_and_save(run_name,
-                          compiled_model.model,
-                          dataloaders,
-                          loss_name,
-                          loss_kwargs=loss_kwargs,
-                          debug=debug,
-                          device=device)
+    LOGGER.info('Finished training: %s', run_name)
 
 
+@timeit_main(LOGGER)
 def train_from_scratch(run_name,
                        dataset_name,
                        shuffle=False,
@@ -406,7 +277,6 @@ def train_from_scratch(run_name,
                        augment_times=1,
                        augment_kwargs={},
                        tb_kwargs={},
-                       post_evaluation=True,
                        debug=True,
                        multiple_gpu=False,
                        num_workers=2,
@@ -581,24 +451,7 @@ def train_from_scratch(run_name,
                 **other_train_kwargs,
                 )
 
-    print('Finished training: ', run_name)
-
-    if post_evaluation:
-        test_dataloader = prepare_data_classification(dataset_type='test', **dataset_kwargs)
-
-        dataloaders = [
-            train_dataloader,
-            val_dataloader,
-            test_dataloader,
-        ]
-
-        evaluate_and_save(run_name,
-                          compiled_model.model,
-                          dataloaders,
-                          loss_name,
-                          loss_kwargs=loss_kwargs,
-                          debug=debug,
-                          device=device)
+    LOGGER.info('Finished training: %s', run_name)
 
 
 def parse_args():
@@ -623,8 +476,6 @@ def parse_args():
                         help='Additional metrics to print to stdout')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
-    parser.add_argument('--no-eval', action='store_true',
-                        help='If present, dont run post-evaluation')
 
     cnn_group = parser.add_argument_group('CNN params')
     cnn_group.add_argument('-m', '--model', type=str, default=None,
@@ -654,7 +505,8 @@ def parse_args():
     images_group.add_argument('--frontal-only', action='store_true',
                               help='Use only frontal images')
     images_group.add_argument('--norm-by-sample', action='store_true',
-                              help='If present, normalize each sample (instead of using dataset stats)')
+                              help='If present, normalize each sample \
+                                    (instead of using dataset stats)')
 
     parsers.add_args_augment(parser)
 
@@ -671,7 +523,8 @@ def parse_args():
                              help='Max ratio to oversample by')
 
     sampl_group.add_argument('-us', '--undersample', default=None,
-                             help='Undersample from the majority class with a given label (str/int)')
+                             help='Undersample from the majority class \
+                                   with a given label (str/int)')
 
     parsers.add_args_tb(parser)
     parsers.add_args_early_stopping(parser, metric='acc')
@@ -683,8 +536,10 @@ def parse_args():
 
     # If training from scratch, require dataset and model
     if not args.resume:
-        if args.dataset is None: parser.error('A dataset must be selected')
-        if args.model is None: parser.error('A model must be selected')
+        if args.dataset is None:
+            parser.error('A dataset must be selected')
+        if args.model is None:
+            parser.error('A model must be selected')
 
 
     # Build loss params
@@ -704,7 +559,6 @@ def parse_args():
 
     # Shortcuts
     args.debug = not args.no_debug
-    args.post_evaluation = not args.no_eval
 
     # Build params
     parsers.build_args_early_stopping_(args)
@@ -716,74 +570,64 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    ARGS = parse_args()
 
-    if args.num_threads > 0:
-        torch.set_num_threads(args.num_threads)
+    if ARGS.num_threads > 0:
+        torch.set_num_threads(ARGS.num_threads)
 
-    device = torch.device('cuda' if not args.cpu and torch.cuda.is_available() else 'cpu')
+    DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
 
-    print_hw_options(device, args)
+    print_hw_options(DEVICE, ARGS)
 
-    start_time = time.time()
-
-    if args.resume:
-        resume_training(args.resume,
-                        max_samples=args.max_samples,
-                        n_epochs=args.epochs,
-                        lr=args.learning_rate,
-                        batch_size=args.batch_size,
-                        print_metrics=args.print_metrics,
-                        post_evaluation=args.post_evaluation,
-                        tb_kwargs=args.tb_kwargs,
-                        debug=args.debug,
-                        multiple_gpu=args.multiple_gpu,
-                        device=device)
+    if ARGS.resume:
+        resume_training(ARGS.resume,
+                        max_samples=ARGS.max_samples,
+                        n_epochs=ARGS.epochs,
+                        lr=ARGS.learning_rate,
+                        batch_size=ARGS.batch_size,
+                        print_metrics=ARGS.print_metrics,
+                        tb_kwargs=ARGS.tb_kwargs,
+                        debug=ARGS.debug,
+                        multiple_gpu=ARGS.multiple_gpu,
+                        device=DEVICE)
     else:
-        run_name = get_timestamp()
-
-        train_from_scratch(run_name,
-            args.dataset,
-            shuffle=args.shuffle,
-            cnn_name=args.model,
-            imagenet=not args.no_imagenet,
-            freeze=args.freeze,
-            cnn_pooling=args.cnn_pooling,
-            fc_layers=args.fc_layers,
-            max_samples=args.max_samples,
-            image_size=args.image_size,
-            loss_name=args.loss_name,
-            loss_kwargs=args.loss_kwargs,
-            print_metrics=args.print_metrics,
-            labels=args.labels,
-            lr=args.learning_rate,
-            batch_size=args.batch_size,
-            norm_by_sample=args.norm_by_sample,
-            n_epochs=args.epochs,
-            early_stopping=args.early_stopping,
-            early_stopping_kwargs=args.early_stopping_kwargs,
-            lr_sch_metric=args.lr_metric,
-            lr_sch_kwargs=args.lr_sch_kwargs,
-            oversample=args.oversample is not None,
-            oversample_label=args.oversample,
-            oversample_class=args.os_class,
-            oversample_ratio=args.os_ratio,
-            oversample_max_ratio=args.os_max_ratio,
-            augment=args.augment,
-            augment_label=args.augment_label,
-            augment_class=args.augment_class,
-            augment_times=args.augment_times,
-            augment_kwargs=args.augment_kwargs,
-            undersample=args.undersample is not None,
-            undersample_label=args.undersample,
-            post_evaluation=args.post_evaluation,
-            debug=args.debug,
-            tb_kwargs=args.tb_kwargs,
-            multiple_gpu=args.multiple_gpu,
-            num_workers=args.num_workers,
-            device=device,
+        train_from_scratch(get_timestamp(),
+            ARGS.dataset,
+            shuffle=ARGS.shuffle,
+            cnn_name=ARGS.model,
+            imagenet=not ARGS.no_imagenet,
+            freeze=ARGS.freeze,
+            cnn_pooling=ARGS.cnn_pooling,
+            fc_layers=ARGS.fc_layers,
+            max_samples=ARGS.max_samples,
+            image_size=ARGS.image_size,
+            loss_name=ARGS.loss_name,
+            loss_kwargs=ARGS.loss_kwargs,
+            print_metrics=ARGS.print_metrics,
+            labels=ARGS.labels,
+            lr=ARGS.learning_rate,
+            batch_size=ARGS.batch_size,
+            norm_by_sample=ARGS.norm_by_sample,
+            n_epochs=ARGS.epochs,
+            early_stopping=ARGS.early_stopping,
+            early_stopping_kwargs=ARGS.early_stopping_kwargs,
+            lr_sch_metric=ARGS.lr_metric,
+            lr_sch_kwargs=ARGS.lr_sch_kwargs,
+            oversample=ARGS.oversample is not None,
+            oversample_label=ARGS.oversample,
+            oversample_class=ARGS.os_class,
+            oversample_ratio=ARGS.os_ratio,
+            oversample_max_ratio=ARGS.os_max_ratio,
+            augment=ARGS.augment,
+            augment_label=ARGS.augment_label,
+            augment_class=ARGS.augment_class,
+            augment_times=ARGS.augment_times,
+            augment_kwargs=ARGS.augment_kwargs,
+            undersample=ARGS.undersample is not None,
+            undersample_label=ARGS.undersample,
+            debug=ARGS.debug,
+            tb_kwargs=ARGS.tb_kwargs,
+            multiple_gpu=ARGS.multiple_gpu,
+            num_workers=ARGS.num_workers,
+            device=DEVICE,
             )
-
-    total_time = time.time() - start_time
-    print(f'Total time: {duration_to_str(total_time)}')
-    print('=' * 80)
