@@ -46,6 +46,8 @@ def evaluate_dummy_model(model_name,
                          similar_run_name=None,
                          similar_cnn_kwargs={},
                          free_values=[False, True],
+                         frontal_only=True,
+                         medical_correctness=True,
                          debug=True,
                          device='cuda',
                          ):
@@ -59,6 +61,8 @@ def evaluate_dummy_model(model_name,
         else:
             cnn_name = similar_cnn_kwargs.get('model_name', None)
             run_name += f'_{cnn_name}'
+    if frontal_only:
+        run_name += '_front'
 
     LOGGER.info('Evaluating %s', run_name)
 
@@ -131,6 +135,7 @@ def evaluate_dummy_model(model_name,
         dataloaders,
         hierarchical=is_hierarchical,
         free_values=free_values,
+        medical_correctness=medical_correctness,
         debug=debug,
         device=device,
         )
@@ -157,6 +162,8 @@ def parse_args():
                         help='If is a non-debugging run')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
+    parser.add_argument('--no-med', action='store_true',
+                        help='If present, do not use medical-correctness metrics')
     parser.add_argument('--cpu', action='store_true',
                         help='Use CPU only')
     parsers.add_args_free_values(parser)
@@ -195,5 +202,6 @@ if __name__ == '__main__':
         similar_cnn_kwargs=ARGS.similar_cnn_kwargs,
         debug=not ARGS.no_debug,
         free_values=ARGS.free_values,
+        medical_correctness=not ARGS.no_med,
         device=DEVICE,
         )

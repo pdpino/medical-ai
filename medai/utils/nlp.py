@@ -1,3 +1,4 @@
+import logging
 import torch
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
@@ -64,7 +65,7 @@ def split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX, pad
     if report[-1] != END_OF_SENTENCE_IDX:
         report = report + [END_OF_SENTENCE_IDX]
 
-    report = torch.tensor(report)
+    report = torch.tensor(report) # pylint: disable=not-callable
 
     # Index positions of end-of-sentence tokens
     end_positions = (report == end_of_sentence_idx).nonzero(as_tuple=False).view(-1)
@@ -88,18 +89,53 @@ def split_sentences_and_pad(report, end_of_sentence_idx=END_OF_SENTENCE_IDX, pad
 class ReportReader:
     """Translates idx to words for generated reports."""
 
-    def __init__(self, vocab):
+    def __init__(self, vocab, added_dot_token='ADOT', ignore_pad=False):
+        words_with_added_dot = set(word for word in vocab.keys() if added_dot_token in word)
+        if len(words_with_added_dot) > 0:
+            logging.warning('Some words have the <added_dot_token> %s', words_with_added_dot)
+
         self._idx_to_word = {v: k for k, v in vocab.items()}
         self._word_to_idx = dict(vocab)
 
+        # Add an aditional token to represent missing dots
+        self._added_dot_idx = len(vocab)
+        self._idx_to_word[self._added_dot_idx] = added_dot_token
+        self._word_to_idx[added_dot_token] = self._added_dot_idx
+
+        self._ignore_pad = ignore_pad
+
+    def _iter_hierarchical(self, report):
+        """Iterates through a hierarchical report."""
+        for sentence in report:
+            last_yielded = None
+            for word_idx in sentence:
+                if word_idx == PAD_IDX:
+                    continue
+
+                yield word_idx
+                last_yielded = word_idx
+            if last_yielded is not None and last_yielded != END_OF_SENTENCE_IDX:
+                yield self._added_dot_idx
+
+
     def idx_to_text(self, report):
+        _word_iterator = iter
+
         if isinstance(report, torch.Tensor):
-            report = report.view(-1).tolist()
+            shape = report.size()
+            report = report.tolist()
+
+            if len(shape) > 1:
+                _word_iterator = self._iter_hierarchical
 
         if not isinstance(report, (list, np.ndarray)):
             return 'ERROR'
 
-        return ' '.join(self._idx_to_word[int(g)] for g in report)
+        return ' '.join(
+            self._idx_to_word[int(word_idx)]
+            for word_idx in _word_iterator(report)
+            if not self._ignore_pad or word_idx != PAD_IDX
+        )
 
     def text_to_idx(self, report):
         assert isinstance(report, (list, str)), f'Report must be list or str, got: {type(report)}'
