@@ -1,4 +1,5 @@
 """Parser utilities."""
+from medai.utils import parse_str_or_int
 
 def add_args_augment(parser):
     aug_group = parser.add_argument_group('Data-augmentation params')
@@ -49,6 +50,7 @@ def add_args_tb(parser):
     tb_group.add_argument('--tb-hist', action='store_true',
                            help='If present, save histograms to TB')
 
+
 def build_args_tb_(args):
     args.tb_kwargs = {
         'histogram': args.tb_hist,
@@ -78,6 +80,7 @@ def add_args_lr_sch(parser, lr=0.0001, metric='loss'):
     lr_group.add_argument('--lr-factor', type=float, default=0.1,
                           help='Factor to multiply the LR on each update')
 
+
 def build_args_lr_sch_(args):
     args.lr_sch_kwargs = {
         'mode': 'min' if args.lr_metric == 'loss' else 'max',
@@ -86,6 +89,7 @@ def build_args_lr_sch_(args):
         'patience': args.lr_patience,
         'verbose': True,
     }
+
 
 def add_args_early_stopping(parser, metric='loss'):
     es_group = parser.add_argument_group('Early stopping params')
@@ -106,3 +110,24 @@ def build_args_early_stopping_(args):
         'metric': args.es_metric,
         'min_delta': args.es_min_delta,
     }
+
+
+def add_args_free_values(parser):
+    parser.add_argument('--skip-free', action='store_true',
+                        help='If present, do not run in free mode')
+    parser.add_argument('--skip-notfree', action='store_true',
+                        help='If present, do not run in not-free mode')
+
+
+def build_args_free_values_(args, parser):
+    use_free = not args.skip_free
+    use_notfree = not args.skip_notfree
+
+    if use_free and use_notfree:
+        args.free_values = [False, True]
+    elif use_free:
+        args.free_values = [True]
+    elif use_notfree:
+        args.free_values = [False]
+    else:
+        parser.error('Cannot skip both free and not free')

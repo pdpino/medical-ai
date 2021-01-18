@@ -1,14 +1,21 @@
 import os
 import json
 import argparse
+import logging
+import pprint
 import numpy as np
 from sklearn.metrics import precision_recall_fscore_support as prf1s, roc_auc_score, accuracy_score
-from pprint import pprint
 
 from medai.datasets.common import CHEXPERT_LABELS
-from medai.utils.files import get_results_folder
 from medai.metrics import load_rg_outputs
 from medai.metrics.report_generation import chexpert
+from medai.utils.files import get_results_folder
+from medai.utils import timeit_main, config_logging
+
+
+config_logging()
+LOGGER = logging.getLogger('rg.eval.chexpert')
+LOGGER.setLevel(logging.INFO)
 
 
 def _calculate_metrics(df):
@@ -24,12 +31,12 @@ def _calculate_metrics(df):
         for i in range(len(CHEXPERT_LABELS))
     ])
 
-    precision, recall, f1, s = prf1s(ground_truth, generated, zero_division=0)
+    precision, recall, f1, _ = prf1s(ground_truth, generated, zero_division=0)
 
     try:
         roc_auc = roc_auc_score(ground_truth, generated, average=None)
     except ValueError as e:
-        print(e)
+        LOGGER.warning(e)
         roc_auc = np.array([-1]*len(CHEXPERT_LABELS))
 
     return acc, precision, recall, f1, roc_auc
@@ -44,9 +51,7 @@ def _calculate_metrics_dict(df):
 
         acc, precision, recall, f1, roc_auc = _calculate_metrics(sub_df)
 
-        metrics = {}
-
-        def _add_to_results(array, prefix):
+        def _add_to_results(metrics, array, prefix):
             # Add mean value to dict
             metrics[prefix] = array.mean()
 
@@ -55,17 +60,19 @@ def _calculate_metrics_dict(df):
             for label, value in zip(CHEXPERT_LABELS, array):
                 metrics[f'{prefix}-{label}'] = value
 
-        _add_to_results(acc, 'acc')
-        _add_to_results(precision, 'prec')
-        _add_to_results(recall, 'recall')
-        _add_to_results(f1, 'f1')
-        _add_to_results(roc_auc, 'roc_auc')
+        metrics = {}
+        _add_to_results(metrics, acc, 'acc')
+        _add_to_results(metrics, precision, 'prec')
+        _add_to_results(metrics, recall, 'recall')
+        _add_to_results(metrics, f1, 'f1')
+        _add_to_results(metrics, roc_auc, 'roc_auc')
 
         all_metrics[dataset_type] = metrics
 
     return all_metrics
 
 
+@timeit_main(LOGGER)
 def evaluate_run(run_name,
                  debug=True,
                  override=False,
@@ -82,14 +89,14 @@ def evaluate_run(run_name,
     labeled_output_path = os.path.join(results_folder, f'outputs-labeled-{suffix}.csv')
 
     if not override and os.path.isfile(labeled_output_path):
-        print('Skipping run, already calculated: ', run_name)
+        LOGGER.info('Skipping run, already calculated: %s', run_name)
         return
 
     # Read outputs
     df = load_rg_outputs(run_name, debug=debug, free=free)
 
     if df is None:
-        print('Need to compute outputs for run first: ', run_name)
+        LOGGER.info('Need to compute outputs for run first: %s', run_name)
         return
 
     _n_distinct_epochs = set(df['epoch'])
@@ -114,10 +121,10 @@ def evaluate_run(run_name,
     chexpert_metrics_path = os.path.join(results_folder, f'chexpert-metrics-{suffix}.json')
     with open(chexpert_metrics_path, 'w') as f:
         json.dump(metrics, f)
-    print('Saved to file: ', chexpert_metrics_path)
+    LOGGER.info('Saved to file: %s', chexpert_metrics_path)
 
     if not quiet:
-        pprint(metrics)
+        LOGGER.info(pprint.pformat(metrics))
 
 
 def parse_args():
@@ -144,12 +151,12 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    ARGS = parse_args()
 
-    evaluate_run(args.run_name,
-                 debug=args.debug,
-                 override=args.override,
-                 max_samples=args.max_samples,
-                 free=args.free,
-                 quiet=args.quiet,
+    evaluate_run(ARGS.run_name,
+                 debug=ARGS.debug,
+                 override=ARGS.override,
+                 max_samples=ARGS.max_samples,
+                 free=ARGS.free,
+                 quiet=ARGS.quiet,
                  )

@@ -1,4 +1,3 @@
-import time
 import argparse
 import logging
 import torch
@@ -6,7 +5,7 @@ from torch.utils.data.dataset import Subset
 from ignite.engine import Engine, Events
 
 from medai.datasets import prepare_data_report_generation
-from medai.metrics import save_results
+from medai.metrics import save_results, are_results_saved
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_medical_correctness,
@@ -24,10 +23,10 @@ from medai.training.report_generation.hierarchical import (
     get_step_fn_hierarchical,
 )
 from medai.utils import (
-    duration_to_str,
     print_hw_options,
     parsers,
     config_logging,
+    timeit_main,
 )
 
 
@@ -36,16 +35,18 @@ LOGGER = logging.getLogger('rg-eval')
 LOGGER.setLevel(logging.INFO)
 
 
-def evaluate_model(run_name,
-                   compiled_model,
-                   dataloader,
-                   n_epochs=1,
-                   hierarchical=False,
-                   supervise_attention=False,
-                   medical_correctness=True,
-                   free=False,
-                   debug=True,
-                   device='cuda'):
+def _evaluate_model_in_dataloader(
+        run_name,
+        model,
+        dataloader,
+        n_epochs=1,
+        hierarchical=False,
+        supervise_attention=False,
+        medical_correctness=True,
+        att_vs_masks=False,
+        free=False,
+        debug=True,
+        device='cuda'):
     """Evaluate a report-generation model on a dataloader."""
     dataset = dataloader.dataset
     if isinstance(dataset, Subset):
@@ -57,7 +58,7 @@ def evaluate_model(run_name,
     else:
         get_step_fn = get_step_fn_flat
 
-    engine = Engine(get_step_fn(compiled_model.model,
+    engine = Engine(get_step_fn(model,
                                 training=False,
                                 supervise_attention=supervise_attention,
                                 free=free,
@@ -73,9 +74,7 @@ def evaluate_model(run_name,
     if medical_correctness:
         attach_medical_correctness(engine, None, dataset.get_vocab())
 
-    # Decide att-vs-masks # HACK: copied from train_model()
-    decoder_name = compiled_model.metadata['decoder_kwargs']['decoder_name']
-    if decoder_name.startswith('h-lstm-att'):
+    if att_vs_masks:
         attach_attention_vs_masks(engine)
 
     # Catch errors, specially for free=True case
@@ -86,21 +85,87 @@ def evaluate_model(run_name,
     return engine.state.metrics
 
 
+def evaluate_model_and_save(
+        run_name,
+        model,
+        dataloaders,
+        debug=True,
+        hierarchical=False,
+        device='cuda',
+        medical_correctness=True,
+        supervise_attention=False,
+        att_vs_masks=False,
+        n_epochs=1,
+        free_values=[False, True],
+        ):
+    """Evaluates a model in ."""
+    evaluate_kwargs = {
+        'hierarchical': hierarchical,
+        'device': device,
+        'debug': debug,
+        'medical_correctness': medical_correctness,
+        'att_vs_masks': att_vs_masks,
+        'supervise_attention': supervise_attention,
+        'n_epochs': n_epochs,
+    }
+
+    for free_value in free_values:
+        # Add a suffix
+        suffix = 'free' if free_value else 'notfree'
+
+        metrics = {}
+
+        evaluate_kwargs['free'] = free_value
+
+        for dataloader in dataloaders:
+            if dataloader is None:
+                continue
+            dataset_type = dataloader.dataset.dataset_type
+            metrics[dataset_type] = _evaluate_model_in_dataloader(
+                run_name,
+                model,
+                dataloader,
+                **evaluate_kwargs,
+            )
+
+        save_results(metrics,
+                     run_name,
+                     task='rg',
+                     debug=debug,
+                     suffix=suffix,
+                     )
+
+
+@timeit_main(LOGGER)
 def evaluate_run(run_name,
                  n_epochs=1,
-                 free='both',
+                 free_values=[False, True],
                  debug=True,
                  device='cuda',
                  multiple_gpu=False,
                  dataset_types=('train','val','test'),
                  medical_correctness=True,
                  max_samples=None,
-                #  batch_size=None,
-                #  frontal_only=False,
-                #  image_size=None,
-                #  norm_by_sample=None,
+                 override=False,
                  ):
     """Evaluates a saved run."""
+    # Check if overriding
+    if not override:
+        filtered_free_values = []
+        for free_value in free_values:
+            suffix = 'free' if free_value else 'notfree'
+
+            if are_results_saved(run_name, task='rg', debug=debug, suffix=suffix):
+                LOGGER.info('Already calculated for %s, skipping', suffix)
+            else:
+                filtered_free_values.append(free_value)
+
+        free_values = filtered_free_values
+        if len(free_values) == 0:
+            LOGGER.info('Skipping run')
+            return
+
+
     # Load model
     compiled_model = load_compiled_model_report_generation(run_name,
                                                            debug=debug,
@@ -145,46 +210,23 @@ def evaluate_run(run_name,
 
     # Other evaluation kwargs
     other_train_kwargs = metadata.get('other_train_kwargs', {})
-    evaluate_kwargs = {
-        'hierarchical': hierarchical,
-        'device': device,
-        'debug': debug,
-        'medical_correctness': medical_correctness,
-        'supervise_attention': other_train_kwargs.get('supervise_attention', False),
-        'n_epochs': n_epochs,
-    }
+    supervise_attention = other_train_kwargs.get('supervise_attention', False)
+    att_vs_masks = decoder_name.startswith('h-lstm-att') # HACK: copied from train_model()
 
-    # Decide free
-    if free == 'both':
-        free_values = [False, True]
-    else:
-        free_values = [bool(free)]
 
-    for free_value in free_values:
-        # Add a suffix
-        suffix = 'free' if free_value else 'notfree'
-
-        metrics = {}
-
-        evaluate_kwargs['free'] = free_value
-
-        for dataloader in dataloaders:
-            if dataloader is None:
-                continue
-            dataset_type = dataloader.dataset.dataset_type
-            metrics[dataset_type] = evaluate_model(
-                run_name,
-                compiled_model,
-                dataloader,
-                **evaluate_kwargs,
-            )
-
-        save_results(metrics,
-                     run_name,
-                     task='rg',
-                     debug=debug,
-                     suffix=suffix,
-                     )
+    evaluate_model_and_save(
+        run_name,
+        compiled_model.model,
+        dataloaders,
+        debug=debug,
+        hierarchical=hierarchical,
+        device=device,
+        medical_correctness=medical_correctness,
+        supervise_attention=supervise_attention,
+        att_vs_masks=att_vs_masks,
+        n_epochs=n_epochs,
+        free_values=free_values,
+        )
 
 
 def parse_args():
@@ -210,16 +252,13 @@ def parse_args():
                         help='If is a non-debugging run')
     parser.add_argument('--no-med', action='store_true',
                         help='If present, do not use medical-correctness metrics')
-    parser.add_argument('--skip-free', action='store_true',
-                        help='If present, do not evaluate in free mode')
-    parser.add_argument('--skip-notfree', action='store_true',
-                        help='If present, do not evaluate in not-free mode')
-
+    parsers.add_args_free_values(parser)
     parsers.add_args_hw(parser, num_workers=4)
 
     args = parser.parse_args()
 
 
+    parsers.build_args_free_values_(args, parser)
     use_free = not args.skip_free
     use_notfree = not args.skip_notfree
     if use_free and use_notfree:
@@ -241,10 +280,8 @@ if __name__ == '__main__':
 
     print_hw_options(DEVICE, ARGS)
 
-    start_time = time.time()
-
     evaluate_run(ARGS.run_name,
-                 free=ARGS.free,
+                 free_values=ARGS.free_values,
                  dataset_types=ARGS.eval_in,
                  debug=not ARGS.no_debug,
                  multiple_gpu=ARGS.multiple_gpu,
@@ -257,6 +294,3 @@ if __name__ == '__main__':
                 #  image_size=ARGS.image_size,
                 #  norm_by_sample=ARGS.norm_by_sample,
                  )
-
-    total_time = time.time() - start_time
-    LOGGER.info('Total time: %s', duration_to_str(total_time))

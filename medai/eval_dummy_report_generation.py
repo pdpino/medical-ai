@@ -1,4 +1,5 @@
 import argparse
+import logging
 import torch
 
 from medai.datasets.iu_xray import IUXRayDataset
@@ -9,16 +10,21 @@ from medai.models.report_generation.dummy.common_words import MostCommonWords
 from medai.models.report_generation.dummy.common_sentences import MostCommonSentences
 from medai.models.report_generation.dummy.random import RandomReport
 from medai.models.report_generation.dummy.most_similar_image import MostSimilarImage
-from medai.training.report_generation.flat import (
-    create_flat_dataloader,
-    get_step_fn_flat,
+from medai.training.report_generation.flat import create_flat_dataloader
+from medai.training.report_generation.hierarchical import create_hierarchical_dataloader
+from medai.eval_report_generation import evaluate_model_and_save
+from medai.utils import (
+    get_timestamp,
+    config_logging,
+    timeit_main,
+    parsers,
+    print_hw_options,
 )
-from medai.training.report_generation.hierarchical import (
-    create_hierarchical_dataloader,
-    get_step_fn_hierarchical,
-)
-from medai.train_report_generation import evaluate_and_save
-from medai.utils import get_timestamp
+
+
+config_logging()
+LOGGER = logging.getLogger('rg.eval.dummy')
+LOGGER.setLevel(logging.INFO)
 
 
 _AVAILABLE_DUMMY_MODELS = [
@@ -33,12 +39,13 @@ def _is_hierarchical(model_name):
     return model_name == 'common-sentences'
 
 
+@timeit_main(LOGGER)
 def evaluate_dummy_model(model_name,
                          batch_size=20,
                          k_first=100,
                          similar_run_name=None,
                          similar_cnn_kwargs={},
-                         free='both',
+                         free_values=[False, True],
                          debug=True,
                          device='cuda',
                          ):
@@ -53,21 +60,23 @@ def evaluate_dummy_model(model_name,
             cnn_name = similar_cnn_kwargs.get('model_name', None)
             run_name += f'_{cnn_name}'
 
+    LOGGER.info('Evaluating %s', run_name)
 
     # Load datasets
-    train_dataset = IUXRayDataset('train')
-    val_dataset = IUXRayDataset('val')
-    test_dataset = IUXRayDataset('test')
+    dataset_kwargs = {
+        'frontal_only': True,
+    }
+    train_dataset = IUXRayDataset('train', **dataset_kwargs)
+    val_dataset = IUXRayDataset('val', **dataset_kwargs)
+    test_dataset = IUXRayDataset('test', **dataset_kwargs)
 
     vocab = train_dataset.get_vocab()
 
     # Decide hierarchical
     is_hierarchical = _is_hierarchical(model_name)
     if is_hierarchical:
-        get_step_fn = get_step_fn_hierarchical
         create_dataloader = create_hierarchical_dataloader
     else:
-        get_step_fn = get_step_fn_flat
         create_dataloader = create_flat_dataloader
 
 
@@ -86,7 +95,7 @@ def evaluate_dummy_model(model_name,
 
     elif model_name == 'common-sentences':
         model = MostCommonSentences(train_dataset, k_first)
-    
+
     elif model_name == 'random':
         model = RandomReport(train_dataset)
 
@@ -102,7 +111,7 @@ def evaluate_dummy_model(model_name,
         model = MostSimilarImage(cnn, vocab)
         model.eval()
 
-        print('Fitting model...')
+        LOGGER.info('Fitting model...')
         model.fit(train_dataloader, device=device)
 
     else:
@@ -116,16 +125,17 @@ def evaluate_dummy_model(model_name,
     ]
 
     # Evaluate
-    evaluate_and_save(run_name,
-                      model,
-                      dataloaders,
-                      hierarchical=is_hierarchical,
-                      free=free,
-                      debug=debug,
-                      device=device,
-                      )
+    evaluate_model_and_save(
+        run_name,
+        model,
+        dataloaders,
+        hierarchical=is_hierarchical,
+        free_values=free_values,
+        debug=debug,
+        device=device,
+        )
 
-    print('Evaluated ', run_name)
+    LOGGER.info('Evaluated %s', run_name)
 
 
 def parse_args():
@@ -149,10 +159,8 @@ def parse_args():
                         help='Max samples to load (debugging)')
     parser.add_argument('--cpu', action='store_true',
                         help='Use CPU only')
-    parser.add_argument('--free-only', action='store_true',
-                        help='Evaluate only in free mode')
-    parser.add_argument('--not-free-only', action='store_true',
-                        help='Evaluate only in not-free mode')
+    parsers.add_args_free_values(parser)
+
     args = parser.parse_args()
 
     args.similar_run_name = args.cnn_run_name
@@ -163,33 +171,29 @@ def parse_args():
         'freeze': True,
     }
 
-    if args.free_only:
-        args.free = True
-    elif args.not_free_only:
-        args.free = False
-    else:
-        args.free = 'both'
-
     if args.model_name == 'most-similar-image':
         if args.similar_run_name is None and args.cnn_name is None:
             parser.error('most-similar-image: needs --cnn-run-name or --cnn-name')
+
+    parsers.build_args_free_values_(args, parser)
 
     return args
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    ARGS = parse_args()
 
-    device = torch.device('cuda' if not args.cpu and torch.cuda.is_available() else 'cpu')
+    DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
 
-    evaluate_dummy_model(args.model_name,
-                         batch_size=args.batch_size,
-                         k_first=args.k_first,
-                         similar_run_name=args.similar_run_name,
-                         similar_cnn_kwargs=args.similar_cnn_kwargs,
-                         debug=not args.no_debug,
-                         free=args.free,
-                         device=device,
-                         )
+    print_hw_options(DEVICE, ARGS)
 
-
+    evaluate_dummy_model(
+        ARGS.model_name,
+        batch_size=ARGS.batch_size,
+        k_first=ARGS.k_first,
+        similar_run_name=ARGS.similar_run_name,
+        similar_cnn_kwargs=ARGS.similar_cnn_kwargs,
+        debug=not ARGS.no_debug,
+        free_values=ARGS.free_values,
+        device=DEVICE,
+        )

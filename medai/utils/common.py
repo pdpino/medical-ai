@@ -115,16 +115,22 @@ def parse_str_or_int(s):
 
 
 def print_hw_options(device, args):
+    """Prints hardware options (device selected) and args provided."""
+    def _safe_get_attr(obj, attr, default_value=None):
+        if not hasattr(obj, attr):
+            return default_value
+        return getattr(obj, attr)
+
     _CUDA_VISIBLE = os.environ.get('CUDA_VISIBLE_DEVICES', '')
     d = {
         'device': device,
         'visible': _CUDA_VISIBLE,
-        'multiple': args.multiple_gpu,
-        'num_workers': args.num_workers,
-        'num_threads': args.num_threads,
+        'multiple': _safe_get_attr(args, 'multiple_gpu'),
+        'num_workers': _safe_get_attr(args, 'num_workers'),
+        'num_threads': _safe_get_attr(args, 'num_threads'),
     }
     info_str = ' '.join(f'{k}={v}' for k, v in d.items())
-    print(f'Using {info_str}')
+    print('Using: ', info_str)
 
 
 def config_logging():

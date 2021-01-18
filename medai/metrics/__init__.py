@@ -11,22 +11,33 @@ class MetricsEncoder(json.JSONEncoder):
     ConfusionMatrix metric returns a torch.Tensor, which is not serializable
         --> transform to list of lists.
     """
-    def default(self, obj):
+    def default(self, obj): # pylint: disable=arguments-differ
         if isinstance(obj, torch.Tensor):
             obj = obj.detach().numpy().tolist()
         return obj
 
 
-def save_results(metrics_dict, run_name, task, debug=True,
-                 suffix='', merge_prev=True):
-    folder = get_results_folder(run_name, task=task, debug=debug,
-                                 save_mode=True)
+def get_results_fpath(run_name, task, debug=True, suffix='', save_mode=False):
+    folder = get_results_folder(run_name, task=task, debug=debug, save_mode=save_mode)
 
     filename = 'metrics'
     if suffix:
         filename += f'-{suffix}'
 
     filepath = os.path.join(folder, f'{filename}.json')
+
+    return filepath
+
+
+def are_results_saved(run_name, task, debug=True, suffix=''):
+    filepath = get_results_fpath(run_name, task, debug=debug, suffix=suffix, save_mode=False)
+
+    return os.path.isfile(filepath)
+
+
+def save_results(metrics_dict, run_name, task, debug=True,
+                 suffix='', merge_prev=True):
+    filepath = get_results_fpath(run_name, task, debug=debug, suffix=suffix, save_mode=True)
 
     if os.path.isfile(filepath) and merge_prev:
         with open(filepath, 'r') as f:
