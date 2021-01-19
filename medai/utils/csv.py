@@ -10,7 +10,6 @@ class CSVWriter:
         self.filepath = filepath
         self.columns = columns
 
-
     def open(self):
         if self.csv_file:
             self.csv_file.close()

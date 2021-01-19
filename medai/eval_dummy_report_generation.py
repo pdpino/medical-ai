@@ -68,7 +68,7 @@ def evaluate_dummy_model(model_name,
 
     # Load datasets
     dataset_kwargs = {
-        'frontal_only': True,
+        'frontal_only': frontal_only,
     }
     train_dataset = IUXRayDataset('train', **dataset_kwargs)
     val_dataset = IUXRayDataset('val', **dataset_kwargs)

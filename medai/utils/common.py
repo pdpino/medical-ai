@@ -1,4 +1,5 @@
 from datetime import datetime
+import numbers
 import time
 import os
 import logging
@@ -71,6 +72,11 @@ def tensor_to_range01(arr, eps=1e-8):
 
 def divide_tensors(a, b):
     """Divide two tensors element-wise, avoiding NaN values in the result."""
+    if isinstance(b, numbers.Number):
+        if b == 0:
+            return 0
+        return a / b
+
     dont_use = b == 0
 
     a = a.clone()

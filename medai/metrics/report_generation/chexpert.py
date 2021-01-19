@@ -1,18 +1,11 @@
 import csv
 import os
-import json
 import subprocess
-import argparse
 import pandas as pd
-import numpy as np
-from sklearn.metrics import precision_recall_fscore_support as prf1s, roc_auc_score, accuracy_score
-from pprint import pprint
 
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.datasets.iu_xray import DATASET_DIR
 from medai.utils import TMP_DIR
-from medai.utils.files import get_results_folder
-from medai.metrics import load_rg_outputs
 
 _NEGBIO_PATH_KEY = 'NEGBIO_PATH'
 assert _NEGBIO_PATH_KEY in os.environ, f'You must export {_NEGBIO_PATH_KEY}'
@@ -94,11 +87,13 @@ def apply_labeler_to_column(dataframe, column_name,
     cmd = f'{cmd_cd} && {cmd_call}'
 
     try:
-        if not quiet: print(f'Labelling {column_name}...')
-        completed_process = subprocess.run(cmd, shell=True, check=True,
-                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                           env=_get_custom_env(),
-                                           )
+        if not quiet:
+            print(f'Labelling {column_name}...')
+        subprocess.run(
+            cmd, shell=True, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env=_get_custom_env(),
+        )
     except subprocess.CalledProcessError as e:
         print('Labeler failed, stdout and stderr:')
         print(e.stdout)

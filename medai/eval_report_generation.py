@@ -2,7 +2,7 @@ import argparse
 import logging
 import torch
 from torch.utils.data.dataset import Subset
-from ignite.engine import Engine, Events
+from ignite.engine import Engine
 
 from medai.datasets import prepare_data_report_generation
 from medai.metrics import save_results, are_results_saved
@@ -10,7 +10,10 @@ from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_medical_correctness,
     attach_attention_vs_masks,
+)
+from medai.metrics.report_generation.writer import (
     attach_report_writer,
+    delete_previous_outputs,
 )
 from medai.models.report_generation import is_decoder_hierarchical
 from medai.models.checkpoint import load_compiled_model_report_generation
@@ -53,6 +56,8 @@ def _evaluate_model_in_dataloader(
         dataset = dataset.dataset # HACK
     LOGGER.info('Evaluating model in %s, free=%s', dataset.dataset_type, free)
 
+    vocab = dataset.get_vocab()
+
     if hierarchical:
         get_step_fn = get_step_fn_hierarchical
     else:
@@ -68,17 +73,15 @@ def _evaluate_model_in_dataloader(
                                      free=free,
                                      supervise_attention=supervise_attention,
                                      )
-    attach_report_writer(engine, dataset.get_vocab(), run_name, free=free,
-                         debug=debug)
+    attach_report_writer(engine, run_name,
+                         vocab, assert_n_samples=len(dataset),
+                         free=free, debug=debug)
 
     if medical_correctness:
-        attach_medical_correctness(engine, None, dataset.get_vocab())
+        attach_medical_correctness(engine, None, vocab)
 
-    if att_vs_masks:
+    if att_vs_masks and not free:
         attach_attention_vs_masks(engine)
-
-    # Catch errors, specially for free=True case
-    engine.add_event_handler(Events.EXCEPTION_RAISED, lambda _, err: LOGGER.error(err))
 
     engine.run(dataloader, n_epochs)
 
@@ -110,8 +113,7 @@ def evaluate_model_and_save(
     }
 
     for free_value in free_values:
-        # Add a suffix
-        suffix = 'free' if free_value else 'notfree'
+        delete_previous_outputs(run_name, debug=debug, free=free_value)
 
         metrics = {}
 
@@ -127,6 +129,9 @@ def evaluate_model_and_save(
                 dataloader,
                 **evaluate_kwargs,
             )
+
+        # Add a suffix
+        suffix = 'free' if free_value else 'notfree'
 
         save_results(metrics,
                      run_name,
@@ -250,6 +255,8 @@ def parse_args():
     #                     help='If present, normalize each sample (instead of using dataset stats)')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--override', action='store_true',
+                        help='Whether to override previous results')
     parser.add_argument('--no-med', action='store_true',
                         help='If present, do not use medical-correctness metrics')
     parsers.add_args_free_values(parser)
@@ -289,6 +296,7 @@ if __name__ == '__main__':
                  medical_correctness=not ARGS.no_med,
                  n_epochs=ARGS.epochs,
                  max_samples=ARGS.max_samples,
+                 override=ARGS.override,
                 #  batch_size=ARGS.batch_size,
                 #  frontal_only=ARGS.frontal_only,
                 #  image_size=ARGS.image_size,

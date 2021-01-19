@@ -1,7 +1,7 @@
-# import torch
 import os
 from functools import partial
 import operator
+import logging
 import numpy as np
 import torch
 from torch.nn.functional import interpolate
@@ -196,70 +196,3 @@ def attach_medical_correctness(trainer, validator, vocab):
 
     # TODO: apply for MIRQI as well
     # _attach_medical_labeler_correctness(engine, MirqiLightLabeler(vocab), 'mirqi')
-
-
-def attach_report_writer(engine, vocab, run_name, debug=True, free=False):
-    """Attach a report-writer to an engine.
-
-    For each example in the dataset writes to a CSV the generated report and ground truth.
-    """
-    report_reader = ReportReader(vocab)
-
-    folder = get_results_folder(run_name,
-                                task='rg',
-                                debug=debug,
-                                save_mode=True)
-    suffix = 'free' if free else 'notfree'
-    path = os.path.join(folder, f'outputs-{suffix}.csv')
-
-    writer = CSVWriter(path, columns=[
-        'filename',
-        'epoch',
-        'dataset_type',
-        'ground_truth',
-        'generated',
-    ])
-
-    @engine.on(Events.STARTED)
-    def _open_writer():
-        writer.open()
-
-    @engine.on(Events.ITERATION_COMPLETED)
-    def _save_text(engine):
-        output = engine.state.output
-        filenames = engine.state.batch.report_fnames
-        gt_reports = output['flat_reports']
-        gen_reports = output['flat_reports_gen']
-
-        epoch = engine.state.epoch
-        dataset_type = engine.state.dataloader.dataset.dataset_type
-
-        # Save result
-        for report, generated, filename in zip(
-            gt_reports,
-            gen_reports,
-            filenames,
-        ):
-            # Remove padding and END token
-            report = trim_rubbish(report)
-            generated = trim_rubbish(generated)
-
-            # Pass to text
-            report = report_reader.idx_to_text(report)
-            generated = report_reader.idx_to_text(generated)
-
-            # Add quotes to avoid issues with commas
-            report = f'"{report}"'
-            generated = f'"{generated}"'
-
-            writer.write(
-                filename,
-                epoch,
-                dataset_type,
-                report,
-                generated,
-            )
-
-    @engine.on(Events.COMPLETED)
-    def _close_writer():
-        writer.close()

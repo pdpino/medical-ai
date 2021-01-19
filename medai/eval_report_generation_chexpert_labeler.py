@@ -96,20 +96,34 @@ def evaluate_run(run_name,
     df = load_rg_outputs(run_name, debug=debug, free=free)
 
     if df is None:
-        LOGGER.info('Need to compute outputs for run first: %s', run_name)
+        LOGGER.error('Need to compute outputs for run first: %s', run_name)
         return
+
+    n_samples = len(df)
+    LOGGER.info('%d samples found in outputs, free=%s', n_samples, free)
 
     _n_distinct_epochs = set(df['epoch'])
     if len(_n_distinct_epochs) != 1:
-        raise NotImplementedError('Only works for one epoch, found: ', _n_distinct_epochs)
+        LOGGER.error('Only works for one epoch, found: %d', _n_distinct_epochs)
+        return
 
     # Debugging purposes
     if max_samples is not None:
         df = df.head(max_samples)
         df.reset_index(inplace=True, drop=True)
 
+        n_samples = len(df)
+        LOGGER.info('Only using max_samples = %d', n_samples)
+
     # Compute labels for both GT and generated
     df = chexpert.apply_labeler_to_df(df)
+
+    if len(df) != n_samples:
+        LOGGER.error(
+            'Internal error: n_samples does not match, initial=%d vs final=%d',
+            n_samples, len(df),
+        )
+        return
 
     # Save to file, to avoid heavy recalculations
     df.to_csv(labeled_output_path, index=False)
