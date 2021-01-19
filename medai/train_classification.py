@@ -45,9 +45,7 @@ from medai.utils.handlers import (
     attach_lr_scheduler_handler,
 )
 
-config_logging()
-LOGGER = logging.getLogger('cl')
-LOGGER.setLevel(logging.INFO)
+LOGGER = logging.getLogger('medai.cl.train')
 
 
 def _choose_print_metrics(dataset_name, additional=None):
@@ -600,6 +598,8 @@ def parse_args():
 
 if __name__ == '__main__':
     ARGS = parse_args()
+
+    config_logging()
 
     if ARGS.num_threads > 0:
         torch.set_num_threads(ARGS.num_threads)

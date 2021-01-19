@@ -1,4 +1,5 @@
 import os
+import logging
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
@@ -7,6 +8,8 @@ import pandas as pd
 from medai.datasets.common import BatchItem
 
 DATASET_DIR = os.environ.get('DATASET_DIR_COVID_ACTUAL')
+
+LOGGER = logging.getLogger(__name__)
 
 def _get_default_image_transformation(image_size=(512, 512)):
     # FIXME: wrong values
@@ -18,20 +21,24 @@ def _get_default_image_transformation(image_size=(512, 512)):
                               ])
 
 class CovidActualDataset(Dataset):
-    def __init__(self, dataset_type='train', image_size=(512, 512), **unused):
+    def __init__(self, dataset_type='train', image_size=(512, 512), **unused_kwargs):
+        super().__init__()
+
         raise NotImplementedError('CovidActualDataset mean and std')
 
+        # pylint: disable=unreachable
         if DATASET_DIR is None:
-            raise Exception(f'DATASET_DIR_COVID_ACTUAL not found in env variables')
+            raise Exception('DATASET_DIR_COVID_ACTUAL not found in env variables')
 
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
 
+        # HACK
         dataset_type = 'test'
-        print('\tCovid-actual only has test dataset')
+        LOGGER.info('\tCovid-actual only has test dataset')
 
-        if kwargs.get('labels', None) is not None:
-            print('Labels selection in CovidKaggle dataset is not implemented yet, ignoring')
+        if unused_kwargs.get('labels', None) is not None:
+            LOGGER.warning('Ignoring labels in CovidActualDataset, not implemented yet')
 
         self.dataset_type = dataset_type
         self.image_format = 'RGB'

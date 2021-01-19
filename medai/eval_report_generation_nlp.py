@@ -1,17 +1,18 @@
 import argparse
 import os
+import logging
+import pprint
 import pandas as pd
 import numpy as np
-import time
-from pprint import pprint
 from pycocoevalcap.bleu import bleu_scorer
 from pycocoevalcap.cider import cider_scorer
 from pycocoevalcap.rouge import rouge as rouge_lib
 
 from medai.datasets.iu_xray import DATASET_DIR
 from medai.metrics import save_results, load_rg_outputs
-from medai.utils.files import get_results_folder
-from medai.utils import duration_to_str
+from medai.utils import timeit_main
+
+LOGGER = logging.getLogger('medai.rg.eval.nlp')
 
 class RougeLScorer:
     # TODO: reuse this in rouge.py?? is copied
@@ -45,6 +46,7 @@ def _split_reports_normal_abnormal():
     return normal_reports, abnormal_reports
 
 
+@timeit_main
 def run_evaluation(run_name,
                    free=False,
                    debug=True,
@@ -58,14 +60,10 @@ def run_evaluation(run_name,
     ]
 
     # Read outputted reports
-    folder = get_results_folder(run_name, task='rg', debug=debug)
-
-    suffix = 'free' if free else 'notfree'
-
     df = load_rg_outputs(run_name, debug=debug, free=free)
 
     if df is None:
-        print('Need to compute outputs for run first: ', run_name)
+        LOGGER.error('Need to compute outputs for run first: %s', run_name)
         return
 
     # Calculate metrics
@@ -81,22 +79,22 @@ def run_evaluation(run_name,
 
             subset_name = f'{dataset_type}-{normality_label}'
             if len(sub_df) == 0:
-                print(f'Empty subset {subset_name}')
+                LOGGER.warning('Empty subset %s', subset_name)
                 continue
 
-            print(f'Evaluating for subset {subset_name}...')
+            LOGGER.info('Evaluating for subset %s...', subset_name)
 
             # Init scorers
             bleu = bleu_scorer.BleuScorer(n=4)
             cider = cider_scorer.CiderScorer(n=4)
             rouge = RougeLScorer()
 
-            for index, row in sub_df.iterrows():
+            for _, row in sub_df.iterrows():
                 gt = row['ground_truth']
                 generated = row['generated']
 
                 if not isinstance(generated, str) or not isinstance(gt, str):
-                    print('\tSkipping sample: ', row)
+                    LOGGER.warning('\tSkipping non-str sample: %s', row)
                     continue
 
                 bleu += (generated, [gt])
@@ -118,11 +116,12 @@ def run_evaluation(run_name,
             }
 
     # Save metrics to file
+    suffix = 'free' if free else 'notfree'
     save_results(metrics, run_name, task='rg',
                  debug=debug, suffix=suffix)
 
     if not quiet:
-        pprint(metrics)
+        LOGGER.info(pprint.pformat(metrics))
 
 
 def parse_args():
@@ -143,18 +142,10 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    ARGS = parse_args()
 
-    start_time = time.time()
-
-    run_evaluation(args.run_name,
-                   free=args.free,
-                   debug=not args.no_debug,
-                   quiet=args.quiet,
+    run_evaluation(ARGS.run_name,
+                   free=ARGS.free,
+                   debug=not ARGS.no_debug,
+                   quiet=ARGS.quiet,
                    )
-
-    total_time = time.time() - start_time
-    print(f'Total time: {duration_to_str(total_time)}')
-    print('=' * 80)
-
-

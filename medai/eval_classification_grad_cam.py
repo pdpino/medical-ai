@@ -16,9 +16,7 @@ from medai.utils import (
     timeit_main,
 )
 
-config_logging()
-LOGGER = logging.getLogger('cl-eval-saliency')
-LOGGER.setLevel(logging.INFO)
+LOGGER = logging.getLogger('medai.cl.eval.grad-cam')
 
 
 @timeit_main(LOGGER)
@@ -110,6 +108,8 @@ if __name__ == '__main__':
 
     if ARGS.num_threads > 0:
         torch.set_num_threads(ARGS.num_threads)
+
+    config_logging()
 
     DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
 

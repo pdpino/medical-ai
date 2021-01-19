@@ -1,6 +1,7 @@
 import csv
 import os
 import subprocess
+import logging
 import pandas as pd
 
 from medai.datasets.common import CHEXPERT_LABELS
@@ -17,6 +18,8 @@ CHEXPERT_PYTHON = '~/software/miniconda3/envs/chexpert-label/bin/python'
 TMP_FOLDER = os.path.join(TMP_DIR, 'chexpert-labeler')
 GT_LABELS_FILEPATH = os.path.join(DATASET_DIR, 'reports', 'reports_with_chexpert_labels.csv')
 
+
+LOGGER = logging.getLogger(__name__)
 
 def labels_with_suffix(suffix):
     """Returns the chexpert labels with a suffix appended to each."""
@@ -88,16 +91,16 @@ def apply_labeler_to_column(dataframe, column_name,
 
     try:
         if not quiet:
-            print(f'Labelling {column_name}...')
+            LOGGER.info('Labelling %s...', column_name)
         subprocess.run(
             cmd, shell=True, check=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env=_get_custom_env(),
         )
     except subprocess.CalledProcessError as e:
-        print('Labeler failed, stdout and stderr:')
-        print(e.stdout)
-        print(e.stderr)
+        LOGGER.error('Labeler failed, stdout and stderr:')
+        LOGGER.error(e.stdout)
+        LOGGER.error(e.stderr)
         raise
 
     # Read chexpert-labeler output

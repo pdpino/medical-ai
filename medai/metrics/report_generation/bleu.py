@@ -1,11 +1,11 @@
-import numpy as np
-import torch
+import logging
 from ignite.metrics import Metric
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
-
 from pycocoevalcap.bleu import bleu_scorer
 
 from medai.utils.nlp import PAD_IDX, indexes_to_strings
+
+LOGGER = logging.getLogger(__name__)
 
 class Bleu(Metric):
     """Computes BLEU metric up to N."""
@@ -50,7 +50,10 @@ class Bleu(Metric):
             scores = result
         else:
             # would be an internal error
-            print(f'Warning: BleuScorer returned {type(result)}, {result}')
+            LOGGER.warning(
+                'Warning: BleuScorer returned unknown type %s, %s',
+                type(result), result,
+            )
             scores = [0.0] * self._n
 
         return scores # np.mean(scores)

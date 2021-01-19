@@ -39,9 +39,7 @@ from medai.utils.handlers import (
 )
 
 
-config_logging()
-LOGGER = logging.getLogger('seg')
-LOGGER.setLevel(logging.INFO)
+LOGGER = logging.getLogger('medai.seg.train')
 
 
 def train_model(run_name,
@@ -383,6 +381,8 @@ def parse_args():
 
 if __name__ == '__main__':
     ARGS = parse_args()
+
+    config_logging()
 
     if ARGS.num_threads > 0:
         torch.set_num_threads(ARGS.num_threads)

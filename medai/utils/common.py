@@ -9,6 +9,8 @@ WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
 TMP_DIR = os.path.join(WORKSPACE_DIR, 'tmp')
 CACHE_DIR = os.path.join(WORKSPACE_DIR, 'cache')
 
+LOGGER = logging.getLogger(__name__)
+
 
 def get_timestamp(short=True):
     now = datetime.fromtimestamp(time.time())
@@ -136,15 +138,20 @@ def print_hw_options(device, args):
         'num_threads': _safe_get_attr(args, 'num_threads'),
     }
     info_str = ' '.join(f'{k}={v}' for k, v in d.items())
-    print('Using: ', info_str)
+    LOGGER.info('Using: %s', info_str)
 
 
 def config_logging():
+    # Root logger
     logging.basicConfig(
         level=logging.WARNING,
-        format='%(levelname)s(%(asctime)s) %(message)s',
+        format='%(levelname)s(%(asctime)s) %(message)s', # %(name)s
         datefmt='%m-%d %H:%M',
     )
+
+    # Own loggers level
+    main_logger = logging.getLogger('medai')
+    main_logger.setLevel(logging.INFO)
 
 
 def timeit_main(logger):

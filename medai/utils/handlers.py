@@ -7,6 +7,9 @@ from ignite.handlers import EarlyStopping
 
 from medai.utils import duration_to_str
 
+LOGGER = logging.getLogger(__name__)
+
+
 def _prettify(value):
     """Prettify a metric value."""
     if value is None:
@@ -22,7 +25,7 @@ def attach_log_metrics(trainer,
                        val_dataloader,
                        tb_writer,
                        timer,
-                       logger=logging,
+                       logger=LOGGER,
                        initial_epoch=0,
                        print_metrics=['loss'],
                        ):
@@ -58,7 +61,10 @@ def attach_log_metrics(trainer,
 
         duration = duration_to_str(timer._elapsed()) # pylint: disable=protected-access
 
-        logger.info(f'Finished epoch {epoch}/{max_epochs}, {metrics_str}, {duration}')
+        logger.info(
+            'Finished epoch %d/%d, %s, %s',
+            epoch, max_epochs, metrics_str, duration,
+        )
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, log_metrics)
 

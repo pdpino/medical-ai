@@ -1,9 +1,12 @@
 import json
 import os
+import logging
 import torch
 import pandas as pd
 
 from medai.utils.files import get_results_folder
+
+LOGGER = logging.getLogger(__name__)
 
 class MetricsEncoder(json.JSONEncoder):
     """Serializes metrics.
@@ -50,7 +53,7 @@ def save_results(metrics_dict, run_name, task, debug=True,
     with open(filepath, 'w') as f:
         json.dump(metrics_dict, f, cls=MetricsEncoder)
 
-    print(f'Saved metrics to {filepath}')
+    LOGGER.info('Saved metrics to %s', filepath)
 
 
 def load_rg_outputs(run_name, debug=True, free=False):
@@ -65,7 +68,7 @@ def load_rg_outputs(run_name, debug=True, free=False):
     outputs_path = os.path.join(results_folder, f'outputs-{suffix}.csv')
 
     if not os.path.isfile(outputs_path):
-        print('Outputs file not found: ', outputs_path)
+        LOGGER.error('Outputs file not found: %s', outputs_path)
         return None
 
     return pd.read_csv(

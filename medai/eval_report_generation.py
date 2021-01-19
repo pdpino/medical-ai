@@ -32,10 +32,7 @@ from medai.utils import (
     timeit_main,
 )
 
-
-config_logging()
-LOGGER = logging.getLogger('rg-eval')
-LOGGER.setLevel(logging.INFO)
+LOGGER = logging.getLogger('medai.rg.eval')
 
 
 def _evaluate_model_in_dataloader(
@@ -282,6 +279,8 @@ def parse_args():
 
 if __name__ == '__main__':
     ARGS = parse_args()
+
+    config_logging()
 
     DEVICE = torch.device('cuda' if torch.cuda.is_available() and not ARGS.cpu else 'cpu')
 

@@ -3,16 +3,17 @@ import os
 import json
 import subprocess
 import argparse
-import re
-import time
+import logging
+
+from pprint import pprint
 import pandas as pd
 import numpy as np
-from pprint import pprint
 
-from medai.utils import TMP_DIR, duration_to_str
+from medai.utils import TMP_DIR, timeit_main
 from medai.utils.files import get_results_folder
 from medai.metrics import load_rg_outputs
 
+LOGGER = logging.getLogger('medai.rg.eval.mirqi')
 
 MIRQI_FOLDER = '~/software/MIRQI'
 CHEXPERT_PYTHON = '~/software/miniconda3/envs/chexpert-label/bin/python'
@@ -41,7 +42,7 @@ def _attributes_to_list(all_attrs):
     ]
 
 
-def MIRQI_v2(gt_list, cand_list, epsilon=1e-6, verbose=False):
+def MIRQI_v2(gt_list, cand_list, epsilon=1e-6):
     """Compute a v2 of the MIRQI metric.
        It returns scores: MIRQI-r, MIRQI-p, MIRQI_sp, MIRQI_np, MIRQI_f, MIRQI_attr_p, MIRQI_attr_r
     """
@@ -56,8 +57,6 @@ def MIRQI_v2(gt_list, cand_list, epsilon=1e-6, verbose=False):
     MIRQI_attr_r = [] # Recall in attributes
 
     for gt_report_entry, cand_report_entry in zip(gt_list, cand_list):
-        attribute_cand_all = []
-
         pos_count_in_gt = 0
         pos_count_in_cand = 0
         tp = 0.0
@@ -71,15 +70,15 @@ def MIRQI_v2(gt_list, cand_list, epsilon=1e-6, verbose=False):
 
         for gt_entity in gt_report_entry:
             if len(gt_entity) < 3:
-                print('LEN: ', gt_report_entry, cand_report_entry)
+                LOGGER.debug('Len less than 3: %s %s', gt_report_entry, cand_report_entry)
             if gt_entity[2] == 'NEGATIVE':
                 continue
             pos_count_in_gt = pos_count_in_gt + 1
         neg_count_in_gt = len(gt_report_entry) - pos_count_in_gt
 
-        for entity_index, cand_entity in enumerate(cand_report_entry):
+        for _, cand_entity in enumerate(cand_report_entry):
             if cand_entity[2] == 'NEGATIVE':
-                for entity_index, gt_entity in enumerate(gt_report_entry):
+                for _, gt_entity in enumerate(gt_report_entry):
                     if  gt_entity[1] == cand_entity[1]:
                         if gt_entity[2] == 'NEGATIVE':
                             tn = tn + 1     # true negative hits
@@ -89,7 +88,7 @@ def MIRQI_v2(gt_list, cand_list, epsilon=1e-6, verbose=False):
                             break
             else:
                 pos_count_in_cand = pos_count_in_cand + 1
-                for entity_index, gt_entity in enumerate(gt_report_entry):
+                for _, gt_entity in enumerate(gt_report_entry):
                     if gt_entity[1] == cand_entity[1]:
                         if gt_entity[2] == 'NEGATIVE':
                             fp = fp + 1     # false positive hits
@@ -188,18 +187,21 @@ def _apply_mirqi_to_df(df, gt_col_name='ground_truth', gen_col_name='generated',
 
     # Call MIRQI
     cmd_cd = f'cd {MIRQI_FOLDER}'
-    cmd_call = f'{CHEXPERT_PYTHON} evaluate.py --reports_path_gt {GT_INPUT_PATH} --reports_path_cand {GEN_INPUT_PATH} --output_path {OUTPUT_PATH} '
+    cmd_call = f'{CHEXPERT_PYTHON} evaluate.py --reports_path_gt {GT_INPUT_PATH} \
+        --reports_path_cand {GEN_INPUT_PATH} --output_path {OUTPUT_PATH} '
     if extra:
         cmd_call += ' '.join(f'--{e}' for e in extra)
     cmd = f'{cmd_cd} && {cmd_call}'
 
     try:
-        print('Evaluating reports with MIRQI...')
-        print(f'\tCalling {cmd_call}')
-        completed_process = subprocess.run(cmd, shell=True, check=True,
-                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        LOGGER.info('Evaluating reports with MIRQI...')
+        LOGGER.info('Calling %s', cmd_call)
+        subprocess.run(
+            cmd, shell=True, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
     except subprocess.CalledProcessError as e:
-        print('MIRQI script failed: ', e.stderr)
+        LOGGER.error('MIRQI script failed: %s', e.stderr)
         raise
 
     # Read MIRQI output # contains reports, "graph" and scores
@@ -235,6 +237,7 @@ def _calculate_metrics_dict(df):
     return all_metrics
 
 
+@timeit_main
 def evaluate_run(run_name,
                  debug=True,
                  override=False,
@@ -252,7 +255,7 @@ def evaluate_run(run_name,
     labeled_output_path = os.path.join(results_folder, f'outputs-mirqi-{suffix}.csv')
 
     if not override and os.path.isfile(labeled_output_path):
-        print('Skipping run, already calculated: ', run_name)
+        LOGGER.info('Skipping calculation, already calculated: %s', run_name)
 
         df = pd.read_csv(labeled_output_path)
     else:
@@ -260,7 +263,7 @@ def evaluate_run(run_name,
         df = load_rg_outputs(run_name, debug=debug, free=free)
 
         if df is None:
-            print('Need to compute outputs for run first: ', run_name)
+            LOGGER.error('Need to compute outputs for run first: %s', run_name)
             return
 
         _n_distinct_epochs = set(df['epoch'])
@@ -293,7 +296,7 @@ def evaluate_run(run_name,
     mirqi_metrics_path = os.path.join(results_folder, f'mirqi-metrics-{suffix}.json')
     with open(mirqi_metrics_path, 'w') as f:
         json.dump(metrics, f)
-    print('Saved to file: ', mirqi_metrics_path)
+    LOGGER.info('Saved to file: %s', mirqi_metrics_path)
 
     if not quiet:
         pprint(metrics)
@@ -325,17 +328,13 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
+    ARGS = parse_args()
 
-    start_time = time.time()
-    evaluate_run(args.run_name,
-                 debug=args.debug,
-                 override=args.override,
-                 max_samples=args.max_samples,
-                 free=args.free,
-                 quiet=args.quiet,
-                 extra=args.extra,
+    evaluate_run(ARGS.run_name,
+                 debug=ARGS.debug,
+                 override=ARGS.override,
+                 max_samples=ARGS.max_samples,
+                 free=ARGS.free,
+                 quiet=ARGS.quiet,
+                 extra=ARGS.extra,
                  )
-    total_time = time.time() - start_time
-    print(f'Total time: {duration_to_str(total_time)}')
-    print('=' * 80)

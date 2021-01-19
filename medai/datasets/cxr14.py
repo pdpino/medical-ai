@@ -1,7 +1,7 @@
 import os
 import json
-import torch
 import logging
+import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 from ignite.utils import to_onehot
@@ -14,6 +14,8 @@ from medai.datasets.common import (
     JSRT_ORGANS,
 )
 from medai.utils.images import get_default_image_transform
+
+LOGGER = logging.getLogger(__name__)
 
 DATASET_DIR = os.environ.get('DATASET_DIR_CXR14')
 
@@ -90,7 +92,7 @@ class CXR14Dataset(Dataset):
 
             not_found_diseases = list(set(self.labels) - set(CXR14_DISEASES))
             if not_found_diseases:
-                print(f'Diseases not found: {not_found_diseases}(ignoring)')
+                LOGGER.warning('Diseases not found: %s (ignoring)', not_found_diseases)
 
         self.n_diseases = len(self.labels)
         self.multilabel = True
@@ -107,7 +109,7 @@ class CXR14Dataset(Dataset):
 
         if len(split_images) > len(available_images):
             missing_images = set(split_images) - available_images
-            logging.warning('Warning: %s images are not available:\n%s',
+            LOGGER.warning('Warning: %s images are not available:\n%s',
                             len(missing_images), missing_images)
 
         # Keep only max_samples images
@@ -147,8 +149,11 @@ class CXR14Dataset(Dataset):
         try:
             image = Image.open(image_fname).convert(self.image_format)
         except OSError as e:
-            print(f'({self.dataset_type}) Failed to load image, may be broken: {image_fname}')
-            print(e)
+            LOGGER.error(
+                '%s: Failed to load image, may be broken: %s',
+                self.dataset_type, image_fname,
+            )
+            LOGGER.error(e)
 
             # FIXME: a way to ignore the image during training? (though it may break other things)
             raise
@@ -198,7 +203,7 @@ class CXR14Dataset(Dataset):
         filepath = os.path.join(self.masks_dir, image_name)
 
         if not os.path.isfile(filepath):
-            print('No such file: ', filepath)
+            LOGGER.error('No such file: %s', filepath)
             return None
 
         mask = Image.open(filepath).convert('L')

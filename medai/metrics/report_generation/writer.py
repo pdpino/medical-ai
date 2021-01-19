@@ -7,6 +7,9 @@ from medai.utils.files import get_results_folder
 from medai.utils.nlp import ReportReader, trim_rubbish
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 def _get_outputs_fpath(run_name, debug=True, free=False):
     folder = get_results_folder(run_name,
                                 task='rg',
@@ -88,9 +91,12 @@ def attach_report_writer(engine, run_name, vocab, assert_n_samples=None, debug=T
 
         if assert_n_samples is not None:
             if sample_counter == assert_n_samples:
-                print(f'Correct amount of samples: {sample_counter}, written to {fpath}')
+                LOGGER.info(
+                    'Correct amount of samples: %d, written to %s',
+                    sample_counter, fpath,
+                )
             else:
-                logging.error(
+                LOGGER.error(
                     'Incorrect amount of samples: written=%d vs should=%d, written to: %s',
                     sample_counter, assert_n_samples, fpath,
                 )
@@ -101,4 +107,4 @@ def delete_previous_outputs(run_name, debug=True, free=False):
 
     if os.path.isfile(fpath):
         os.remove(fpath)
-        print('Deleted previous outputs file at %s' % fpath)
+        LOGGER.info('Deleted previous outputs file at %s', fpath)

@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import pandas as pd
 from PIL import Image
 import torch
@@ -15,6 +16,8 @@ from medai.utils.nlp import (
     compute_vocab,
     SentenceToOrgans,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 DATASET_DIR = os.environ.get('DATASET_DIR_IU_XRAY')
 _REPORTS_FNAME = 'reports.clean.v2.json'
@@ -128,8 +131,11 @@ class IUXRayDataset(Dataset):
         try:
             image = Image.open(image_path).convert(self.image_format)
         except OSError as e:
-            print(f'({self.dataset_type}) Failed to load image, may be broken: {image_path}')
-            print(e)
+            LOGGER.error(
+                '%s: Failed to load image, may be broken: %s',
+                self.dataset_type, image_path,
+            )
+            LOGGER.error(e)
             raise
 
         image = self.transform(image)

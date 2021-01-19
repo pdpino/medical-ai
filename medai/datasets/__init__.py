@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from torch.utils.data import DataLoader, Subset
 from torch.utils.data.dataloader import default_collate
@@ -38,6 +39,8 @@ _SEG_DATASETS = {
 AVAILABLE_CLASSIFICATION_DATASETS = list(_CL_DATASETS)
 AVAILABLE_SEGMENTATION_DATASETS = list(_SEG_DATASETS)
 
+LOGGER = logging.getLogger(__name__)
+
 def _classification_collate_fn(batch_items):
     batch_items = [
         batch_item._replace(report=-1)
@@ -60,7 +63,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 num_workers=2,
                                 **kwargs,
                                 ):
-    print(f'Loading {dataset_name}/{dataset_type} dataset...')
+    LOGGER.info('Loading %s/%s cl-dataset...', dataset_name, dataset_type)
 
     assert dataset_name in _CL_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _CL_DATASETS[dataset_name]
@@ -154,7 +157,7 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    masks=False,
                                    **kwargs,
                                    ):
-    print(f'Loading {dataset_name}/{dataset_type} dataset...')
+    LOGGER.info('Loading %s/%s rg-dataset...', dataset_name, dataset_type)
 
     assert dataset_name in _RG_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _RG_DATASETS[dataset_name]
@@ -196,6 +199,8 @@ def prepare_data_segmentation(dataset_name=None,
                               num_workers=2,
                               **kwargs,
                              ):
+    LOGGER.info('Loading %s/%s seg-dataset...', dataset_name, dataset_type)
+
     assert dataset_name in _SEG_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _SEG_DATASETS[dataset_name]
 

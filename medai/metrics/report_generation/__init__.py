@@ -142,7 +142,7 @@ def _attach_medical_labeler_correctness(engine, labeler, basename, timer=True):
         basename -- to use when attaching metrics
     """
     if timer:
-        timer_metric = LabelerTimerMetric(labeler)
+        timer_metric = LabelerTimerMetric(labeler=labeler)
         timer_metric.attach(engine, f'{basename}_timer')
 
     metric_obj = MedicalLabelerCorrectness(labeler, output_transform=_get_flat_reports)
@@ -191,7 +191,7 @@ def attach_medical_correctness(trainer, validator, vocab):
     ## to avoid calculating for non-sense random reports
     # @trainer.on(Events.EPOCH_STARTED(once=5))
     # def _awake_after_epochs():
-    #     print('Awaking metrics...')
+    #     LOGGER.info('Awaking metrics...')
     #     chexpert.has_started = True
 
     # TODO: apply for MIRQI as well

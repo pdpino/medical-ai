@@ -22,9 +22,7 @@ from medai.utils import (
 )
 
 
-config_logging()
-LOGGER = logging.getLogger('rg.eval.dummy')
-LOGGER.setLevel(logging.INFO)
+LOGGER = logging.getLogger('medai.rg.eval.dummy')
 
 
 _AVAILABLE_DUMMY_MODELS = [
@@ -189,6 +187,8 @@ def parse_args():
 
 if __name__ == '__main__':
     ARGS = parse_args()
+
+    config_logging()
 
     DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
 

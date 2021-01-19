@@ -13,9 +13,7 @@ from medai.utils.files import get_results_folder
 from medai.utils import timeit_main, config_logging
 
 
-config_logging()
-LOGGER = logging.getLogger('rg.eval.chexpert')
-LOGGER.setLevel(logging.INFO)
+LOGGER = logging.getLogger('medai.rg.eval.chexpert')
 
 
 def _calculate_metrics(df):
@@ -166,6 +164,8 @@ def parse_args():
 
 if __name__ == '__main__':
     ARGS = parse_args()
+
+    config_logging()
 
     evaluate_run(ARGS.run_name,
                  debug=ARGS.debug,

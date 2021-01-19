@@ -1,4 +1,5 @@
 import os
+import logging
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
@@ -7,6 +8,8 @@ import pandas as pd
 from medai.datasets.common import BatchItem
 
 DATASET_DIR = os.environ.get('DATASET_DIR_COVID_FIG1')
+
+LOGGER = logging.getLogger(__name__)
 
 def _get_default_image_transformation(image_size=(512, 512)):
     # FIXME: wrong values
@@ -19,19 +22,22 @@ def _get_default_image_transformation(image_size=(512, 512)):
 
 class CovidFig1Dataset(Dataset):
     def __init__(self, dataset_type='train', image_size=(512, 512), **kwargs):
+        super().__init__()
+
         raise NotImplementedError('CovidFig1Dataset mean and std')
 
+        # pylint: disable=unreachable
         if DATASET_DIR is None:
-            raise Exception(f'DATASET_DIR_COVID_FIG1 not found in env variables')
+            raise Exception('DATASET_DIR_COVID_FIG1 not found in env variables')
 
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')
 
         dataset_type = 'test'
-        print('\tCovid-fig1 only has test dataset')
+        LOGGER.info('\tCovid-fig1 only has test dataset')
 
         if kwargs.get('labels', None) is not None:
-            print('Labels selection in CovidKaggle dataset is not implemented yet, ignoring')
+            LOGGER.warning('Ignoring labels in CovidFig1Dataset, not implemented yet')
 
         self.dataset_type = dataset_type
         self.image_format = 'RGB'

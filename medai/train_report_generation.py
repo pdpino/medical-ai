@@ -57,9 +57,7 @@ from medai.utils.handlers import (
 )
 
 
-config_logging()
-LOGGER = logging.getLogger('rg')
-LOGGER.setLevel(logging.INFO)
+LOGGER = logging.getLogger('medai.rg.train')
 
 
 def train_model(run_name,
@@ -540,6 +538,8 @@ if __name__ == '__main__':
 
     if ARGS.num_threads > 0:
         torch.set_num_threads(ARGS.num_threads)
+
+    config_logging()
 
     DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
 

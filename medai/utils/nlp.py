@@ -17,6 +17,9 @@ END_OF_SENTENCE_TOKEN = '.'
 END_OF_SENTENCE_IDX = 4
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 def compute_vocab(reports_iterator):
     """Computes a vocabulary, given a set of reports."""
     word_to_idx = {
@@ -92,7 +95,7 @@ class ReportReader:
     def __init__(self, vocab, added_dot_token='ADOT', ignore_pad=False):
         words_with_added_dot = set(word for word in vocab.keys() if added_dot_token in word)
         if len(words_with_added_dot) > 0:
-            logging.warning('Some words have the <added_dot_token> %s', words_with_added_dot)
+            LOGGER.warning('Some words have the <added_dot_token> %s', words_with_added_dot)
 
         self._idx_to_word = {v: k for k, v in vocab.items()}
         self._word_to_idx = dict(vocab)
@@ -187,7 +190,10 @@ class SentenceToOrgans:
         if sentence_hash not in self._sentence_to_organ_mapping:
             self._sentence_to_organ_mapping[sentence_hash] = [1] * self.n_organs
             sentence_str = self.report_reader.idx_to_text(sentence)
-            print(f'Organs not found for sentence: {sentence_str}, {sentence_hash}')
+            LOGGER.warning(
+                'Organs not found for sentence: %s, (%s)',
+                sentence_str, sentence_hash,
+            )
 
         return self._sentence_to_organ_mapping[sentence_hash]
 
