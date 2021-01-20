@@ -1,7 +1,7 @@
 import time
 import torch
 from torch import nn
-from torch.nn.functional import interpolate
+from torch.nn.functional import interpolate, softmax
 from ignite.engine import Engine, Events
 from captum.attr import LayerGradCam
 
@@ -13,13 +13,19 @@ from medai.utils import tensor_to_range01
 
 class ModelWrapper(nn.Module):
     """Wraps a model to pass it through captum.LayerGradCam."""
-    def __init__(self, model):
+    def __init__(self, model, activation=None):
         super().__init__()
         self.model = model
 
+        self._activation = activation
+
     def forward(self, x):
         output = self.model(x)[0]
-        output = torch.sigmoid(output)
+        if self._activation == 'sigmoid':
+            output = torch.sigmoid(output)
+        elif self._activation == 'softmax':
+            output = softmax(output, dim=1)
+
         return output
 
 
@@ -31,11 +37,11 @@ def _get_last_layer(compiled_model):
         model = model.module
 
     if model_name == 'mobilenet-v2':
-        return model.features[-1][-1]
+        return model.features[-1][0] # -1
     if model_name == 'densenet-121-v2':
-        return model.features.norm5
+        return model.features.conv2 # norm5
     if model_name == 'resnet-50-v2':
-        return model.features.layer4[-1].relu
+        return model.features[-1][-1].conv3 # relu
 
     # DEPRECATED MODELS
     if model_name == 'mobilenet':
@@ -63,16 +69,37 @@ def create_grad_cam(compiled_model, device='cuda', multiple_gpu=False):
 
 
 def threshold_attributions(attributions, thresh=0.5):
+    """Apply a threshold over attributions.
+
+    Args:
+        attributions -- tensor of any shape, with values between 0 and 1
+        threshold -- float to apply the threshold
+    Returns:
+        thresholded attributions, same shape as input
+    """
     ones = torch.ones(attributions.size()).to(attributions.device)
     zeros = torch.zeros(attributions.size()).to(attributions.device)
     attributions = torch.where(attributions >= thresh, ones, zeros)
-    # shape: batch_size, h, w
 
     return attributions
 
 
-def calculate_attributions(grad_cam, images, label_index, image_size):
-    attributions = grad_cam.attribute(images, label_index).detach()
+def calculate_attributions(grad_cam, images, label_index, relu=True):
+    """Calculate grad-cam attributions for a batch of images.
+
+    Args:
+        grad_cam -- LayerGradCam object
+        images -- tensor of shape (bs, 3, height, width)
+        label_index -- int to calculate the grad-cam to
+    Returns:
+        attributions, tensor of shape (bs, height, width)
+    """
+    image_size = images.size()[-2:]
+
+    images.requires_grad = True # Needed for Grad-CAM
+    # Notice this is not returned to its original value!
+
+    attributions = grad_cam.attribute(images, label_index, relu_attributions=relu).detach()
     # shape: batch_size, 1, layer_h, layer_w
 
     attributions = interpolate(attributions, image_size)
@@ -88,12 +115,11 @@ def calculate_attributions(grad_cam, images, label_index, image_size):
 
 
 def get_step_fn(grad_cam, labels,
-                enable_bbox=True, enable_masks=True,
+                enable_bbox=True, enable_masks=True, relu=True,
                 thresh=0.5, device='cuda'):
     def step_fn(unused_engine, batch):
         ## Images
         images = batch.image.to(device)
-        images.requires_grad = True # Needed for Grad-CAM
         # shape: batch_size, 3, height, width
 
         image_size = images.size()[-2:]
@@ -121,7 +147,7 @@ def get_step_fn(grad_cam, labels,
         ## Calculate attributions
         attributions = []
         for index, _ in enumerate(labels):
-            attrs = calculate_attributions(grad_cam, images, index, image_size)
+            attrs = calculate_attributions(grad_cam, images, index, relu=relu)
             attributions.append(attrs)
         attributions = torch.stack(attributions, dim=1)
         # shape: batch_size, n_labels, h, w
@@ -137,7 +163,6 @@ def get_step_fn(grad_cam, labels,
         }
 
     return step_fn
-
 
 
 def create_grad_cam_evaluator(trainer,
@@ -176,3 +201,26 @@ def create_grad_cam_evaluator(trainer,
 
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, run_grad_cam_evaluation)
+
+
+def calculate_cam(model, x):
+    """Calculates CAM manually with a CNN over images.
+
+    Args:
+        model -- CNN with `features` (any convolutional configuration)
+            and `prediction`, a single Linear layer.
+        x -- input images, tensor of shape: batch_size, 3, height, width
+    Returns:
+        CAM activations, tensor of shape
+            (batch_size, n_diseases, features-height, features-width)
+    """
+    x = model.features(x)
+    # shape: batch_size, n_features, features-h, features-w
+
+    weights, unused_bias = list(model.prediction.parameters())
+    # weights shape: n_diseases, n_features
+
+    activations = torch.matmul(weights, x.transpose(1, 2)).transpose(1, 2)
+    # shape: batch_size, n_diseases, features-h, features-w
+
+    return activations
