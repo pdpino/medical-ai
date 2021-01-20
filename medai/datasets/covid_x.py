@@ -1,40 +1,43 @@
-from torch.utils.data import Dataset
-from torchvision import transforms
-from PIL import Image
 import os
+import logging
+from torch.utils.data import Dataset
+from PIL import Image
 import pandas as pd
 
 from medai.datasets.common import BatchItem
+from medai.utils.images import get_default_image_transform
+
+LOGGER = logging.getLogger(__name__)
 
 DATASET_DIR = os.environ.get('DATASET_DIR_COVID_X')
 
-
-def _get_default_image_transformation(image_size=(512, 512)):
-    # FIXME: wrong values
-    mean = [0.4919, 0.4920, 0.4920]
-    sd = [0.0467, 0.0467, 0.0467]
-    return transforms.Compose([transforms.Resize(image_size),
-                               transforms.ToTensor(),
-                               transforms.Normalize(mean, sd)
-                              ])
+_DATASET_MEAN = [0.4914, 0.4914, 0.4915]
+_DATASET_STD = 0.2286
 
 class CovidXDataset(Dataset):
-    def __init__(self, dataset_type='train', max_samples=None, image_size=(512, 512), **kwargs):
-        raise NotImplementedError('CovidXDataset mean and std')
+    def __init__(self, dataset_type='train', max_samples=None,
+                 image_size=(512, 512), norm_by_sample=False,
+                 **kwargs):
+        super().__init__()
 
         if DATASET_DIR is None:
-            raise Exception(f'DATASET_DIR_COVID_X not found in env variables')
+            raise Exception('DATASET_DIR_COVID_X not found in env variables')
 
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val or test')
 
         if kwargs.get('labels', None) is not None:
-            print('Labels selection in CovidX dataset is not implemented yet, ignoring')
+            LOGGER.warning('Labels selection in CovidX dataset is not implemented yet, ignoring')
 
         self.dataset_type = dataset_type
         self.image_format = 'RGB'
         self.image_size = image_size
-        self.transform = _get_default_image_transformation(self.image_size)
+        self.transform = get_default_image_transform(
+            self.image_size,
+            norm_by_sample=norm_by_sample,
+            mean=_DATASET_MEAN,
+            std=_DATASET_STD,
+        )
 
         self.multilabel = False
 
