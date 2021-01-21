@@ -6,6 +6,7 @@ runs/
 nohup.out
 pdpino-models/
 .vscode/
+data/
 
 
 # Python env
