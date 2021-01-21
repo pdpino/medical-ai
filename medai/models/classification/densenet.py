@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from torchvision import models
 
@@ -8,12 +7,14 @@ from medai.models.common import (
 )
 
 class Densenet121CNN(nn.Module):
+    model_name = 'densenet-121'
+
     def __init__(self, labels, imagenet=True, freeze=False,
                  pretrained_cnn=None, gpool='max', fc_layers=(),
-                 **unused):
+                 **unused_kwargs):
         super().__init__()
         self.base_cnn = models.densenet121(pretrained=imagenet)
-        
+
         if freeze:
             for param in self.base_cnn.parameters():
                 param.requires_grad = False
@@ -31,17 +32,17 @@ class Densenet121CNN(nn.Module):
             len(self.labels),
             fc_layers,
         )
-        
+
     def forward(self, x, features=False):
         x = self.base_cnn.features(x)
-        
+
         if features:
             return x
 
         x = self.global_pool(x)
 
         embedding = x
-        
+
         x = self.prediction(x) # n_samples, n_diseases
 
         return x, embedding

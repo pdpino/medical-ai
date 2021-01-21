@@ -63,7 +63,11 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 num_workers=2,
                                 **kwargs,
                                 ):
-    LOGGER.info('Loading %s/%s cl-dataset...', dataset_name, dataset_type)
+    LOGGER.info('Loading %s/%s cl-dataset, bs=%d...', dataset_name, dataset_type, batch_size)
+
+    assert image_size is None or isinstance(image_size, (tuple, list)), (
+        'Image size must be a tuple, list, or None'
+    )
 
     assert dataset_name in _CL_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _CL_DATASETS[dataset_name]
@@ -81,7 +85,10 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                            )
 
     if len(dataset) == 0:
+        LOGGER.error('\tEmpty dataset')
         return None
+
+    LOGGER.info('\tDataset size: %d', len(dataset))
 
     if augment:
         dataset = Augmentator(dataset,
@@ -157,7 +164,7 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    masks=False,
                                    **kwargs,
                                    ):
-    LOGGER.info('Loading %s/%s rg-dataset...', dataset_name, dataset_type)
+    LOGGER.info('Loading %s/%s rg-dataset, bs=%d...', dataset_name, dataset_type, batch_size)
 
     assert dataset_name in _RG_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _RG_DATASETS[dataset_name]
@@ -170,6 +177,12 @@ def prepare_data_report_generation(create_dataloader_fn,
                            masks=masks,
                            **kwargs,
                            )
+
+    if len(dataset) == 0:
+        LOGGER.error('\tEmpty dataset')
+        return None
+
+    LOGGER.info('\tDataset size: %d', len(dataset))
 
     if augment:
         dataset = Augmentator(dataset,
@@ -199,7 +212,7 @@ def prepare_data_segmentation(dataset_name=None,
                               num_workers=2,
                               **kwargs,
                              ):
-    LOGGER.info('Loading %s/%s seg-dataset...', dataset_name, dataset_type)
+    LOGGER.info('Loading %s/%s seg-dataset, bs=%d...', dataset_name, dataset_type, batch_size)
 
     assert dataset_name in _SEG_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _SEG_DATASETS[dataset_name]
@@ -208,6 +221,12 @@ def prepare_data_segmentation(dataset_name=None,
                            image_size=image_size,
                            **kwargs,
                           )
+
+    if len(dataset) == 0:
+        LOGGER.error('\tEmpty dataset')
+        return None
+
+    LOGGER.info('\tDataset size: %d', len(dataset))
 
     if augment:
         dataset = Augmentator(dataset,

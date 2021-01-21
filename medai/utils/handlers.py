@@ -111,6 +111,9 @@ def attach_lr_scheduler_handler(lr_scheduler,
     """Attaches a callback that updates the lr_scheduler."""
     def update_scheduler(unused_engine):
         val_metrics = validator.state.metrics
+        if target_metric not in val_metrics:
+            LOGGER.warning('Cannot step LR-scheduler, %s not found in val_metrics', target_metric)
+            return
         lr_scheduler.step(val_metrics[target_metric])
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, update_scheduler)

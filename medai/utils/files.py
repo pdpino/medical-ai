@@ -8,6 +8,7 @@ def _get_task_folder(task):
         'rg': 'report_generation',
         'seg': 'segmentation',
     }
+    task = task.lower()
     if task not in folder_by_task:
         raise Exception(f'Task does not exist: {task}')
 

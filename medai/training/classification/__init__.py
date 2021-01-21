@@ -1,7 +1,21 @@
 import torch
 
-def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, device='cuda'):
+from medai.losses.out_of_target import OutOfTargetSumLoss
+from medai.training.classification.grad_cam import (
+    calculate_attributions_for_labels,
+    create_grad_cam,
+)
+from medai.datasets.common.utils import reduce_masks_for_diseases
+
+def get_step_fn(model, loss_fn, optimizer=None, training=True,
+                multilabel=True, hint=False, diseases=None,
+                device='cuda'):
     """Creates a step function for an Engine."""
+    if hint:
+        hint_loss_fn = OutOfTargetSumLoss()
+        grad_cam = create_grad_cam(model, device=device)
+        assert diseases is not None, 'If hint=True, diseases cannot be None'
+
     def step_fn(unused_engine, data_batch):
         # Move inputs to GPU
         images = data_batch.image.to(device)
@@ -30,12 +44,36 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
             labels = labels.long()
 
         # Compute classification loss
-        loss = loss_fn(outputs, labels)
+        cl_loss = loss_fn(outputs, labels)
 
-        batch_loss = loss.item()
+        if hint:
+            images.requires_grad = True
+
+            grad_cam_attrs = calculate_attributions_for_labels(
+                grad_cam, images, diseases,
+                relu=True, create_graph=True,
+            )
+            # shape: (batch_size, n_diseases, height, width)
+
+            images.requires_grad = False
+
+            masks = reduce_masks_for_diseases(
+                diseases,
+                data_batch.masks.to(device),
+            )
+            # shape: (batch_size, n_diseases, height, width)
+
+            hint_loss = hint_loss_fn(grad_cam_attrs, masks)
+            hint_loss_value = hint_loss.item()
+
+            total_loss = cl_loss + hint_loss
+        else:
+            hint_loss_value = -1
+
+            total_loss = cl_loss
 
         if training:
-            loss.backward()
+            total_loss.backward()
             optimizer.step()
 
         if multilabel:
@@ -43,7 +81,8 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True, multilabel=True, 
             outputs = torch.sigmoid(outputs)
 
         return {
-            'loss': batch_loss,
+            'loss': total_loss.item(),
+            'hint_loss': hint_loss_value,
             'pred_labels': outputs,
             'gt_labels': labels,
         }

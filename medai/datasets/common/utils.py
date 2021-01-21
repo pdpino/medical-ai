@@ -9,7 +9,6 @@ from medai.datasets.common.constants import (
     JSRT_ORGANS,
 )
 
-
 # Map from diseases to tuple of organs
 _DISEASE_TO_ORGANS = {
     disease: (ORGAN_RIGHT_LUNG, ORGAN_LEFT_LUNG)
@@ -28,11 +27,11 @@ def reduce_masks_for_disease(label, sample_masks, organs=JSRT_ORGANS):
     collapses the mask into an image.
 
     Args:
-        organs -- list of organs (list of str)
         label -- disease (str)
         sample_masks -- tensor of shape (*, n_organs, height, width)
             Notice it may be masks for a batch (i.e. batch_size is the first dimension),
             or for one sample (i.e. n_organs is the first dimension)
+        organs -- list of organs (list of str)
 
     Returns:
         Mask with organs for the disease, tensor of shape (*, height, width)
@@ -57,3 +56,27 @@ def reduce_masks_for_disease(label, sample_masks, organs=JSRT_ORGANS):
     # shape: *, height, width
 
     return mask
+
+
+def reduce_masks_for_diseases(labels, sample_masks, organs=JSRT_ORGANS):
+    """Reduce a tensor of organ masks for multiple diseases.
+
+    i.e. calls reduce_masks_for_disease() multiple times
+
+    Args:
+        labels -- diseases (list of str)
+        sample_masks -- tensor of shape (*, n_organs, height, width)
+            Notice it may be masks for a batch (i.e. batch_size is the first dimension),
+            or for one sample (i.e. n_organs is the first dimension)
+        organs -- list of organs (list of str)
+
+    Returns:
+        Mask with organs for the disease, tensor of shape (*, n_labels, height, width)
+    """
+    masks = torch.stack([
+        reduce_masks_for_disease(label, sample_masks, organs=organs)
+        # shape: batch_size, height, width
+        for label in labels
+    ], dim=-3)
+
+    return masks

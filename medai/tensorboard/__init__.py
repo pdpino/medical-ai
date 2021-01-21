@@ -9,7 +9,7 @@ from medai import utils
 from medai.utils.files import get_tb_log_folder
 
 IGNORE_METRICS = [
-    '\Acm', # Confusion-matrix, no sense to put it in TB
+    r'\Acm', # Confusion-matrix, no sense to put it in TB
     '_timer', # Medical correctness timers, return strings
 ]
 
@@ -40,6 +40,7 @@ class TBWriter:
             'word_loss': 'Loss_word',
             'stop_loss': 'Loss_stop',
             'att_loss': 'Loss_att',
+            'hint_loss': 'Loss_hint',
         }
 
         self._histogram = histogram
@@ -67,6 +68,11 @@ class TBWriter:
 
             name = self._name_mappings.get(name, name)
             self.writer.add_scalar(f'{name}/{run_type}', value, epoch, wall_time)
+
+
+    def write_graph(self, model, inputs, verbose=False):
+        self.writer.add_graph(model, inputs, verbose=verbose)
+
 
     def close(self):
         self.writer.close()

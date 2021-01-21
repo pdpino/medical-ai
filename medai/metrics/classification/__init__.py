@@ -151,14 +151,20 @@ def _transform_remove_loss_and_round(output):
     return torch.round(y_pred), y_true
 
 
-def attach_metrics_classification(engine, labels, multilabel=True):
+def attach_metrics_classification(engine, labels, multilabel=True, hint=False):
     """Attach classification metrics to an engine, to use during training.
 
     Note: most multilabel metrics are treated as binary,
         i.e. the metrics are computed separately for each label.
     """
-    loss = RunningAverage(output_transform=operator.itemgetter('loss'), alpha=1)
-    loss.attach(engine, 'loss')
+    losses = ['loss']
+    if hint:
+        losses.append('hint_loss')
+    for loss_name in losses:
+        loss_metric = RunningAverage(
+            output_transform=operator.itemgetter(loss_name), alpha=1,
+        )
+        loss_metric.attach(engine, loss_name)
 
     if multilabel:
         acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round)

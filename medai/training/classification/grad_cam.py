@@ -5,7 +5,8 @@ from torch.nn.functional import interpolate, softmax
 from ignite.engine import Engine, Events
 from captum.attr import LayerGradCam
 
-from medai.datasets.common.utils import reduce_masks_for_disease
+from medai.models.classification.load_imagenet import ImageNetModel
+from medai.datasets.common.utils import reduce_masks_for_diseases
 from medai.metrics.segmentation import attach_metrics_image_saliency
 from medai.utils.images import bbox_coordinates_to_map
 from medai.utils import tensor_to_range01
@@ -29,40 +30,41 @@ class ModelWrapper(nn.Module):
         return output
 
 
-def _get_last_layer(compiled_model):
-    model_name = compiled_model.metadata['model_kwargs']['model_name']
-
-    model = compiled_model.model
+def _get_last_layer(model):
     if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
         model = model.module
 
-    if model_name == 'mobilenet-v2':
-        return model.features[-1][0] # -1
-    if model_name == 'densenet-121-v2':
-        return model.features.conv2 # norm5
-    if model_name == 'resnet-50-v2':
-        return model.features[-1][-1].conv3 # relu
+    model_name = model.model_name
+
+    if isinstance(model, ImageNetModel):
+        if model_name == 'mobilenet':
+            return model.features[-1][0] # -1
+        if model_name == 'densenet-121':
+            return model.features.denseblock4.denselayer16.conv2 # norm5
+        if model_name == 'resnet-50':
+            return model.features[-1][-1].conv3 # relu
 
     # DEPRECATED MODELS
-    if model_name == 'mobilenet':
-        # return model.base_cnn.features[-1][0] # Last conv
-        return model.base_cnn.features[-1][-1] # Actual last
-    if model_name == 'densenet-121':
-        # return model.base_cnn.features.denseblock4.denselayer16.conv2 # Last conv
-        return model.base_cnn.features.norm5 # Actual last
-    if model_name == 'resnet-50':
-        # return model.base_cnn.layer4[-1].conv3 # Last conv
-        return model.base_cnn.layer4[-1].relu # Actual last
+    else:
+        if model_name == 'mobilenet':
+            # return model.base_cnn.features[-1][0] # Last conv
+            return model.base_cnn.features[-1][-1] # Actual last
+        if model_name == 'densenet-121':
+            # return model.base_cnn.features.denseblock4.denselayer16.conv2 # Last conv
+            return model.base_cnn.features.norm5 # Actual last
+        if model_name == 'resnet-50':
+            # return model.base_cnn.layer4[-1].conv3 # Last conv
+            return model.base_cnn.layer4[-1].relu # Actual last
 
     raise Exception(f'Last layer not hardcoded for: {model_name}')
 
 
-def create_grad_cam(compiled_model, device='cuda', multiple_gpu=False):
-    wrapped_model = ModelWrapper(compiled_model.model).to(device)
+def create_grad_cam(model, device='cuda', multiple_gpu=False):
+    wrapped_model = ModelWrapper(model).to(device)
     if multiple_gpu:
         wrapped_model = nn.DataParallel(wrapped_model)
 
-    layer = _get_last_layer(compiled_model)
+    layer = _get_last_layer(model)
     grad_cam = LayerGradCam(wrapped_model, layer)
 
     return grad_cam
@@ -84,7 +86,8 @@ def threshold_attributions(attributions, thresh=0.5):
     return attributions
 
 
-def calculate_attributions(grad_cam, images, label_index, relu=True):
+def calculate_attributions(grad_cam, images, label_index,
+                           relu=True, create_graph=False):
     """Calculate grad-cam attributions for a batch of images.
 
     Args:
@@ -96,10 +99,10 @@ def calculate_attributions(grad_cam, images, label_index, relu=True):
     """
     image_size = images.size()[-2:]
 
-    images.requires_grad = True # Needed for Grad-CAM
-    # Notice this is not returned to its original value!
-
-    attributions = grad_cam.attribute(images, label_index, relu_attributions=relu).detach()
+    attributions = grad_cam.attribute(
+        images, label_index,
+        relu_attributions=relu, create_graph=create_graph,
+    )
     # shape: batch_size, 1, layer_h, layer_w
 
     attributions = interpolate(attributions, image_size)
@@ -114,9 +117,19 @@ def calculate_attributions(grad_cam, images, label_index, relu=True):
     return attributions
 
 
+def calculate_attributions_for_labels(grad_cam, images, labels, **kwargs):
+    """Calls calculate_attributions() for multiple labels,
+    and stack the results."""
+    return torch.stack([
+        calculate_attributions(grad_cam, images, index, **kwargs) # (bs, h, w)
+        for index, _ in enumerate(labels)
+    ], dim=1)
+
+
 def get_step_fn(grad_cam, labels,
                 enable_bbox=True, enable_masks=True, relu=True,
                 thresh=0.5, device='cuda'):
+    """Returns a step_fn that only runs grad_cam evaluation."""
     def step_fn(unused_engine, batch):
         ## Images
         images = batch.image.to(device)
@@ -135,21 +148,17 @@ def get_step_fn(grad_cam, labels,
 
         ## Organ masks
         if enable_masks:
-            batch_masks = batch.masks.to(device) # shape: batch_size, n_organs, height, width
-            masks = torch.stack([
-                reduce_masks_for_disease(label, batch_masks) # shape: batch_size, height, width
-                for label in labels
-            ], dim=1)
-            # shape: batch_size, n_labels, height, width
+            batch_masks = batch.masks.to(device) # shape (bs, n_organs, h, w)
+            masks = reduce_masks_for_diseases(labels, batch_masks) # shape (bs, n_labels, h, w)
         else:
             masks = None
 
         ## Calculate attributions
-        attributions = []
-        for index, _ in enumerate(labels):
-            attrs = calculate_attributions(grad_cam, images, index, relu=relu)
-            attributions.append(attrs)
-        attributions = torch.stack(attributions, dim=1)
+        images.requires_grad = True # Needed for Grad-CAM
+        # Notice this is not returned to its original value!
+        attributions = calculate_attributions_for_labels(
+            grad_cam, images, labels, relu=relu,
+        ).detach()
         # shape: batch_size, n_labels, h, w
 
         attributions = threshold_attributions(attributions, thresh=thresh)
@@ -176,7 +185,9 @@ def create_grad_cam_evaluator(trainer,
     labels = dataloaders[0].dataset.labels
 
     # Prepare grad_cam
-    grad_cam = create_grad_cam(compiled_model, device=device, multiple_gpu=multiple_gpu)
+    grad_cam = create_grad_cam(
+        compiled_model.model, device=device, multiple_gpu=multiple_gpu,
+    )
     grad_cam_engine = Engine(get_step_fn(grad_cam,
                                          labels,
                                          enable_bbox=False,

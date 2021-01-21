@@ -73,6 +73,7 @@ def train_model(run_name,
                 grad_cam_thresh=0.5,
                 early_stopping=True,
                 early_stopping_kwargs={},
+                hint=False,
                 lr_sch_metric='loss',
                 debug=True,
                 dryrun=False,
@@ -105,9 +106,12 @@ def train_model(run_name,
                                    loss,
                                    training=False,
                                    multilabel=multilabel,
+                                   hint=hint,
+                                   diseases=labels,
                                    device=device,
                                    ))
-    attach_metrics_classification(validator, labels, multilabel=multilabel)
+    attach_metrics_classification(validator, labels,
+                                  multilabel=multilabel, hint=hint)
 
     # Create trainer engine
     trainer = Engine(get_step_fn(model,
@@ -115,9 +119,12 @@ def train_model(run_name,
                                  optimizer=optimizer,
                                  training=True,
                                  multilabel=multilabel,
+                                 hint=hint,
+                                 diseases=labels,
                                  device=device,
                                  ))
-    attach_metrics_classification(trainer, labels, multilabel=multilabel)
+    attach_metrics_classification(trainer, labels,
+                                  multilabel=multilabel, hint=hint)
 
     if grad_cam:
         create_grad_cam_evaluator(
@@ -271,6 +278,7 @@ def train_from_scratch(run_name,
                        batch_size=None,
                        norm_by_sample=False,
                        n_epochs=10,
+                       hint=False,
                        grad_cam=True,
                        grad_cam_thresh=0.5,
                        early_stopping=True,
@@ -361,7 +369,7 @@ def train_from_scratch(run_name,
         'frontal_only': frontal_only,
         'num_workers': num_workers,
         'norm_by_sample': norm_by_sample,
-        'masks': grad_cam,
+        'masks': grad_cam or hint,
     }
     dataset_train_kwargs = {
         'shuffle': shuffle,
@@ -423,6 +431,7 @@ def train_from_scratch(run_name,
 
     # Create lr_scheduler
     lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
+    LOGGER.info('Using LR-scheduler=%s', lr_scheduler is not None)
 
     other_train_kwargs = {
         'early_stopping': early_stopping,
@@ -430,6 +439,7 @@ def train_from_scratch(run_name,
         'lr_sch_metric': lr_sch_metric,
         'grad_cam': grad_cam,
         'grad_cam_thresh': grad_cam_thresh,
+        'hint': hint,
     }
 
 
@@ -493,6 +503,8 @@ def parse_args():
                         help='Additional metrics to print to stdout')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--hint', action='store_true',
+                        help='Use HINT training')
 
     cnn_group = parser.add_argument_group('CNN params')
     cnn_group.add_argument('-m', '--model', type=str, default=None,
@@ -550,8 +562,8 @@ def parse_args():
                                    with a given label (str/int)')
 
     parsers.add_args_tb(parser)
-    parsers.add_args_early_stopping(parser, metric='acc')
-    parsers.add_args_lr_sch(parser, lr=None, metric='acc')
+    parsers.add_args_early_stopping(parser, metric='roc_auc')
+    parsers.add_args_lr_sch(parser, lr=None, metric='roc_auc')
 
     parsers.add_args_hw(parser, num_workers=2)
 
@@ -564,9 +576,9 @@ def parse_args():
         if args.model is None:
             parser.error('A model must be selected')
 
-    if args.grad_cam:
+    if args.grad_cam or args.hint:
         if not args.frontal_only:
-            parser.error('If grad_cam, frontal_only must be True')
+            parser.error('If grad_cam or hint, frontal_only must be True')
 
 
     # Build loss params
@@ -638,6 +650,7 @@ if __name__ == '__main__':
             batch_size=ARGS.batch_size,
             norm_by_sample=ARGS.norm_by_sample,
             n_epochs=ARGS.epochs,
+            hint=ARGS.hint,
             grad_cam=ARGS.grad_cam,
             grad_cam_thresh=ARGS.grad_cam_thresh,
             early_stopping=ARGS.early_stopping,

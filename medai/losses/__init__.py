@@ -17,8 +17,8 @@ AVAILABLE_LOSSES = list(_LOSS_CLASSES)
 def get_loss_function(loss_name, **loss_params):
     if loss_name not in _LOSS_CLASSES:
         raise Exception(f'Loss not found: {loss_name}')
-        
+
     LossClass = _LOSS_CLASSES[loss_name]
-        
+
     loss = LossClass(**loss_params)
     return loss

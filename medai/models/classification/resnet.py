@@ -8,10 +8,12 @@ from medai.models.common import (
 )
 
 class Resnet50CNN(nn.Module):
+    model_name = 'resnet-50'
+
     def __init__(self, labels, imagenet=True, freeze=False,
                  pretrained_cnn=None, gpool='max', fc_layers=(),
                  dropout=None,
-                 **unused):
+                 **unused_kwargs):
         """Resnet-50."""
         super().__init__()
 
@@ -19,7 +21,7 @@ class Resnet50CNN(nn.Module):
 
         if pretrained_cnn is not None:
             self.base_cnn.load_state_dict(pretrained_cnn.state_dict())
-        
+
         self.labels = list(labels)
 
         if freeze:
@@ -43,15 +45,15 @@ class Resnet50CNN(nn.Module):
 
         x = self.features(x)
         # shape: batch_size, n_features, height = 16, width = 16
-        
+
         if features:
             return x
 
         x = self.global_pool(x)
         # shape: batch_size, n_features
-        
+
         if self.dropout:
-            x = self.dropout(x)
+            x = self.dropout(x) # pylint: disable=not-callable
             # shape: batch_size, n_features
 
         x = self.prediction(x)
@@ -79,26 +81,26 @@ class Resnet50CNN(nn.Module):
 
         x = self.features(x)
         # shape: batch_size, n_features, height = 16, width = 16
-        
+
 
         # Calculate CAM
-        pred_weights, pred_bias_unused = list(self.prediction.parameters())
+        pred_weights, unused_pred_bias = list(self.prediction.parameters())
         # pred_weights size: n_diseases, n_features = 2048
 
         # x: activations from prev layer
         # bbox: for each sample, multiply n_features dimensions
         activations = torch.matmul(pred_weights, x.transpose(1, 2)).transpose(1, 2)
         # shape: batch_size, n_diseases, height, width
-        
+
         x = self.global_pool(x)
         # shape: batch_size, n_features, 1, 1
-        
+
         x = x.view(x.size(0), -1)
         # shape: batch_size, n_features
-        
+
         embedding = x
-        
+
         x = self.prediction(x)
         # shape: batch_size, n_diseases
-        
+
         return x, embedding, activations

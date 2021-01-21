@@ -54,7 +54,7 @@ def run_evaluation(run_name,
     labels = dataloader.dataset.labels
 
     # Prepare GradCAM
-    grad_cam = create_grad_cam(compiled_model, device, multiple_gpu)
+    grad_cam = create_grad_cam(compiled_model.model, device, multiple_gpu)
 
     # Create engine
     engine = Engine(get_step_fn(grad_cam, labels, thresh=thresh, device=device))

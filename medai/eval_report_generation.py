@@ -145,6 +145,7 @@ def evaluate_run(run_name,
                  debug=True,
                  device='cuda',
                  multiple_gpu=False,
+                 batch_size=None,
                  dataset_types=('train','val','test'),
                  medical_correctness=True,
                  max_samples=None,
@@ -198,6 +199,8 @@ def evaluate_run(run_name,
 
     if max_samples is not None:
         dataset_kwargs['max_samples'] = max_samples
+    if batch_size is not None:
+        dataset_kwargs['batch_size'] = batch_size
 
     # Create dataloaders
     dataloaders = [
@@ -240,8 +243,8 @@ def parse_args():
                         help='Eval in datasets')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
-    # parser.add_argument('-bs', '--batch_size', type=int, default=10,
-    #                     help='Batch size')
+    parser.add_argument('-bs', '--batch_size', type=int, default=None,
+                        help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
     # parser.add_argument('--image-size', type=int, default=512,
@@ -296,7 +299,7 @@ if __name__ == '__main__':
                  n_epochs=ARGS.epochs,
                  max_samples=ARGS.max_samples,
                  override=ARGS.override,
-                #  batch_size=ARGS.batch_size,
+                 batch_size=ARGS.batch_size,
                 #  frontal_only=ARGS.frontal_only,
                 #  image_size=ARGS.image_size,
                 #  norm_by_sample=ARGS.norm_by_sample,

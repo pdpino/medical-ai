@@ -145,7 +145,7 @@ def config_logging():
     # Root logger
     logging.basicConfig(
         level=logging.WARNING,
-        format='%(levelname)s(%(asctime)s) %(message)s', # %(name)s
+        format='%(levelname)s(%(asctime)s) %(message)s', # [%(name)s]
         datefmt='%m-%d %H:%M',
     )
 

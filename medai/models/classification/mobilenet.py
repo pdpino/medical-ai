@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from torchvision import models
 
@@ -8,9 +7,11 @@ from medai.models.common import (
 )
 
 class MobileNetV2CNN(nn.Module):
+    model_name = 'mobilenet'
+
     def __init__(self, labels, imagenet=True, freeze=False,
                  pretrained_cnn=None, gpool='max', fc_layers=(),
-                 **unused):
+                 **unused_kwargs):
         """MobileNet-v2."""
         super().__init__()
 
@@ -50,4 +51,4 @@ class MobileNetV2CNN(nn.Module):
         x = self.prediction(x)
         # shape: batch_size, n_diseases
 
-        return x,
+        return (x,)

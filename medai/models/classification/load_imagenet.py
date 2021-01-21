@@ -54,7 +54,7 @@ class ImageNetModel(nn.Module):
                 param.requires_grad = False
 
         self.labels = list(labels)
-        self.base_name = model_name
+        self.model_name = model_name
 
         self.global_pool = get_adaptive_pooling_layer(gpool)
 
