@@ -19,3 +19,4 @@ main.py
 
 # Others
 medai/batch*.sh
+medai/utils/*.sh
