@@ -1,3 +1,4 @@
+import logging
 import torch
 
 from medai.losses.out_of_target import OutOfTargetSumLoss
@@ -6,6 +7,8 @@ from medai.training.classification.grad_cam import (
     create_grad_cam,
 )
 from medai.datasets.common.utils import reduce_masks_for_diseases
+
+LOGGER = logging.getLogger(__name__)
 
 def get_step_fn(model, loss_fn, optimizer=None, training=True,
                 multilabel=True, hint=False, diseases=None,
@@ -47,13 +50,14 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
         cl_loss = loss_fn(outputs, labels)
 
         if hint:
-            images.requires_grad = True
+            with torch.set_grad_enabled(True):
+                images.requires_grad = True
 
-            grad_cam_attrs = calculate_attributions_for_labels(
-                grad_cam, images, diseases,
-                relu=True, create_graph=True,
-            )
-            # shape: (batch_size, n_diseases, height, width)
+                grad_cam_attrs = calculate_attributions_for_labels(
+                    grad_cam, images, diseases,
+                    relu=True, create_graph=True,
+                )
+                # shape: (batch_size, n_diseases, height, width)
 
             images.requires_grad = False
 
@@ -63,10 +67,21 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
             )
             # shape: (batch_size, n_diseases, height, width)
 
-            hint_loss = hint_loss_fn(grad_cam_attrs, masks)
-            hint_loss_value = hint_loss.item()
+            hint_loss = hint_loss_fn(grad_cam_attrs, masks) # shape: 1
+            if hint_loss.isnan().any():
+                hint_loss_value = -1
+                LOGGER.error(
+                    'Hint loss returned nan, training=%s, masks_is_nan=%s, attrs_is_nan=%s',
+                    training,
+                    masks.isnan().any(),
+                    grad_cam_attrs.isnan().any(),
+                )
 
-            total_loss = cl_loss + hint_loss
+                total_loss = cl_loss
+            else:
+                hint_loss_value = hint_loss.item()
+                total_loss = cl_loss + hint_loss
+
         else:
             hint_loss_value = -1
 

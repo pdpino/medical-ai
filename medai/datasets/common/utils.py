@@ -6,17 +6,29 @@ from medai.datasets.common.constants import (
     ORGAN_RIGHT_LUNG,
     ORGAN_LEFT_LUNG,
     CXR14_DISEASES,
+    CHEXPERT_LABELS,
     JSRT_ORGANS,
 )
 
 # Map from diseases to tuple of organs
 _DISEASE_TO_ORGANS = {
     disease: (ORGAN_RIGHT_LUNG, ORGAN_LEFT_LUNG)
-    for disease in CXR14_DISEASES
+    for disease in CXR14_DISEASES + CHEXPERT_LABELS
     # Almost all belong to both lungs
 }
-_DISEASE_TO_ORGANS['Cardiomegaly'] = (ORGAN_HEART,)
-_DISEASE_TO_ORGANS['Hernia'] = (ORGAN_BACKGROUND, ORGAN_HEART, ORGAN_RIGHT_LUNG, ORGAN_LEFT_LUNG)
+
+def _set_organs_for_disease(diseases, organs):
+    for label in diseases:
+        _DISEASE_TO_ORGANS[label] = tuple(organs)
+
+_set_organs_for_disease(
+    ('Hernia', 'No Finding', 'Fracture', 'Support Devices'),
+    (ORGAN_BACKGROUND, ORGAN_HEART, ORGAN_RIGHT_LUNG, ORGAN_LEFT_LUNG),
+)
+_set_organs_for_disease(
+    ('Enlarged Cardiomediastinum', 'Cardiomegaly'),
+    (ORGAN_HEART,),
+)
 
 
 def reduce_masks_for_disease(label, sample_masks, organs=JSRT_ORGANS):
@@ -38,7 +50,7 @@ def reduce_masks_for_disease(label, sample_masks, organs=JSRT_ORGANS):
     """
     # Get organ names
     if label not in _DISEASE_TO_ORGANS:
-        raise KeyError('Disease not in _DISEASE_TO_ORGANS dictionary')
+        raise KeyError(f'Disease {label} not in _DISEASE_TO_ORGANS dictionary')
     organs_names = _DISEASE_TO_ORGANS[label]
 
     # Get organ idxs

@@ -657,6 +657,7 @@ if __name__ == '__main__':
             early_stopping_kwargs=ARGS.early_stopping_kwargs,
             lr_sch_metric=ARGS.lr_metric,
             lr_sch_kwargs=ARGS.lr_sch_kwargs,
+            frontal_only=ARGS.frontal_only,
             oversample=ARGS.oversample is not None,
             oversample_label=ARGS.oversample,
             oversample_class=ARGS.os_class,
