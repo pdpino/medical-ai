@@ -24,6 +24,8 @@ from medai.utils.csv import CSVWriter
 from medai.utils.files import get_results_folder
 from medai.utils.nlp import ReportReader, trim_rubbish
 
+LOGGER = logging.getLogger(__name__)
+
 
 def _get_flat_reports(outputs):
     """Transforms the output to arrays of words indexes.
@@ -181,11 +183,48 @@ def _attach_medical_labeler_correctness(engine, labeler, basename, timer=True):
     return metric_obj
 
 
+from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
+from medai.utils.lock import SyncLock
+
+_LOCK_FOLDER = LABELER_CACHE_DIR
+_LOCK_NAME = 'med-corr-cache'
+
 def attach_medical_correctness(trainer, validator, vocab):
+    """Attaches medical correctness metrics to engines.
+
+    Args:
+        trainer -- ignite.Engine
+        validator -- ignite.Engine or None
+        vocab -- dataset vocabulary (dict)
+    """
+    lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME)
+
+    if not lock.acquire():
+        LOGGER.warning(
+            'Cannot attach medical correctness metric, cache is locked',
+        )
+        return
+
     for engine in (trainer, validator):
         if engine is None:
             continue
-        _attach_medical_labeler_correctness(engine, ChexpertLightLabeler(vocab), 'chex')
+
+        labeler = ChexpertLightLabeler(vocab)
+        _attach_medical_labeler_correctness(engine, labeler, 'chex')
+
+
+    def _release_locks(unused_engine, err=None):
+        lock.release()
+
+        if err is not None:
+            raise err
+
+    trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
+    trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
+
+    if validator is not None:
+        validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
+
 
     ## TODO: awake metrics only after N epochs,
     ## to avoid calculating for non-sense random reports

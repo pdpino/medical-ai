@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from functools import reduce
-import os
 import pandas as pd
 import numpy as np
 
@@ -36,7 +35,6 @@ class LightLabeler(ABC):
         Returns:
             np.array of shape batch_size, n_diseases
         """
-        pass
 
 
     def _split_sentences_and_label(self, reports):
