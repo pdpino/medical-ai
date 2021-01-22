@@ -8,9 +8,9 @@ from medai.datasets import prepare_data_report_generation
 from medai.metrics import save_results, are_results_saved
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
-    attach_medical_correctness,
     attach_attention_vs_masks,
 )
+from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
 from medai.metrics.report_generation.writer import (
     attach_report_writer,
     delete_previous_outputs,

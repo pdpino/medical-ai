@@ -1,11 +1,7 @@
-import os
-from functools import partial
 import operator
 import logging
 import numpy as np
-import torch
 from torch.nn.functional import interpolate
-from ignite.engine import Events
 from ignite.metrics import RunningAverage, MetricsLambda
 
 from medai.metrics.segmentation.iou import IoU
@@ -16,29 +12,9 @@ from medai.metrics.report_generation.rouge import RougeL
 from medai.metrics.report_generation.cider import CiderD
 from medai.metrics.report_generation.distinct_sentences import DistinctSentences
 from medai.metrics.report_generation.distinct_words import DistinctWords
-from medai.metrics.report_generation.labeler_correctness import MedicalLabelerCorrectness
-from medai.metrics.report_generation.labeler_correctness.light_labeler import ChexpertLightLabeler
-from medai.metrics.report_generation.labeler_correctness.labeler_timer import LabelerTimerMetric
-from medai.utils import WORKSPACE_DIR
-from medai.utils.csv import CSVWriter
-from medai.utils.files import get_results_folder
-from medai.utils.nlp import ReportReader, trim_rubbish
+from medai.metrics.report_generation.transforms import _get_flat_reports
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _get_flat_reports(outputs):
-    """Transforms the output to arrays of words indexes.
-
-    Args:
-        outputs: dict with at least:
-            ['flat_reports']: shape: batch_size, n_words
-            ['flat_reports_gen']: shape: batch_size, n_words
-    """
-    flat_reports = outputs['flat_reports']
-    flat_reports_gen = outputs['flat_reports_gen']
-
-    return flat_reports_gen, flat_reports
 
 
 def _attach_bleu(engine, up_to_n=4,
@@ -131,107 +107,3 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False,
 
     distinct_sentences = DistinctSentences(output_transform=_get_flat_reports)
     distinct_sentences.attach(engine, 'distinct_sentences')
-
-
-def _attach_medical_labeler_correctness(engine, labeler, basename, timer=True):
-    """Attaches MedicalLabelerCorrectness metrics to an engine.
-
-    It will attach metrics in the form <basename>_<metric_name>_<disease>
-
-    Args:
-        engine -- ignite engine to attach metrics to
-        labeler -- labeler instance to pass to the MedicalLabelerCorrectness metric
-        basename -- to use when attaching metrics
-    """
-    if timer:
-        timer_metric = LabelerTimerMetric(labeler=labeler)
-        timer_metric.attach(engine, f'{basename}_timer')
-
-    metric_obj = MedicalLabelerCorrectness(labeler, output_transform=_get_flat_reports)
-
-    def _disease_metric_getter(result, metric_name, metric_index):
-        """Given the MedicalLabelerCorrectness output returns a disease metric value.
-
-        The metric obj returns a dict(key: metric_name, value: tensor/array of size n_diseases)
-        e.g.: {
-          'acc': tensor of 14 diseases,
-          'prec': tensor of 14 diseases,
-          etc
-        }
-        """
-        return result[metric_name][metric_index].item()
-
-    def _macro_avg_getter(result, metric_name):
-        return np.mean(result[metric_name])
-
-    for metric_name in metric_obj.METRICS:
-        # Attach diseases' macro average
-        macro_avg = MetricsLambda(
-            partial(_macro_avg_getter, metric_name=metric_name),
-            metric_obj,
-        )
-        macro_avg.attach(engine, f'{basename}_{metric_name}')
-
-        # Attach for each disease
-        for index, disease in enumerate(labeler.diseases):
-            disease_metric = MetricsLambda(
-                partial(_disease_metric_getter, metric_name=metric_name, metric_index=index),
-                metric_obj,
-            )
-            disease_metric.attach(engine, f'{basename}_{metric_name}_{disease}')
-
-    return metric_obj
-
-
-from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
-from medai.utils.lock import SyncLock
-
-_LOCK_FOLDER = LABELER_CACHE_DIR
-_LOCK_NAME = 'med-corr-cache'
-
-def attach_medical_correctness(trainer, validator, vocab):
-    """Attaches medical correctness metrics to engines.
-
-    Args:
-        trainer -- ignite.Engine
-        validator -- ignite.Engine or None
-        vocab -- dataset vocabulary (dict)
-    """
-    lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME)
-
-    if not lock.acquire():
-        LOGGER.warning(
-            'Cannot attach medical correctness metric, cache is locked',
-        )
-        return
-
-    for engine in (trainer, validator):
-        if engine is None:
-            continue
-
-        labeler = ChexpertLightLabeler(vocab)
-        _attach_medical_labeler_correctness(engine, labeler, 'chex')
-
-
-    def _release_locks(unused_engine, err=None):
-        lock.release()
-
-        if err is not None:
-            raise err
-
-    trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
-    trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
-
-    if validator is not None:
-        validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
-
-
-    ## TODO: awake metrics only after N epochs,
-    ## to avoid calculating for non-sense random reports
-    # @trainer.on(Events.EPOCH_STARTED(once=5))
-    # def _awake_after_epochs():
-    #     LOGGER.info('Awaking metrics...')
-    #     chexpert.has_started = True
-
-    # TODO: apply for MIRQI as well
-    # _attach_medical_labeler_correctness(engine, MirqiLightLabeler(vocab), 'mirqi')
