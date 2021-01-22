@@ -29,6 +29,7 @@ class TBWriter:
         self.ignore_regex = '|'.join(ignore_metrics)
         self.ignore_regex = re.compile(f'({self.ignore_regex})')
 
+        self._histogram = histogram
 
         # Capitalize so in TB appears first
         self._name_mappings = {
@@ -37,13 +38,17 @@ class TBWriter:
             'hamming': 'Hamming',
             'bce': 'BCELoss',
             'roc_auc': 'Roc_auc', # Macro averaged
-            'word_loss': 'Loss_word',
-            'stop_loss': 'Loss_stop',
-            'att_loss': 'Loss_att',
-            'hint_loss': 'Loss_hint',
         }
 
-        self._histogram = histogram
+        self._loss_regex = re.compile(r'(\w+)_loss')
+
+    def _map_metric_name(self, name):
+        found = self._loss_regex.search(name)
+        if found:
+            captured = found.group(1)
+            return f'Loss_{captured}'
+
+        return self._name_mappings.get(name, name)
 
 
     def write_histogram(self, model, epoch, wall_time):
@@ -66,7 +71,7 @@ class TBWriter:
             if self.ignore_regex.search(name) or not isinstance(value, numbers.Number):
                 continue
 
-            name = self._name_mappings.get(name, name)
+            name = self._map_metric_name(name)
             self.writer.add_scalar(f'{name}/{run_type}', value, epoch, wall_time)
 
 

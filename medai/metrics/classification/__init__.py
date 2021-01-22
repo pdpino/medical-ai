@@ -159,7 +159,7 @@ def attach_metrics_classification(engine, labels, multilabel=True, hint=False):
     """
     losses = ['loss']
     if hint:
-        losses.append('hint_loss')
+        losses.extend(['cl_loss', 'hint_loss'])
     for loss_name in losses:
         loss_metric = RunningAverage(
             output_transform=operator.itemgetter(loss_name), alpha=1,

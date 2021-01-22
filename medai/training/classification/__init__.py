@@ -97,6 +97,7 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
 
         return {
             'loss': total_loss.item(),
+            'cl_loss': cl_loss.item(),
             'hint_loss': hint_loss_value,
             'pred_labels': outputs,
             'gt_labels': labels,
