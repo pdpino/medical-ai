@@ -115,7 +115,7 @@ def _get_transform_cm_multilabel(label_index):
 def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
                            use_round=True,
                            get_transform_fn=None,
-                           include_macro=False,
+                           include_macro=True,
                            metric_args=()):
     """Attaches one metric per label to an engine."""
     metrics = []
@@ -177,14 +177,13 @@ def attach_metrics_classification(engine, labels, multilabel=True, hint=False):
                         output_transform=_transform_remove_loss_and_round)
         bce_loss.attach(engine, 'bce')
 
-        _attach_binary_metrics(engine, labels, 'acc', Accuracy, True)
+        _attach_binary_metrics(engine, labels, 'acc', Accuracy, True,
+                               include_macro=False)
         _attach_binary_metrics(engine, labels, 'prec', Precision, True)
         _attach_binary_metrics(engine, labels, 'recall', Recall, True)
         _attach_binary_metrics(engine, labels, 'spec', Specificity, True)
-        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False,
-                               include_macro=True)
-        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric, False,
-                               include_macro=True)
+        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False)
+        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric, False)
     else:
         acc = Accuracy(output_transform=_transform_remove_loss)
         acc.attach(engine, 'acc')

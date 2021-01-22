@@ -1,7 +1,9 @@
+import logging
 import random
 import types
 from torch.utils.data import Dataset
 from torchvision import transforms
+import matplotlib.pyplot as plt
 
 from medai.datasets.tools.transforms import (
     pre_transform_masks,
@@ -19,6 +21,9 @@ _SPATIAL_TRANSFORMS = set([
     'shear',
     ])
 _TRANSFORM_METHOD_NAME = 'transform' # Transform method name in each dataset
+
+
+LOGGER = logging.getLogger(__name__)
 
 class Augmentator(Dataset):
     """Augmentates a classification dataset.
@@ -52,6 +57,8 @@ class Augmentator(Dataset):
             brightness -- value provided to ColorJitter
             shear -- shear angles (x, y), provided to RandomAffineMany as shear=(-x, x, -y, y)
         """
+        super().__init__()
+
         self.dataset = dataset
 
         # Define which samples to augment
@@ -126,12 +133,13 @@ class Augmentator(Dataset):
             if not should_augment:
                 continue
 
-            for aug_method in self._aug_fns.keys():
+            for aug_method in self._aug_fns:
                 for _ in range(times):
                     self.indices.append((idx, aug_method))
 
         if not dont_shuffle:
             random.shuffle(self.indices)
+        self._did_shuffle = not dont_shuffle
 
         self.augment_masks = seg_mask
 
@@ -142,7 +150,7 @@ class Augmentator(Dataset):
             'original': len(self.dataset),
         }
         stats_str = ' '.join(f'{k}={v}' for k, v in stats.items())
-        print(f'\tAugmenting {_samples_info}: ', stats_str)
+        LOGGER.info('\tAugmenting %s: %s', _samples_info, stats_str)
 
         self.monkey_patch_transform()
 
@@ -193,8 +201,8 @@ class Augmentator(Dataset):
         _transforms = tf_instance.transforms
 
         assert len(_transforms) >= 2, 'There should be at least two transforms'
-        assert isinstance(_transforms[0], transforms.Resize), 'First transform should be Resize'
-        assert isinstance(_transforms[1], transforms.ToTensor), 'Second transform should be ToTensor'
+        assert isinstance(_transforms[0], transforms.Resize), '1st transform should be Resize'
+        assert isinstance(_transforms[1], transforms.ToTensor), '2d transform should be ToTensor'
 
         # Break in two steps
         self.pre_transform = _transforms[0]
@@ -222,46 +230,45 @@ class Augmentator(Dataset):
 
         return labels_presence_aug_idxs
 
+    def plot_augmented_samples(self, sample_idx, masks=True):
+        """Utility function to plot augmented samples.
 
-import matplotlib.pyplot as plt
+        The instance must have been created with dont_shuffle=True,
+        so the samples are ordered!!
+        """
+        assert not self._did_shuffle, 'The augmented dataset was shuffled!'
 
+        plot_masks = self.augment_masks and masks
 
-def plot_augmented_samples(augmented_dataset, sample_idx, masks=True):
-    """Utility function to plot augmented samples.
+        # Amounts
+        n_aug_methods = len(self._aug_fns)
+        n_cols = n_aug_methods + 1
+        n_rows = 2 if plot_masks else 1
 
-    The augmented_dataset must have been created with dont_shuffle=True, so the samples are ordered!!
-    """
-    plot_masks = augmented_dataset.augment_masks and masks
+        # Augmented sample idx
+        idx = sample_idx * n_cols
 
-    # Amounts
-    n_aug_methods = len(augmented_dataset._aug_fns)
-    n_cols = n_aug_methods + 1
-    n_rows = 2 if plot_masks else 1
+        plt.figure(figsize=(15, 5))
 
-    # Augmented sample idx
-    idx = sample_idx * n_cols
-
-    plt.figure(figsize=(15, 5))
-
-    item = augmented_dataset[idx]
-    plt.subplot(n_rows, n_cols, 1)
-    plt.title('original')
-    plt.imshow(item.image[0], cmap='gray')
-    plt.axis('off')
-
-    if plot_masks:
-        plt.subplot(n_rows, n_cols, n_cols + 1)
-        plt.imshow(item.masks)
-        plt.axis('off')
-
-    for i, method in enumerate(list(augmented_dataset._aug_fns)):
-        item = augmented_dataset[idx + 1 + i]
-        plt.subplot(n_rows, n_cols, i + 2)
-        plt.title(method)
+        item = self[idx]
+        plt.subplot(n_rows, n_cols, 1)
+        plt.title('original')
         plt.imshow(item.image[0], cmap='gray')
         plt.axis('off')
 
         if plot_masks:
-            plt.subplot(n_rows, n_cols, n_cols + i + 2)
+            plt.subplot(n_rows, n_cols, n_cols + 1)
             plt.imshow(item.masks)
             plt.axis('off')
+
+        for i, method in enumerate(list(self._aug_fns)):
+            item = self[idx + 1 + i]
+            plt.subplot(n_rows, n_cols, i + 2)
+            plt.title(method)
+            plt.imshow(item.image[0], cmap='gray')
+            plt.axis('off')
+
+            if plot_masks:
+                plt.subplot(n_rows, n_cols, n_cols + i + 2)
+                plt.imshow(item.masks)
+                plt.axis('off')

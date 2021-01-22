@@ -1,5 +1,8 @@
 import random
+import logging
 from torch.utils.data import Sampler
+
+LOGGER = logging.getLogger(__name__)
 
 class OneLabelUnderSampler(Sampler):
     def __init__(self, dataset, label=0):
@@ -9,6 +12,8 @@ class OneLabelUnderSampler(Sampler):
             dataset -- torch.utils.data.Dataset that implements `get_labels_presence_for(label)`
             label -- str (label name) or int (index)
         """
+        super().__init__(dataset)
+
         total_samples = len(dataset)
 
         # Labels for each sample
@@ -32,12 +37,12 @@ class OneLabelUnderSampler(Sampler):
 
         normally_sampled = should_normally_sample
         undersampled = random.sample(should_undersample, len(should_normally_sample))
-        
+
         self.resampled_indexes = normally_sampled + undersampled
 
         random.shuffle(self.resampled_indexes)
-        
-        # Print info    
+
+        # Print info
         label_name = dataset.labels[label] if isinstance(label, int) else label
         stats = {
             'positives': n_positives,
@@ -46,12 +51,15 @@ class OneLabelUnderSampler(Sampler):
             'original': total_samples,
         }
         stats_str = ' '.join(f'{k}={v}' for k, v in stats.items())
-        print(f'\tUndersampling {label_name} ({undersampled_class}):', stats_str)
+        LOGGER.info(
+            '\tUndersampling %s (%s): %s',
+            label_name,
+            undersampled_class,
+            stats_str,
+        )
 
-    
     def __len__(self):
         return len(self.resampled_indexes)
-    
+
     def __iter__(self):
         return iter(self.resampled_indexes)
-        

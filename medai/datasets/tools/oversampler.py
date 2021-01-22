@@ -1,10 +1,13 @@
 import random
+import logging
 from torch.utils.data import Sampler
+
+LOGGER = logging.getLogger(__name__)
 
 class OneLabelOverSampler(Sampler):
     def __init__(self, dataset, label=0, ratio=None, force_class=None, max_ratio=None):
         """Oversamples samples that are less represented, considering a specific label.
-        
+
         Used to oversample one under-represented class.
         Tries to oversample the given `label`, by a factor that implies that
             n_positive_cases == n_negative_cases, or `max_ratio`.
@@ -18,9 +21,12 @@ class OneLabelOverSampler(Sampler):
             ratio -- int. Specifies amount of times to oversample. If not provided,
                 calculates ratio to level negative and positive samples.
             force_class -- 0, 1 or None
-                If not None, forcedly oversample samples with class provided (1=positive, 0=negative)
+                If not None, forcedly oversample samples with class
+                provided (1=positive, 0=negative)
             max_ratio -- float indicating max oversampling ratio allowed
         """
+        super().__init__(dataset)
+
         total_samples = len(dataset)
 
         # Labels for each sample
@@ -56,10 +62,10 @@ class OneLabelOverSampler(Sampler):
         # note that it only affects ratio > 1 (i.e. oversampling positive samples)
         if max_ratio is not None:
             ratio = min(ratio, max_ratio)
-        
+
         # Resample indexes
         self.resampled_indexes = []
-        
+
         for idx, presence in labels_presence_by_idx:
             if presence == UNDERSAMPLE_CLASS:
                 self.resampled_indexes.append(idx)
@@ -69,8 +75,8 @@ class OneLabelOverSampler(Sampler):
 
         # Shuffle to avoid having oversampled samples together
         random.shuffle(self.resampled_indexes)
-        
-        # Print info    
+
+        # Print info
         label_name = dataset.labels[label] if isinstance(label, int) else label
         stats = {
             'os-class': OVERSAMPLE_CLASS,
@@ -80,12 +86,12 @@ class OneLabelOverSampler(Sampler):
             'new-total': len(self.resampled_indexes),
             'original': total_samples,
         }
-        print(f'\tOversampling {label_name}:', ' '.join(f"{k}={v}" for k, v in stats.items()))
+        stats_str = ' '.join(f"{k}={v}" for k, v in stats.items())
+        LOGGER.info('\tOversampling %s: %s', label_name, stats_str)
 
-    
+
     def __len__(self):
         return len(self.resampled_indexes)
-    
+
     def __iter__(self):
         return iter(self.resampled_indexes)
-        
