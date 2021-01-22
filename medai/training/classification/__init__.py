@@ -6,7 +6,7 @@ from medai.training.classification.grad_cam import (
     calculate_attributions_for_labels,
     create_grad_cam,
 )
-from medai.datasets.common.utils import reduce_masks_for_diseases
+from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
 
 LOGGER = logging.getLogger(__name__)
 

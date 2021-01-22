@@ -6,7 +6,7 @@ from ignite.engine import Engine, Events
 from captum.attr import LayerGradCam
 
 from medai.models.classification.load_imagenet import ImageNetModel
-from medai.datasets.common.utils import reduce_masks_for_diseases
+from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
 from medai.metrics.segmentation import attach_metrics_image_saliency
 from medai.utils.images import bbox_coordinates_to_map
 from medai.utils import tensor_to_range01
