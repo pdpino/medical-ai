@@ -6,7 +6,7 @@ from torch.nn.functional import pad, one_hot
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
 
-from medai.utils.nlp import END_OF_SENTENCE_IDX, split_sentences_and_pad
+from medai.utils.nlp import split_sentences_and_pad
 
 def _get_stats(dataset):
     sentence_appearances = defaultdict(lambda: 0) # TODO: use a Counter here?
@@ -18,7 +18,7 @@ def _get_stats(dataset):
             sentence = sentence.tolist()
             sentence = np.trim_zeros(sentence, 'b')
             sentence = ' '.join(str(val) for val in sentence)
-            
+
             sentence_appearances[sentence] += 1
 
     sentence_appearances = sorted(list(sentence_appearances.items()),
@@ -38,7 +38,7 @@ class MostCommonSentences(nn.Module):
 
         self.sentences, self.weights = zip(*sentence_appearances[:k_first])
         self.n_sentences, self.n_weights = zip(*sentence_counts.items())
-        
+
     def forward(self, images, reports=None, free=False, **unused_kwargs):
         if reports is None:
             # TODO: handle this case
@@ -46,7 +46,7 @@ class MostCommonSentences(nn.Module):
 
         device = images.device
         batch_size, gt_n_sentences, gt_n_words = reports.size()
-        
+
         # Generate samples one by one
         reports = []
         for _ in range(batch_size):
@@ -58,9 +58,9 @@ class MostCommonSentences(nn.Module):
 
             for sentence in random.choices(self.sentences, self.weights, k=n_sentences):
                 sentence = [int(word) for word in sentence.split()]
-                sentence = torch.tensor(sentence)
+                sentence = torch.tensor(sentence) # pylint: disable=not-callable
                 # shape: n_words
-                
+
                 if not free:
                     if len(sentence) >= gt_n_words:
                         sentence = sentence[:gt_n_words]
@@ -71,12 +71,12 @@ class MostCommonSentences(nn.Module):
                 sentences.append(sentence)
 
             # sentences shape (list): n_sentences, n_words (gt_ if not free)
-                
+
             sentences = pad_sequence(sentences, batch_first=True)
             # tensor shape: n_sentences, n_words
 
             reports.append(sentences)
-        
+
         # reports shape (list): batch_size, n_sentences, n_words (gt_ if not free)
 
         if free:
@@ -94,8 +94,9 @@ class MostCommonSentences(nn.Module):
 
         reports = one_hot(reports, num_classes=self.vocab_size).float()
         # shape: batch_size, n_sentences, n_words, vocab_size
-        
+
         batch_size, n_sentences = reports.size()[:2]
         dummy_stops = torch.zeros(batch_size, n_sentences).to(device)
+        dummy_att_scores = torch.zeros(batch_size, n_sentences, 1, 1)
 
-        return reports, dummy_stops
+        return reports, dummy_stops, dummy_att_scores
