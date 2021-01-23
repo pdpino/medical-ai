@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
-from functools import reduce
 import pandas as pd
 import numpy as np
 
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.metrics.report_generation import chexpert
-from medai.metrics.report_generation.labeler_correctness.cache import SentencesLabelCache
+from medai.metrics.report_generation.labeler_correctness.cache import ReportLabelsCache
 from medai.utils.nlp import (
     ReportReader,
     sentence_iterator,
@@ -17,8 +16,11 @@ class LightLabeler(ABC):
     name = 'some-metric'
     diseases = ['dis1', 'dis2']
 
+    no_finding_idx = None
+    support_idxs = None
+
     def __init__(self, vocab):
-        self._labels_by_sentence = SentencesLabelCache(self.name, self.diseases)
+        self._labels_by_sentence = ReportLabelsCache(self.name, self.diseases)
 
         self._report_reader = ReportReader(vocab)
 
@@ -35,6 +37,47 @@ class LightLabeler(ABC):
         Returns:
             np.array of shape batch_size, n_diseases
         """
+
+    def _reduce_report(self, report):
+        """Reduces the labels of a report.
+
+        Iterates over the sentences' labels, and apply a reduction to obtain
+        an array of report labels.
+
+        Args:
+            report -- iterator of sentences' labels
+        Returns:
+            report labels, np.array of shape n_diseases
+        """
+        all_labels = np.array([self._labels_by_sentence[sentence] for sentence in report])
+        # shape: n_sentences, n_diseases
+
+        reduced_labels = all_labels.max(axis=0)
+        # shape: n_diseases
+
+        if self.no_finding_idx is None:
+            return reduced_labels
+
+        # The no-finding disease needs to be treated different.
+        # If any other disease is present --> no-finding == 0
+        # If all diseases are absent --> no-finding == 1
+
+        # Consider only actual diseases, by masking no-finding and support-devices
+        ignore_mask = np.zeros(len(self.diseases))
+        ignore_mask[self.no_finding_idx] = 1
+        if self.support_idxs is not None:
+            ignore_mask[self.support_idxs] = 1
+
+        # Filter only actual diseases
+        disease_labels = np.ma.array(reduced_labels, mask=ignore_mask)
+
+        # Check if all diseases are absent
+        no_findings = np.ma.all((disease_labels == 0) | (disease_labels == -2))
+
+        # Override reduced_labels array
+        reduced_labels[self.no_finding_idx] = no_findings
+
+        return reduced_labels
 
 
     def _split_sentences_and_label(self, reports):
@@ -82,14 +125,8 @@ class LightLabeler(ABC):
         # If one sentence contains a positive mention --> whole report is positive
         # and so on
         # FIXME: for chexpert, the max function is not appropriate for "No Finding"
-        np_max = np.vectorize(max)
-        all_nan_labels = np.full(len(self.diseases), -2)
         reports_labels = np.array([
-            reduce(
-                np_max,
-                [self._labels_by_sentence[sentence] for sentence in report],
-                all_nan_labels,
-            )
+            self._reduce_report(report)
             for report in splitted_reports
         ])
         # np.array shape: batch_size, n_diseases
@@ -112,6 +149,9 @@ class LightLabeler(ABC):
 class ChexpertLightLabeler(LightLabeler):
     name = 'chexpert'
     diseases = CHEXPERT_LABELS
+
+    no_finding_idx = 0
+    support_idxs = 13
 
     def _label_reports(self, reports):
         _column_name = 'sentences'

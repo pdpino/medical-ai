@@ -5,15 +5,16 @@ import numpy as np
 from medai.utils import CACHE_DIR
 from medai.utils.csv import CSVWriter
 
-LABELER_CACHE_DIR = os.path.join(CACHE_DIR, 'labeled_sentences')
+LABELER_CACHE_DIR = os.path.join(CACHE_DIR, 'labeler')
 
-class _SentencesLabelCache:
-    """Class to handle sentence to labels relation.
+class _ReportLabelsCache:
+    """Class to handle report to labels relation.
 
     Note: the information is duplicated in memory (a dict) and disk (a csv file).
         When writing new information, both are updated.
-        This is error-prone, but more efficient than transforming
-        dict-to-csv every time new entries are added.
+        This is error-prone, but should be more efficient than writing to disk every
+        time new entries are added. Also, this implies the need of a lock, i.e.
+        only one process can use this cache at the same time.
         The disk-version is saved as csv to comply with the format of
         sentences_with_chexpert_labels.csv file, and the memory-version
         is a dict to optimize access times.
@@ -64,8 +65,8 @@ class _SentencesLabelCache:
 
 _instances = {}
 
-def SentencesLabelCache(name, *args):
+def ReportLabelsCache(name, *args):
     """Enforce loading one instance per name of the labeler."""
     if name not in _instances:
-        _instances[name] = _SentencesLabelCache(name, *args)
+        _instances[name] = _ReportLabelsCache(name, *args)
     return _instances[name]
