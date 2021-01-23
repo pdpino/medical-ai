@@ -11,7 +11,7 @@ def _interpolate(target, size):
     return interpolate(target, size, mode='nearest')
 
 class OutOfTargetSumLoss(nn.Module):
-    def __init__(self, interpolate_target=True):
+    def __init__(self, interpolate_target=True, eps=1e-8):
         """Constructor.
 
         Args:
@@ -19,6 +19,8 @@ class OutOfTargetSumLoss(nn.Module):
                 do not match. If false, resize the generated output.
         """
         super().__init__()
+
+        self.eps = eps
 
         self._interpolate_target = interpolate_target
 
@@ -53,7 +55,7 @@ class OutOfTargetSumLoss(nn.Module):
         out_of_target = (target == 0).long()
         # shape: batch_size, n_channels, height, width
 
-        wrong_values = -torch.log(1 - output * out_of_target) # Cross-entropy like
+        wrong_values = -torch.log(1 - output * out_of_target + self.eps) # Cross-entropy like
         # wrong_values = output * out_of_target # Raw sum
         # shape: batch_size, n_channels, height, width
 

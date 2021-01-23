@@ -5,6 +5,8 @@ import os
 import logging
 import numpy as np
 
+import torch
+
 WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
 TMP_DIR = os.path.join(WORKSPACE_DIR, 'tmp')
 CACHE_DIR = os.path.join(WORKSPACE_DIR, 'cache')
@@ -69,11 +71,11 @@ def tensor_to_range01(arr, eps=1e-8):
     # shape: *, 1, 1
 
     arr_range = (arr_max - arr_min) + eps
-    return (arr - arr_min) / arr_range
+    return divide_tensors(arr - arr_min, arr_range)
 
 
 def divide_tensors(a, b):
-    """Divide two tensors element-wise, avoiding NaN values in the result."""
+    """Divide two tensors element-wise, avoiding NaN or Inf values in the result."""
     if isinstance(b, numbers.Number):
         if b == 0:
             return 0
@@ -81,11 +83,12 @@ def divide_tensors(a, b):
 
     dont_use = b == 0
 
-    a = a.clone()
-    a[dont_use] = 0
+    if dont_use.any():
+        zeros = torch.zeros_like(a, requires_grad=a.requires_grad)
+        a = torch.where(dont_use, zeros, a)
 
-    b = b.clone()
-    b[dont_use] = 1
+        ones = torch.ones_like(b, requires_grad=b.requires_grad)
+        b = torch.where(dont_use, ones, b)
 
     return a.true_divide(b)
 
