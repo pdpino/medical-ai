@@ -56,7 +56,7 @@ def train_model(run_name,
                 debug=True,
                 device='cuda',
                 ):
-    LOGGER.info('Training run: %s', run_name)
+    LOGGER.info('Training run: %s (debug=%s)', run_name, debug)
 
     tb_writer = TBWriter(run_name,
                          task='seg',
@@ -139,8 +139,7 @@ def train_model(run_name,
     duration_per_epoch = duration_to_str(secs_per_epoch)
     LOGGER.info('Average time per epoch: %s', duration_per_epoch)
 
-    LOGGER.info('Finished training: %s', run_name)
-    LOGGER.info('-'*50)
+    LOGGER.info('Finished training: %s (debug=%s)', run_name, debug)
 
     return trainer.state.metrics, validator.state.metrics
 

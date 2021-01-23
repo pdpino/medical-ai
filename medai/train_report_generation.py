@@ -79,7 +79,7 @@ def train_model(run_name,
                 device='cuda',
                ):
     # Prepare run stuff
-    LOGGER.info('Run: %s', run_name)
+    LOGGER.info('Training run: %s (debug=%s)', run_name, debug)
     tb_writer = TBWriter(run_name, task='rg', debug=debug, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
@@ -171,6 +171,8 @@ def train_model(run_name,
     # Close stuff
     tb_writer.close()
 
+    LOGGER.info('Finished training: %s (debug=%s)', run_name, debug)
+
     return trainer, validator
 
 
@@ -238,8 +240,6 @@ def resume_training(run_name,
                 debug=debug,
                 **other_train_kwargs,
                 )
-
-    LOGGER.info('Finished training: %s', run_name)
 
 
 def train_from_scratch(run_name,
@@ -457,9 +457,6 @@ def train_from_scratch(run_name,
                 debug=debug,
                 **other_train_kwargs,
                 )
-
-
-    LOGGER.info('Finished run: %s', run_name)
 
 
 def parse_args():
