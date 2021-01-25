@@ -7,13 +7,15 @@ LOGGER = logging.getLogger(__name__)
 class SyncLock:
     """Implements a sync-lock.
 
-    If it cannot acquire the lock, returns False instead of raising an error.
+    Default behavior: if it cannot acquire the lock, returns False instead of raising an error.
     """
-    def __init__(self, folder, name):
+    def __init__(self, folder, name, raise_error=False):
         self.name = name
 
         fpath = os.path.join(folder, f'{name}.lock')
         self.lock = FileLock(fpath)
+
+        self.raise_error = raise_error
 
     def acquire(self, timeout=10):
         try:
@@ -21,8 +23,41 @@ class SyncLock:
             LOGGER.info('Acquired lock for %s', self.name)
             return True
         except Timeout:
+            if self.raise_error:
+                raise
             return False
 
     def release(self):
         self.lock.release()
         LOGGER.info('Released lock for %s', self.name)
+
+    def __enter__(self):
+        self.acquire()
+
+    def __exit__(self, _1, _2, _3):
+        self.release()
+
+
+def with_lock(folder, lockname_key, **other):
+    """Wraps a function using a SyncLock.
+
+    The folder where the lock is stored is fixed, but the name is
+    obtained from the function call parameters.
+    If the
+
+    Args:
+        folder -- folder to save the lock
+        lockname_key -- argument key to obtain the lockname
+        **other -- other arguments passed to the SyncLock constructor
+    """
+
+    def wrapper(fn):
+        def wrapped(*args, **kwargs):
+            lockname = kwargs.get(lockname_key, fn.__name__)
+
+            with SyncLock(folder, lockname, **other):
+                return fn(*args, **kwargs)
+
+        return wrapped
+
+    return wrapper

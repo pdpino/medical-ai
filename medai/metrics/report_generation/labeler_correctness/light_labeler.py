@@ -20,7 +20,7 @@ class LightLabeler(ABC):
     support_idxs = None
 
     def __init__(self, vocab):
-        self._labels_by_sentence = ReportLabelsCache(self.name, self.diseases)
+        self._labels_by_sentence = ReportLabelsCache(self.name, 'sentences', self.diseases)
 
         self._report_reader = ReportReader(vocab)
 
@@ -49,7 +49,10 @@ class LightLabeler(ABC):
         Returns:
             report labels, np.array of shape n_diseases
         """
-        all_labels = np.array([self._labels_by_sentence[sentence] for sentence in report])
+        all_labels = np.array([
+            self._labels_by_sentence[sentence]
+            for sentence in report
+        ])
         # shape: n_sentences, n_diseases
 
         reduced_labels = all_labels.max(axis=0)
@@ -78,7 +81,6 @@ class LightLabeler(ABC):
         reduced_labels[self.no_finding_idx] = no_findings
 
         return reduced_labels
-
 
     def _split_sentences_and_label(self, reports):
         """Split sentences, label them and apply union."""
@@ -116,6 +118,10 @@ class LightLabeler(ABC):
             with self.timer:
                 new_labels = self._label_reports(cache_miss)
 
+                assert len(new_labels) == len(cache_miss), (
+                    f'_label_reports() output mismatch, {new_labels.shape} vs {len(cache_miss)}',
+                )
+
             # Insert new labels to cache
             self._labels_by_sentence.insert(cache_miss, new_labels)
 
@@ -132,7 +138,6 @@ class LightLabeler(ABC):
         # np.array shape: batch_size, n_diseases
 
         return reports_labels
-
 
     def __call__(self, reports):
         """Labels a batch of generated and ground_truth reports.
@@ -161,6 +166,7 @@ class ChexpertLightLabeler(LightLabeler):
             reports_df, _column_name,
             fill_empty=-2, fill_uncertain=-1,
             quiet=True,
+            caller_id='light-labeler',
         )
 
         return labels

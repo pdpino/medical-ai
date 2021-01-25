@@ -10,7 +10,7 @@ from medai.datasets.common import CHEXPERT_LABELS
 from medai.metrics import load_rg_outputs
 from medai.metrics.report_generation import chexpert
 from medai.utils.files import get_results_folder
-from medai.utils import timeit_main, config_logging
+from medai.utils import timeit_main, config_logging, get_timestamp
 
 
 LOGGER = logging.getLogger('medai.rg.eval.chexpert')
@@ -114,7 +114,7 @@ def evaluate_run(run_name,
         LOGGER.info('Only using max_samples = %d', n_samples)
 
     # Compute labels for both GT and generated
-    df = chexpert.apply_labeler_to_df(df)
+    df = chexpert.apply_labeler_to_df(df, caller_id=get_timestamp())
 
     if len(df) != n_samples:
         LOGGER.error(

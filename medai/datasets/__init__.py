@@ -63,7 +63,10 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 num_workers=2,
                                 **kwargs,
                                 ):
-    LOGGER.info('Loading %s/%s cl-dataset, bs=%d...', dataset_name, dataset_type, batch_size)
+    LOGGER.info(
+        'Loading %s/%s cl-dataset, bs=%d, imgsize=%s...',
+        dataset_name, dataset_type, batch_size, image_size,
+    )
 
     assert image_size is None or isinstance(image_size, (tuple, list)), (
         'Image size must be a tuple, list, or None'

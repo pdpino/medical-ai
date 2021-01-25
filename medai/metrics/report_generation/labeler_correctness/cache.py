@@ -1,4 +1,5 @@
 import os
+import logging
 import pandas as pd
 import numpy as np
 
@@ -6,6 +7,8 @@ from medai.utils import CACHE_DIR
 from medai.utils.csv import CSVWriter
 
 LABELER_CACHE_DIR = os.path.join(CACHE_DIR, 'labeler')
+
+LOGGER = logging.getLogger(__name__)
 
 class _ReportLabelsCache:
     """Class to handle report to labels relation.
@@ -22,7 +25,9 @@ class _ReportLabelsCache:
     def __init__(self, name, labels):
         os.makedirs(LABELER_CACHE_DIR, exist_ok=True)
 
-        self.fpath = os.path.join(LABELER_CACHE_DIR, f'sentences_{name}.csv')
+        self.fpath = os.path.join(LABELER_CACHE_DIR, f'{name}.csv')
+
+        LOGGER.info('Using labeler-cache saved in %s', self.fpath)
 
         if not os.path.isfile(self.fpath):
             # Init empty state
@@ -40,33 +45,34 @@ class _ReportLabelsCache:
             # value: list of labels
 
         # Create CSV writer to write on the fly
-        columns = ['sentences'] + labels
+        columns = ['text'] + labels
         self.writer = CSVWriter(self.fpath, columns, assert_folder=False)
 
-    def __getitem__(self, sentence):
-        return np.array(self.state[sentence])
+    def __getitem__(self, text):
+        return np.array(self.state[text])
 
-    def __contains__(self, sentence):
-        return sentence in self.state
+    def __contains__(self, text):
+        return text in self.state
 
-    def insert(self, sentences, labels):
-        """Insert into the cache a list of sentences and its labels.
+    def insert(self, texts, labels):
+        """Insert into the cache a list of texts and its labels.
 
         Args:
-            sentences -- list of strs, of len batch_size
+            texts -- list of strs, of len batch_size
             labels -- list, tensor or np.array of shape batch_size, n_labels
         """
         with self.writer:
-            for sentence, sentence_labels in zip(sentences, labels):
-                if sentence in self.state:
+            for text, text_labels in zip(texts, labels):
+                if text in self.state:
                     continue
-                self.state[sentence] = sentence_labels
-                self.writer.write(sentence, *sentence_labels, quote=True)
+                self.state[text] = text_labels
+                self.writer.write(text, *text_labels, quote=True)
 
 _instances = {}
 
-def ReportLabelsCache(name, *args):
-    """Enforce loading one instance per name of the labeler."""
-    if name not in _instances:
-        _instances[name] = _ReportLabelsCache(name, *args)
-    return _instances[name]
+def ReportLabelsCache(name, level, *args):
+    """Enforce loading one instance per name and level of the labeler."""
+    full_name = f'{level}_{name}'
+    if full_name not in _instances:
+        _instances[full_name] = _ReportLabelsCache(full_name, *args)
+    return _instances[full_name]

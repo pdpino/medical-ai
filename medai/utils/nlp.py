@@ -250,9 +250,11 @@ def sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
     Yields:
         Sentence as list of word indexes
     """
+    if isinstance(flat_report, torch.Tensor):
+        flat_report = flat_report.tolist()
+
     sentence_so_far = []
     for word in flat_report:
-        word = word.item()
         if word == PAD_IDX:
             continue
 

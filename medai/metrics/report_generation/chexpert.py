@@ -7,6 +7,7 @@ import pandas as pd
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.datasets.iu_xray import DATASET_DIR
 from medai.utils import TMP_DIR
+from medai.utils.lock import with_lock
 
 _NEGBIO_PATH_KEY = 'NEGBIO_PATH'
 assert _NEGBIO_PATH_KEY in os.environ, f'You must export {_NEGBIO_PATH_KEY}'
@@ -69,9 +70,10 @@ def _concat_df_matrix(df, results, suffix=None):
                      axis=1, join='inner')
 
 
+@with_lock(TMP_FOLDER, 'caller_id', raise_error=True)
 def apply_labeler_to_column(dataframe, column_name,
                             fill_empty=None, fill_uncertain=None,
-                            quiet=False):
+                            quiet=False, caller_id='main'):
     """Apply chexpert-labeler to a column of a dataframe."""
     # Grab reports
     reports_only = dataframe[column_name]
@@ -80,11 +82,11 @@ def apply_labeler_to_column(dataframe, column_name,
     os.makedirs(TMP_FOLDER, exist_ok=True)
 
     # Create input file
-    input_path = os.path.join(TMP_FOLDER, 'reports-input.csv')
+    input_path = os.path.join(TMP_FOLDER, f'reports-input_{caller_id}.csv')
     reports_only.to_csv(input_path, header=False, index=False, quoting=csv.QUOTE_ALL)
 
     # Call chexpert-labeler
-    output_path = os.path.join(TMP_FOLDER, 'reports-output.csv')
+    output_path = os.path.join(TMP_FOLDER, f'reports-output_{caller_id}.csv')
     cmd_cd = f'cd {CHEXPERT_FOLDER}'
     cmd_call = f'{CHEXPERT_PYTHON} label.py --reports_path {input_path} --output_path {output_path}'
     cmd = f'{cmd_cd} && {cmd_call}'
@@ -117,7 +119,7 @@ def apply_labeler_to_column(dataframe, column_name,
     return out_df[CHEXPERT_LABELS].to_numpy()
 
 
-def apply_labeler_to_df(df):
+def apply_labeler_to_df(df, caller_id='main'):
     """Calculates chexpert labels for a set of GT and generated reports.
 
     Args:
@@ -127,9 +129,10 @@ def apply_labeler_to_df(df):
     ground_truth = _load_gt_labels(df)
 
     # Calculate labels for generated
-    generated = apply_labeler_to_column(df, 'generated',
-                                         fill_empty=0,
-                                         fill_uncertain=1)
+    generated = apply_labeler_to_column(
+        df, 'generated', fill_empty=0, fill_uncertain=1,
+        caller_id=caller_id,
+    )
 
     # Concat in main dataframe
     df = _concat_df_matrix(df, ground_truth, 'gt')
