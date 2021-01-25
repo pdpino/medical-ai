@@ -36,16 +36,19 @@ def run_evaluation(run_name,
                                                         device=device,
                                                         multiple_gpu=False,
                                                         )
+    compiled_model.model.train(False)
 
     # Load data
     dataset_type = 'test-bbox'
+    dataset_kwargs = compiled_model.metadata.get('dataset_kwargs', {})
     kwargs = {
         'dataset_name': 'cxr14',
         'dataset_type': dataset_type,
-        'labels': compiled_model.metadata.get('dataset_kwargs', {}).get('labels', None),
+        'labels': dataset_kwargs.get('labels', None),
         'max_samples': max_samples,
         'batch_size': batch_size,
         'masks': True,
+        'image_size': dataset_kwargs['image_size'],
     }
     if image_size is not None:
         kwargs['image_size'] = (image_size, image_size)
@@ -57,7 +60,9 @@ def run_evaluation(run_name,
     grad_cam = create_grad_cam(compiled_model.model, device, multiple_gpu)
 
     # Create engine
-    engine = Engine(get_step_fn(grad_cam, labels, thresh=thresh, device=device))
+    engine = Engine(get_step_fn(
+        grad_cam, labels, thresh=thresh, device=device,
+    ))
     keys = [
         ('bbox', 'bboxes_map', 'bboxes_valid'),
         ('masks', 'masks', None),
@@ -93,7 +98,7 @@ def parse_args():
                         help='If present, do not print metrics to stdout')
 
     images_group = parser.add_argument_group('Images params')
-    images_group.add_argument('--image-size', type=int, default=512,
+    images_group.add_argument('--image-size', type=int, default=None,
                               help='Image size in pixels')
 
     parsers.add_args_hw(parser, num_workers=2)

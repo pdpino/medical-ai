@@ -130,39 +130,47 @@ def get_step_fn(grad_cam, labels,
                 enable_bbox=True, enable_masks=True, relu=True,
                 thresh=0.5, device='cuda'):
     """Returns a step_fn that only runs grad_cam evaluation."""
+    torch.set_grad_enabled(False)
+
     def step_fn(unused_engine, batch):
         ## Images
         images = batch.image.to(device)
         # shape: batch_size, 3, height, width
 
-        image_size = images.size()[-2:]
-
         ## Bboxes
         if enable_bbox:
+            image_size = images.size()[-2:]
             bboxes_valid = batch.bboxes_valid.to(device) # shape: batch_size, n_labels
-            bboxes = batch.bboxes.to(device).long() # shape: batch_size, n_labels, 4
-            bboxes_map = bbox_coordinates_to_map(bboxes, bboxes_valid, image_size)
+            bboxes_map = bbox_coordinates_to_map(
+                batch.bboxes.to(device).long(), # shape: batch_size, n_labels, 4
+                bboxes_valid,
+                image_size,
+            )
             # shape: batch_size, n_labels, height, width
         else:
             bboxes_map, bboxes_valid = None, None
 
         ## Organ masks
         if enable_masks:
-            batch_masks = batch.masks.to(device) # shape (bs, n_organs, h, w)
-            masks = reduce_masks_for_diseases(labels, batch_masks) # shape (bs, n_labels, h, w)
+            masks = reduce_masks_for_diseases(
+                labels,
+                batch.masks.to(device), # shape (bs, n_organs, h, w)
+            ) # shape (bs, n_labels, h, w)
         else:
             masks = None
 
         ## Calculate attributions
-        images.requires_grad = True # Needed for Grad-CAM
-        # Notice this is not returned to its original value!
-        attributions = calculate_attributions_for_labels(
-            grad_cam, images, labels, relu=relu,
-        ).detach()
-        # shape: batch_size, n_labels, h, w
+        with torch.set_grad_enabled(True):
+            images.requires_grad = True # Needed for Grad-CAM
+            attributions = calculate_attributions_for_labels(
+                grad_cam, images, labels, relu=relu, create_graph=False,
+            ).detach()
+            # shape: batch_size, n_labels, h, w
 
-        attributions = threshold_attributions(attributions, thresh=thresh)
-        # shape: batch_size, n_labels, h, w
+            attributions = threshold_attributions(attributions, thresh=thresh)
+            # shape: batch_size, n_labels, h, w
+
+            images.requires_grad = False
 
         return {
             'activations': attributions,

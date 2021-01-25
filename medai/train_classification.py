@@ -312,6 +312,8 @@ def train_from_scratch(run_name,
     # Create run name
     run_name = f'{run_name}_{dataset_name}_{cnn_name}_lr{lr}'
 
+    if hint:
+        run_name += '_hint'
     if not imagenet:
         run_name += '_noig'
     if freeze:

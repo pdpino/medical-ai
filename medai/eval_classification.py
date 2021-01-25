@@ -59,6 +59,7 @@ def evaluate_model(model,
 def evaluate_run(run_name,
                  dataset_types=['train', 'val', 'test'],
                  n_epochs=1,
+                 batch_size=None,
                  max_samples=None,
                  debug=True,
                  multiple_gpu=False,
@@ -70,6 +71,7 @@ def evaluate_run(run_name,
                                                         debug=debug,
                                                         device=device,
                                                         multiple_gpu=multiple_gpu)
+    compiled_model.model.eval()
 
     # Metadata (contains all configuration)
     metadata = compiled_model.metadata
@@ -78,6 +80,8 @@ def evaluate_run(run_name,
     dataset_kwargs = metadata['dataset_kwargs']
     if max_samples is not None:
         dataset_kwargs['max_samples'] = max_samples
+    if batch_size is not None:
+        dataset_kwargs['batch_size'] = batch_size
 
     dataloaders = [
         prepare_data_classification(dataset_type=dataset_type, **dataset_kwargs)
@@ -121,6 +125,8 @@ def parse_args():
                         help='Eval in datasets')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
+    parser.add_argument('-bs', '--batch-size', type=int, default=None,
+                        help='Batch size')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
     parser.add_argument('--no-debug', action='store_true',
@@ -145,6 +151,7 @@ if __name__ == '__main__':
     evaluate_run(ARGS.run_name,
                  dataset_types=ARGS.eval_in,
                  max_samples=ARGS.max_samples,
+                 batch_size=ARGS.batch_size,
                  n_epochs=ARGS.epochs,
                  debug=not ARGS.no_debug,
                  multiple_gpu=ARGS.multiple_gpu,

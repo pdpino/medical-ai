@@ -69,7 +69,7 @@ class NormalizeBySample:
         self.epsilon = epsilon
 
     def __call__(self, image):
-        n_channels, height, width = image.size()
+        n_channels, unused_height, unused_width = image.size()
         sample = image.view(n_channels, -1)
 
         sample_mean = sample.mean(-1).unsqueeze(-1).unsqueeze(-1)
