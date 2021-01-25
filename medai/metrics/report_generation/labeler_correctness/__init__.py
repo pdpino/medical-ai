@@ -78,7 +78,7 @@ def attach_medical_correctness(trainer, validator, vocab):
         validator -- ignite.Engine or None
         vocab -- dataset vocabulary (dict)
     """
-    lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME)
+    lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
 
     if not lock.acquire():
         LOGGER.warning(

@@ -2,14 +2,12 @@ import logging
 import os
 from filelock import FileLock, Timeout
 
-LOGGER = logging.getLogger(__name__)
-
 class SyncLock:
     """Implements a sync-lock.
 
     Default behavior: if it cannot acquire the lock, returns False instead of raising an error.
     """
-    def __init__(self, folder, name, raise_error=False):
+    def __init__(self, folder, name, raise_error=False, verbose=False):
         self.name = name
 
         fpath = os.path.join(folder, f'{name}.lock')
@@ -17,10 +15,15 @@ class SyncLock:
 
         self.raise_error = raise_error
 
+        self.logger = logging.getLogger(f'{__name__}.{name}')
+        self.logger.setLevel(
+            logging.INFO if verbose else logging.WARNING
+        )
+
     def acquire(self, timeout=10):
         try:
             self.lock.acquire(timeout=timeout)
-            LOGGER.info('Acquired lock for %s', self.name)
+            self.logger.info('Acquired lock for %s', self.name)
             return True
         except Timeout:
             if self.raise_error:
@@ -29,7 +32,7 @@ class SyncLock:
 
     def release(self):
         self.lock.release()
-        LOGGER.info('Released lock for %s', self.name)
+        self.logger.info('Released lock for %s', self.name)
 
     def __enter__(self):
         self.acquire()

@@ -82,6 +82,8 @@ def _evaluate_model_in_dataloader(
 
     engine.run(dataloader, n_epochs)
 
+    LOGGER.info('-' * 50)
+
     return engine.state.metrics
 
 
