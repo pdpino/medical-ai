@@ -57,7 +57,7 @@ def reduce_masks_for_disease(label, sample_masks, organs=JSRT_ORGANS):
     organs_idxs = torch.tensor([ # pylint: disable=not-callable
         organs.index(organ_name)
         for organ_name in organs_names
-    ]).to(sample_masks.device)
+    ], device=sample_masks.device)
 
     # Select organs
     mask = sample_masks.index_select(dim=-3, index=organs_idxs)

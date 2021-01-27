@@ -7,18 +7,18 @@ from torch import nn
 
 from medai.models.report_generation.att_2layer import AttentionTwoLayers
 from medai.models.report_generation.att_no_att import NoAttention
-from medai.utils.nlp import PAD_IDX, START_IDX, END_OF_SENTENCE_IDX, END_IDX
+from medai.utils.nlp import PAD_IDX, START_IDX, END_IDX
 
 
 class HierarchicalLSTMAttDecoderV2(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size, teacher_forcing=True, stop_threshold=0.5,
-                 attention=True, **kwargs):
+                 attention=True, **unused_kwargs):
         super().__init__()
 
         self.hidden_size = hidden_size
         self.teacher_forcing = teacher_forcing
-        self.start_idx = torch.tensor(START_IDX)
+        self.start_idx = torch.tensor(START_IDX) # pylint: disable=not-callable
         self.stop_threshold = stop_threshold
 
         # Attention input
@@ -68,7 +68,8 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         # Set iteration maximum
         if free:
             sentences_iterator = range(max_sentences) if max_sentences else count()
-            should_stop = torch.tensor(False).to(device).repeat(batch_size)
+            # pylint: disable=not-callable
+            should_stop = torch.tensor(False, device=device).repeat(batch_size)
         else:
             assert reports is not None, 'Cant pass free=False and reports=None'
             actual_n_sentences = reports.size()[1]
@@ -96,7 +97,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
 
             # Pass thru LSTM
             state = self.sentence_lstm(sentence_input_t, state)
-            h_t, c_t = state
+            h_t, unused_c_t = state
             # shapes: batch_size, hidden_size
 
             # Generate topic vector
@@ -145,7 +146,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
 
         # Build initial state
         initial_h_state = topic
-        initial_c_state = torch.zeros(batch_size, self.hidden_size).to(device)
+        initial_c_state = torch.zeros(batch_size, self.hidden_size, device=device)
         state = (initial_h_state, initial_c_state)
 
         # Build initial input
@@ -158,7 +159,8 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         # Set iteration maximum
         if free:
             words_iterator = range(max_words) if max_words else count()
-            should_stop = torch.tensor(False).to(device).repeat(batch_size)
+            # pylint: disable=not-callable
+            should_stop = torch.tensor(False, device=device).repeat(batch_size)
         else:
             assert reports is not None, 'Cant pass free=False and reports=None'
             actual_max_words = reports.size()[-1]
@@ -169,7 +171,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         for word_j in words_iterator:
             # Pass thru Word LSTM
             state = self.word_lstm(input_t, state)
-            h_t, c_t = state
+            h_t, unused_c_t = state
             # shapes: batch_size, hidden_size
 
             # Predict words

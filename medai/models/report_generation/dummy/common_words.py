@@ -32,7 +32,7 @@ class MostCommonWords(nn.Module):
         self.words_idx, self.word_weights = zip(*word_appearances[:k_first])
 
         self.lens, self.lens_weights = zip(*reports_lens.items())
-        
+
     def forward(self, images, reports=None, free=False, **unused_kwargs):
         batch_size = images.size()[0]
         device = images.device
@@ -41,11 +41,11 @@ class MostCommonWords(nn.Module):
             n_words = random.choices(self.lens, self.lens_weights, k=1)[0]
         else:
             n_words = reports.size()[-1]
-        
+
         reports = [
             random.choices(self.words_idx, self.word_weights, k=n_words)
             for _ in range(batch_size)
         ]
-        reports = torch.tensor(reports).to(device)
+        reports = torch.tensor(reports, device=device) # pylint: disable=not-callable
         reports = one_hot(reports, num_classes=self.vocab_size).float()
-        return reports,
+        return (reports,)

@@ -115,7 +115,7 @@ class IUXRayDataset(Dataset):
 
         labels = self.labels_by_report[report_fname]
 
-        mask = self.load_mask(image_fname) if self.enable_masks else None
+        mask = self.load_mask(image_fname) if self.enable_masks else -1
 
         return BatchItem(
             image=image,

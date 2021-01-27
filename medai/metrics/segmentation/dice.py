@@ -29,7 +29,7 @@ class Dice(Metric):
         added_dice = dice.sum(dim=0) # shape: n_labels
 
         batch_size, n_labels, _, _ = gt_map.size()
-        n_samples = torch.ones(n_labels).to(self._device) * batch_size # shape: n_labels
+        n_samples = torch.ones(n_labels, device=self._device) * batch_size # shape: n_labels
 
         self._added_dice += added_dice
         self._n_samples += n_samples

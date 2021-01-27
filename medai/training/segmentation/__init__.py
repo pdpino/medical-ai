@@ -4,7 +4,7 @@ from torch import nn
 def get_step_fn(model, optimizer=None, training=False,
                 loss_weights=None, device='cuda'):
     if isinstance(loss_weights, (list, tuple)):
-        loss_weights = torch.tensor(loss_weights).to(device) # pylint: disable=not-callable
+        loss_weights = torch.tensor(loss_weights, device=device) # pylint: disable=not-callable
     elif isinstance(loss_weights, torch.Tensor):
         loss_weights = loss_weights.to(device)
 

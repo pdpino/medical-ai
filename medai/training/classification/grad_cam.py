@@ -62,7 +62,8 @@ def _get_last_layer(model):
 def create_grad_cam(model, device='cuda', multiple_gpu=False):
     wrapped_model = ModelWrapper(model).to(device)
     if multiple_gpu:
-        wrapped_model = nn.DataParallel(wrapped_model)
+        raise NotImplementedError('Grad-CAM with multiple_gpu=True is not implemented')
+        # wrapped_model = nn.DataParallel(wrapped_model)
 
     layer = _get_last_layer(model)
     grad_cam = LayerGradCam(wrapped_model, layer)
@@ -79,8 +80,11 @@ def threshold_attributions(attributions, thresh=0.5):
     Returns:
         thresholded attributions, same shape as input
     """
-    ones = torch.ones(attributions.size()).to(attributions.device)
-    zeros = torch.zeros(attributions.size()).to(attributions.device)
+    device = attributions.device
+    size = attributions.size()
+
+    ones = torch.ones(size, device=device)
+    zeros = torch.zeros(size, device=device)
     attributions = torch.where(attributions >= thresh, ones, zeros)
 
     return attributions

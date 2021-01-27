@@ -96,7 +96,7 @@ class MostCommonSentences(nn.Module):
         # shape: batch_size, n_sentences, n_words, vocab_size
 
         batch_size, n_sentences = reports.size()[:2]
-        dummy_stops = torch.zeros(batch_size, n_sentences).to(device)
-        dummy_att_scores = torch.zeros(batch_size, n_sentences, 1, 1)
+        dummy_stops = torch.zeros(batch_size, n_sentences, device=device)
+        dummy_att_scores = torch.zeros(batch_size, n_sentences, 1, 1, device=device)
 
         return reports, dummy_stops, dummy_att_scores

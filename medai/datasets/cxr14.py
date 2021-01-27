@@ -139,19 +139,19 @@ class CXR14Dataset(Dataset):
         row = self.label_index.iloc[idx]
 
         # Image name
-        image_name = row[0]
+        image_fname = row[0]
 
         # Extract labels
         labels = row[self.labels].to_numpy().astype('int')
 
         # Load image
-        image_fname = os.path.join(self.image_dir, image_name)
+        image_fpath = os.path.join(self.image_dir, image_fname)
         try:
-            image = Image.open(image_fname).convert(self.image_format)
+            image = Image.open(image_fpath).convert(self.image_format)
         except OSError as e:
             LOGGER.error(
                 '%s: Failed to load image, may be broken: %s',
-                self.dataset_type, image_fname,
+                self.dataset_type, image_fpath,
             )
             LOGGER.error(e)
 
@@ -160,9 +160,9 @@ class CXR14Dataset(Dataset):
 
         image = self.transform(image)
 
-        masks = self.load_mask(image_name) if self.enable_masks else -1
+        masks = self.load_mask(image_fname) if self.enable_masks else -1
 
-        bboxes, bboxes_valid = self.get_bboxes(image_name)
+        bboxes, bboxes_valid = self.get_bboxes(image_fname)
 
         return BatchItem(
             image=image,
@@ -170,7 +170,7 @@ class CXR14Dataset(Dataset):
             masks=masks,
             bboxes=bboxes,
             bboxes_valid=bboxes_valid,
-            image_fname=image_name,
+            image_fname=image_fname,
         )
 
     def get_bboxes(self, image_name):

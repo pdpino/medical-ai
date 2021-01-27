@@ -50,7 +50,7 @@ class IoU(Metric):
         else:
             # Assume all are valid
             batch_size, n_labels, _, _ = gt_map.size()
-            n_samples = torch.ones(n_labels).to(gt_map.device) * batch_size
+            n_samples = torch.ones(n_labels, device=gt_map.device) * batch_size
 
         added_iou = iou.sum(dim=0) # shape: n_labels
 

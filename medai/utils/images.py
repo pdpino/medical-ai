@@ -113,7 +113,7 @@ def bbox_coordinates_to_map(bboxes, valid, image_size):
       tensor of shape (batch_size, n_diseases, height, width)
     """
     batch_size, n_labels = valid.size()
-    bboxes_map = torch.zeros(batch_size, n_labels, *image_size).to(bboxes.device)
+    bboxes_map = torch.zeros(batch_size, n_labels, *image_size, device=bboxes.device)
 
     for i_batch in range(batch_size):
         for j_label in range(n_labels):

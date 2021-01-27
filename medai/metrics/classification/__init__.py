@@ -204,7 +204,7 @@ def attach_metric_cm(engine, labels, multilabel=True):
     if multilabel:
         _attach_binary_metrics(engine, labels, 'cm', ConfusionMatrix,
                                get_transform_fn=_get_transform_cm_multilabel,
-                               metric_args=(2,),
+                               metric_args=(2,), include_macro=False,
                                )
     else:
         cm = ConfusionMatrix(len(labels), output_transform=_transform_remove_loss_and_round)
