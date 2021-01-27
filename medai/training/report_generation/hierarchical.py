@@ -3,12 +3,10 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from torch.nn.functional import pad
-import numpy as np
 
 from medai.datasets.common import BatchItems
 from medai.utils.nlp import (
     PAD_IDX,
-    END_OF_SENTENCE_IDX,
     split_sentences_and_pad,
 )
 from medai.losses.out_of_target import OutOfTargetSumLoss
@@ -101,73 +99,63 @@ def create_hierarchical_dataloader(dataset, include_masks=False, **kwargs):
 def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
     """Flattens generated reports.
 
-    generated_words -- tensor of shape (batch_size, max_n_sentences, max_n_words, vocab_size)
-    stops_prediction -- tensor of shape (batch_size, max_n_sentences)
+    generated_words -- tensor of shape (batch_size, n_max_sentences,
+        n_max_words_per_sentence, vocab_size)
+    stops_prediction -- tensor of shape (batch_size, n_max_sentences)
 
     Returns:
-        padded tensor of shape batch_size, n_words
+        padded tensor of shape batch_size, n_max_words
     """
-    # FIXME: very inefficient: for loops, and calling pad_sequence()
     texts = []
 
-    _, n_sentences, n_words, _ = generated_words.size()
-    target_len = n_sentences * n_words
+    generated_words = generated_words.argmax(dim=-1)
+    # shape: batch_size, n_max_sentences, n_max_words_per_sentence
 
-    for report, stops in zip(generated_words, stops_prediction):
-        text = []
+    valid_sentences = torch.where(
+        stops_prediction < threshold,
+        torch.ones_like(stops_prediction),
+        torch.zeros_like(stops_prediction),
+    )
+    # shape: batch_size, n_max_sentences
 
-        for sentence, stop in zip(report, stops):
-            if stop.item() > threshold:
-                break
+    for report, valid in zip(generated_words, valid_sentences):
+        # report shape: n_sentences, n_words
+        # valid shape: n_sentences
 
-            # REVIEW: can this be done once outside the loops?
-            _, sentence = sentence.max(dim=-1)
+        report = report[valid.nonzero(as_tuple=True)]
+        # shape: n_valid_sentences, n_words
 
-            for word in sentence:
-                word = word.item()
-                text.append(word)
+        report = report[(report != PAD_IDX).nonzero(as_tuple=True)]
+        # shape: n_total_words
 
-                if word == END_OF_SENTENCE_IDX:
-                    break
-
-        missing_words = target_len - len(text)
-        if missing_words > 0:
-            text += [PAD_IDX] * missing_words
-        text = torch.tensor(text) # shape: n_words # pylint: disable=not-callable
-
-        texts.append(text) # shape: batch_size, n_words
+        texts.append(report)
 
     return pad_sequence(texts, batch_first=True)
 
 
 def _flatten_gt_reports(reports):
-    texts = []
+    """Flats ground truth hierarchical reports.
 
-    batch_size = reports.size()[0]
-    target_len = reports.numel() // batch_size
-
-    for report in reports:
-        text = []
-        for sentence in report:
-            sentence = np.trim_zeros(sentence.detach().cpu().numpy())
-            if len(sentence) > 0:
-                text.extend(sentence)
-
-        missing_words = target_len - len(text)
-        if missing_words > 0:
-            text += [PAD_IDX] * missing_words
-
-        texts.append(torch.tensor(text)) # pylint: disable=not-callable
+    Args:
+        reports -- tensor of shape (batch_size, n_max_sentences,
+            n_max_words_per_sentence)
+    Returns:
+        flatten_reports, tensor of shape (batch_size, n_max_words)
+    """
+    texts = [
+        report[(report != PAD_IDX).nonzero(as_tuple=True)]
+        for report in reports
+    ]
 
     return pad_sequence(texts, batch_first=True)
 
 
-def get_step_fn_hierarchical(model, optimizer=None, training=True, free=False,
-                             device='cuda',
+def get_step_fn_hierarchical(model, optimizer=None, training=True,
+                             free=False, device='cuda',
                              supervise_attention=False,
                              max_words=50, max_sentences=20, **unused_kwargs):
     """Creates a step function for an Engine, considering a hierarchical dataloader."""
-    word_loss_fn = nn.CrossEntropyLoss()
+    word_loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
     stop_loss_fn = nn.BCELoss()
     att_loss_fn = OutOfTargetSumLoss()
 

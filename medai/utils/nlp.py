@@ -203,29 +203,32 @@ def trim_rubbish(report):
     """Trims padding and END token of a report.
 
     Receives a report list/array/tensor of word indexes.
-    Assumes pad_idx is 0, otherwise np.trim_zeros() function would be uglier
+
+    Args:
+        report -- tensor or list of indexes.
+    Returns:
+        report without PAD_IDX and END_IDX, as list
     """
-    if isinstance(report, torch.Tensor):
-        report = report.cpu().detach().numpy()
+    if isinstance(report, (tuple, list)):
+        report = torch.LongTensor(report)
 
     if report is None or len(report) == 0:
-        return np.array([])
+        return []
 
-    # Trim padding from the end of sentences
-    report = np.trim_zeros(report, 'b')
+    report = report[(report != PAD_IDX).nonzero(as_tuple=True)]
 
     if len(report) > 0 and report[-1] == END_IDX:
         report = report[:-1]
 
-    return report
+    return report.tolist()
 
 
 def indexes_to_strings(candidate, ground_truth):
     """Receives two word-indexes tensors, and returns candidate and gt strings.
 
     Args:
-        candidate -- torch.Tensor of shape n_words
-        ground_truth -- torch.Tensor of shape n_words
+        candidate -- torch.Tensor of shape n_gen_words
+        ground_truth -- torch.Tensor of shape n_gt_words
     Returns:
         candidate_str, ground_truth_strs
         - candidate_str: string of concatenated indexes

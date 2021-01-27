@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 from medai.datasets.common import BatchItems
-from medai.utils.nlp import END_IDX
+from medai.utils.nlp import END_IDX, PAD_IDX
 
 def create_flat_dataloader(dataset, include_masks=False, **kwargs):
     """Creates a dataloader from a images-report dataset, considering flat word sequences.
@@ -39,7 +39,7 @@ def create_flat_dataloader(dataset, include_masks=False, **kwargs):
 def get_step_fn_flat(model, optimizer=None, training=True, free=False,
                      device='cuda', max_words=200, **unused_kwargs):
     """Creates a step function for an Engine."""
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     assert not (free and training), 'Cant set training=True and free=True'
 

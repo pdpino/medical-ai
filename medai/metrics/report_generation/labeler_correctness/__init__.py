@@ -8,7 +8,7 @@ from medai.metrics.report_generation.labeler_correctness.metric import MedicalLa
 from medai.metrics.report_generation.labeler_correctness.light_labeler import ChexpertLightLabeler
 from medai.metrics.report_generation.labeler_correctness.labeler_timer import LabelerTimerMetric
 from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
-from medai.metrics.report_generation.transforms import _get_flat_reports
+from medai.metrics.report_generation.transforms import get_flat_reports
 from medai.utils.lock import SyncLock
 
 LOGGER = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def _attach_medical_labeler_correctness(engine, labeler, basename, timer=True):
         timer_metric = LabelerTimerMetric(labeler=labeler)
         timer_metric.attach(engine, f'{basename}_timer')
 
-    metric_obj = MedicalLabelerCorrectness(labeler, output_transform=_get_flat_reports)
+    metric_obj = MedicalLabelerCorrectness(labeler, output_transform=get_flat_reports)
 
     def _disease_metric_getter(result, metric_name, metric_index):
         """Given the MedicalLabelerCorrectness output returns a disease metric value.

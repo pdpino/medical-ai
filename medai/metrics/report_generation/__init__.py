@@ -12,13 +12,13 @@ from medai.metrics.report_generation.rouge import RougeL
 from medai.metrics.report_generation.cider import CiderD
 from medai.metrics.report_generation.distinct_sentences import DistinctSentences
 from medai.metrics.report_generation.distinct_words import DistinctWords
-from medai.metrics.report_generation.transforms import _get_flat_reports
+from medai.metrics.report_generation.transforms import get_flat_reports
 
 LOGGER = logging.getLogger(__name__)
 
 
 def _attach_bleu(engine, up_to_n=4,
-                 output_transform=_get_flat_reports):
+                 output_transform=get_flat_reports):
     bleu_up_to_n = Bleu(n=up_to_n, output_transform=output_transform)
     for i in range(up_to_n):
         bleu_n = MetricsLambda(operator.itemgetter(i), bleu_up_to_n)
@@ -89,21 +89,22 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False,
 
     # Attach word accuracy
     if not free:
-        word_acc = WordAccuracy(output_transform=_get_flat_reports)
-        word_acc.attach(engine, 'word_acc')
+        pass
+        # word_acc = WordAccuracy(output_transform=get_flat_reports)
+        # word_acc.attach(engine, 'word_acc')
 
     # Attach multiple bleu
     _attach_bleu(engine, 4)
 
-    rouge = RougeL(output_transform=_get_flat_reports)
+    rouge = RougeL(output_transform=get_flat_reports)
     rouge.attach(engine, 'rougeL')
 
-    cider = CiderD(output_transform=_get_flat_reports)
+    cider = CiderD(output_transform=get_flat_reports)
     cider.attach(engine, 'ciderD')
 
     # Attach variability
-    distinct_words = DistinctWords(output_transform=_get_flat_reports)
+    distinct_words = DistinctWords(output_transform=get_flat_reports)
     distinct_words.attach(engine, 'distinct_words')
 
-    distinct_sentences = DistinctSentences(output_transform=_get_flat_reports)
+    distinct_sentences = DistinctSentences(output_transform=get_flat_reports)
     distinct_sentences.attach(engine, 'distinct_sentences')

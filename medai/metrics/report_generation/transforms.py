@@ -1,4 +1,4 @@
-def _get_flat_reports(outputs):
+def get_flat_reports(outputs):
     """Transforms the output to arrays of words indexes.
 
     Args:

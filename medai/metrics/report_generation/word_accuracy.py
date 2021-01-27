@@ -11,6 +11,10 @@ class WordAccuracy(Metric):
 
         super().__init__(output_transform=output_transform, device=device)
 
+        # WordAccuracy assumes generated_words and seq have the same shapes,
+        # which will not work for hierarchical reports
+        raise NotImplementedError('FIXME')
+
     @reinit__is_reduced
     def reset(self):
         self._n_correct = 0
