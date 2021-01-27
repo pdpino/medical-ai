@@ -16,7 +16,7 @@ class MetricsEncoder(json.JSONEncoder):
     """
     def default(self, obj): # pylint: disable=arguments-differ
         if isinstance(obj, torch.Tensor):
-            obj = obj.detach().numpy().tolist()
+            obj = obj.detach().tolist()
         return obj
 
 

@@ -10,7 +10,7 @@ def pr_auc_compute_fn(y_preds, y_true):
 
     y_pred = y_preds.numpy()
 
-    precision, recall, thresholds = pr_curve(y_true, y_pred)
+    precision, recall, unused_thresholds = pr_curve(y_true, y_pred)
 
     return auc(recall, precision)
 

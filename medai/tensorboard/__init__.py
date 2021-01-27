@@ -62,8 +62,12 @@ class TBWriter:
             if params.numel() == 0:
                 continue
 
-            params = params.cpu().detach().numpy()
             self.writer.add_histogram(name, params, global_step=epoch, walltime=wall_time)
+
+            if params.grad is not None:
+                self.writer.add_histogram(
+                    f'{name}/grad', params.grad, global_step=epoch, walltime=wall_time,
+                )
 
 
     def write_metrics(self, metrics, run_type, epoch, wall_time):

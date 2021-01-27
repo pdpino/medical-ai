@@ -13,11 +13,11 @@ def apply_to_many(transform_fn, images):
             name: transform_fn(image)
             for name, image in images.items()
         }
-    elif isinstance(images, (list, tuple)):
+    if isinstance(images, (list, tuple)):
         return [
             transform_fn(image) for image in images
         ]
-    elif isinstance(images, (Image.Image, torch.Tensor)):
+    if isinstance(images, (Image.Image, torch.Tensor)):
         return transform_fn(images)
     raise Exception(f'images type not supported: {type(images)}')
 
@@ -25,9 +25,9 @@ def apply_to_many(transform_fn, images):
 def get_first(images):
     if isinstance(images, (Image.Image, torch.Tensor)):
         return images
-    elif isinstance(images, (list, tuple)):
+    if isinstance(images, (list, tuple)):
         return images[0]
-    elif isinstance(images, dict):
+    if isinstance(images, dict):
         key = next(iter(images))
         return images[key]
     raise Exception(f'images type not supported: {type(images)}')
@@ -41,7 +41,7 @@ def get_first(images):
 
 
 class RandomRotationMany(transforms.RandomRotation):
-    def forward(self, images):
+    def forward(self, images): # pylint: disable=arguments-differ
         angle = self.get_params(self.degrees)
         transform_fn = lambda image: F.rotate(
             image, angle, self.resample, self.expand, self.center, self.fill)
@@ -50,7 +50,7 @@ class RandomRotationMany(transforms.RandomRotation):
 
 
 class RandomResizedCropMany(transforms.RandomResizedCrop):
-    def forward(self, images):
+    def forward(self, images): # pylint: disable=arguments-differ
         first_image = get_first(images)
         i, j, h, w = self.get_params(first_image, self.scale, self.ratio)
         transform_fn = lambda image: F.resized_crop(
@@ -60,9 +60,11 @@ class RandomResizedCropMany(transforms.RandomResizedCrop):
 
 
 class RandomAffineMany(transforms.RandomAffine):
-    def forward(self, images):
+    def forward(self, images): # pylint: disable=arguments-differ
         first_image = get_first(images)
-        ret = self.get_params(self.degrees, self.translate, self.scale, self.shear, first_image.size)
+        ret = self.get_params(
+            self.degrees, self.translate, self.scale, self.shear, first_image.size,
+        )
 
         transform_fn = lambda image: F.affine(
             image, *ret, resample=self.resample, fillcolor=self.fillcolor)
@@ -80,6 +82,7 @@ class ColorJitterMany(transforms.ColorJitter):
         transformations_to_apply = []
 
         for fn_id in fn_idx:
+            # pylint: disable=not-callable
             if fn_id == 0 and self.brightness is not None:
                 brightness = self.brightness
                 brightness_factor = torch.tensor(1.0).uniform_(brightness[0], brightness[1]).item()
@@ -134,6 +137,7 @@ class WIP_TransformMany:
             first -- key to use as first key of the dict
         """
         raise NotImplementedError
+        # pylint: disable=unreachable
         # fn_params = self.tf_class.get_params(imgs[first_key], **self.get_params)
         fn_params = self.tf_class.get_params(**self.get_params)
 
@@ -161,12 +165,16 @@ def pre_transform_masks(masks):
 def post_transform_masks(masks_pil):
     """Steps to perform after applying a transform to a segmentation mask.
 
+    Note: the pil -> numpy -> tensor transormation is done manually,
+    and not using the `transforms.ToTensor()` class, to avoid range
+    modifications (i.e. from 0-1, 0-255, etc).
+
     Args:
         masks_pil -- PIL image of shape (height, width)
     Returns:
         Tensor of shape (height, width), of type long
     """
-    masks = torch.tensor(np.array(masks_pil)) # shape: height, width
+    masks = torch.from_numpy(np.array(masks_pil)) # shape: height, width
     # masks = masks.unsqueeze(0) # shape: 1, height, width
     masks = masks.long()
     return masks
