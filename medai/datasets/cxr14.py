@@ -40,7 +40,7 @@ class CXR14Dataset(Dataset):
 
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
-                 masks=False,
+                 masks=False, images_version=None,
                  **unused_kwargs):
         super().__init__()
 
@@ -57,7 +57,16 @@ class CXR14Dataset(Dataset):
             std=_DATASET_STD,
         )
 
-        self.image_dir = os.path.join(DATASET_DIR, 'images')
+        self.image_dir = os.path.join(
+            DATASET_DIR,
+            'images'
+            if images_version is None else f'images-{images_version}',
+        )
+        if not os.path.isdir(self.image_dir):
+            raise ValueError(
+                f'Image version not found: {images_version} (in {self.image_dir})',
+            )
+
         self.masks_dir = os.path.join(DATASET_DIR, 'masks')
 
         # Load split images

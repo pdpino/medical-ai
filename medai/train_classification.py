@@ -263,6 +263,7 @@ def resume_training(run_name,
 def train_from_scratch(run_name,
                        dataset_name,
                        shuffle=False,
+                       clahe=False,
                        cnn_name='resnet-50',
                        imagenet=True,
                        freeze=False,
@@ -310,7 +311,12 @@ def train_from_scratch(run_name,
     batch_size = batch_size or 10
 
     # Create run name
-    run_name = f'{run_name}_{dataset_name}_{cnn_name}_lr{lr}'
+    run_name = f'{run_name}_{dataset_name}'
+
+    if clahe:
+        run_name += '-clahe'
+
+    run_name += f'_{cnn_name}_lr{lr}'
 
     if hint:
         run_name += '_hint'
@@ -372,6 +378,7 @@ def train_from_scratch(run_name,
         'num_workers': num_workers,
         'norm_by_sample': norm_by_sample,
         'masks': grad_cam or hint,
+        'images_version': 'clahe' if clahe else None
     }
     dataset_train_kwargs = {
         'shuffle': shuffle,
@@ -536,6 +543,8 @@ def parse_args():
     images_group.add_argument('--norm-by-sample', action='store_true',
                               help='If present, normalize each sample \
                                     (instead of using dataset stats)')
+    images_group.add_argument('--clahe', action='store_true',
+                              help='Use CLAHE normalized images')
 
     grad_cam_group = parser.add_argument_group('Grad-CAM evaluation params')
     grad_cam_group.add_argument('--grad-cam', action='store_true',
@@ -632,9 +641,11 @@ if __name__ == '__main__':
                         multiple_gpu=ARGS.multiple_gpu,
                         device=DEVICE)
     else:
-        train_from_scratch(get_timestamp(),
+        train_from_scratch(
+            get_timestamp(),
             ARGS.dataset,
             shuffle=ARGS.shuffle,
+            clahe=ARGS.clahe,
             cnn_name=ARGS.model,
             imagenet=not ARGS.no_imagenet,
             freeze=ARGS.freeze,

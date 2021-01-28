@@ -63,13 +63,8 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 num_workers=2,
                                 **kwargs,
                                 ):
-    LOGGER.info(
-        'Loading %s/%s cl-dataset, bs=%d, imgsize=%s...',
-        dataset_name, dataset_type, batch_size, image_size,
-    )
-
     assert image_size is None or isinstance(image_size, (tuple, list)), (
-        'Image size must be a tuple, list, or None'
+        f'Image size must be a tuple, list, or None, got {image_size}'
     )
 
     assert dataset_name in _CL_DATASETS, f'Dataset not found: {dataset_name}'
@@ -79,6 +74,15 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         if dataset_name not in ('cxr14', 'iu-x-ray'):
             raise NotImplementedError(f'Dataset {dataset_name} does not have \
                                         masks yet (masks=True)')
+
+    if kwargs.get('images_version') and dataset_name not in ('cxr14',):
+        LOGGER.warning('images_version is not implemented in %s', dataset_name)
+        kwargs['images_version'] = None
+
+    LOGGER.info(
+        'Loading %s/%s cl-dataset, bs=%d, imgsize=%s, version=%s...',
+        dataset_name, dataset_type, batch_size, image_size, kwargs['images_version'],
+    )
 
     dataset = DatasetClass(dataset_type=dataset_type,
                            labels=labels,
