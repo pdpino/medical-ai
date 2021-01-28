@@ -82,7 +82,7 @@ def train_model(run_name,
                 device='cuda',
                 ):
     # Prepare run
-    LOGGER.info('Training run: %s, (debug=%s)', run_name, debug)
+    LOGGER.info('Training run: %s (debug=%s)', run_name, debug)
     tb_writer = TBWriter(run_name, task='cls', debug=debug, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:

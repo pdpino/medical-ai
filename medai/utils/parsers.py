@@ -131,3 +131,20 @@ def build_args_free_values_(args, parser):
         args.free_values = [False]
     else:
         parser.error('Cannot skip both free and not free')
+
+
+def add_args_med(parser):
+    med_group = parser.add_argument_group('Medical correctness metrics')
+    med_group.add_argument('--no-med', action='store_true',
+                           help='If present, do not use medical-correctness metrics')
+    med_group.add_argument('--med-after', type=int, default=None,
+                           help='Only start using med-metrics after N epochs')
+    med_group.add_argument('--med-steps', type=int, default=None,
+                           help='Only run med-metrics every N epochs (in training)')
+
+
+def build_args_med_(args):
+    args.med_kwargs = {
+        'after': args.med_after,
+        'steps': args.med_steps,
+    }

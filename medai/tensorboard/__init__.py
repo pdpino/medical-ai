@@ -75,6 +75,9 @@ class TBWriter:
             if self.ignore_regex.search(name) or not isinstance(value, numbers.Number):
                 continue
 
+            if value == -1:
+                continue
+
             name = self._map_metric_name(name)
             self.writer.add_scalar(f'{name}/{run_type}', value, epoch, wall_time)
 

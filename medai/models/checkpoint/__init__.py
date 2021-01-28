@@ -189,7 +189,6 @@ def load_compiled_model_report_generation(run_name,
 
     # Load metadata
     metadata = _load_meta(folder)
-    hparams = metadata.get('hparams', {})
 
     # Create CNN
     cnn_kwargs = metadata.get('cnn_kwargs', None)

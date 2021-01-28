@@ -72,6 +72,7 @@ def train_model(run_name,
                 dryrun=False,
                 tb_kwargs={},
                 medical_correctness=True,
+                med_kwargs={},
                 early_stopping=True,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
@@ -119,7 +120,7 @@ def train_model(run_name,
     # Attach medical correctness metrics
     if medical_correctness:
         vocab = train_dataloader.dataset.get_vocab()
-        attach_medical_correctness(trainer, validator, vocab)
+        attach_medical_correctness(trainer, validator, vocab, **med_kwargs)
 
     decoder_name = compiled_model.metadata['decoder_kwargs']['decoder_name']
     if decoder_name.startswith('h-lstm-att'):
@@ -255,6 +256,7 @@ def train_from_scratch(run_name,
                        lr=0.0001,
                        n_epochs=10,
                        medical_correctness=True,
+                       med_kwargs={},
                        cnn_run_name=None,
                        cnn_model_name='resnet-50',
                        cnn_imagenet=True,
@@ -422,6 +424,7 @@ def train_from_scratch(run_name,
         'lr_sch_metric': lr_sch_metric,
         'supervise_attention': supervise_attention,
         'medical_correctness': medical_correctness,
+        'med_kwargs': med_kwargs,
     }
 
     # Save metadata
@@ -480,8 +483,6 @@ def parse_args():
                         help='If present, does not use teacher forcing')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
-    parser.add_argument('--no-med', action='store_true',
-                        help='If present, do not use medical-correctness metrics')
 
     data_group = parser.add_argument_group('Data')
     data_group.add_argument('--image-size', type=int, default=512,
@@ -512,6 +513,7 @@ def parse_args():
     parsers.add_args_augment(parser)
 
     parsers.add_args_hw(parser, num_workers=4)
+    parsers.add_args_med(parser)
 
     args = parser.parse_args()
 
@@ -526,6 +528,7 @@ def parse_args():
     parsers.build_args_lr_sch_(args)
     parsers.build_args_augment_(args)
     parsers.build_args_tb_(args)
+    parsers.build_args_med_(args)
 
     return args
 
@@ -567,6 +570,7 @@ if __name__ == '__main__':
                            lr=ARGS.learning_rate,
                            n_epochs=ARGS.epochs,
                            medical_correctness=not ARGS.no_med,
+                           med_kwargs=ARGS.med_kwargs,
                            image_size=ARGS.image_size,
                            cnn_run_name=ARGS.cnn_pretrained,
                            cnn_model_name=ARGS.cnn,

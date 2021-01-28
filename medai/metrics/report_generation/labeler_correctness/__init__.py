@@ -10,6 +10,7 @@ from medai.metrics.report_generation.labeler_correctness.labeler_timer import La
 from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
 from medai.metrics.report_generation.transforms import get_flat_reports
 from medai.utils.lock import SyncLock
+from medai.utils.metrics_usage import EveryNEpochs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ _LOCK_FOLDER = LABELER_CACHE_DIR
 _LOCK_NAME = 'medical-correctness-cache'
 
 
-def _attach_medical_labeler_correctness(engine, labeler, basename, timer=True):
+def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=True):
     """Attaches MedicalLabelerCorrectness metrics to an engine.
 
     It will attach metrics in the form <basename>_<metric_name>_<disease>
@@ -28,9 +29,17 @@ def _attach_medical_labeler_correctness(engine, labeler, basename, timer=True):
         labeler -- labeler instance to pass to the MedicalLabelerCorrectness metric
         basename -- to use when attaching metrics
     """
+    if run_every_n_steps:
+        kwargs = {
+            'usage': EveryNEpochs(run_every_n_steps),
+        }
+    else:
+        kwargs = {}
+
+
     if timer:
         timer_metric = LabelerTimerMetric(labeler=labeler)
-        timer_metric.attach(engine, f'{basename}_timer')
+        timer_metric.attach(engine, f'{basename}_timer', **kwargs)
 
     metric_obj = MedicalLabelerCorrectness(labeler, output_transform=get_flat_reports)
 
@@ -55,7 +64,7 @@ def _attach_medical_labeler_correctness(engine, labeler, basename, timer=True):
             partial(_macro_avg_getter, metric_name=metric_name),
             metric_obj,
         )
-        macro_avg.attach(engine, f'{basename}_{metric_name}')
+        macro_avg.attach(engine, f'{basename}_{metric_name}', **kwargs)
 
         # Attach for each disease
         for index, disease in enumerate(labeler.diseases):
@@ -63,12 +72,12 @@ def _attach_medical_labeler_correctness(engine, labeler, basename, timer=True):
                 partial(_disease_metric_getter, metric_name=metric_name, metric_index=index),
                 metric_obj,
             )
-            disease_metric.attach(engine, f'{basename}_{metric_name}_{disease}')
+            disease_metric.attach(engine, f'{basename}_{metric_name}_{disease}', **kwargs)
 
     return metric_obj
 
 
-def attach_medical_correctness(trainer, validator, vocab):
+def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None):
     """Attaches medical correctness metrics to engines.
 
     It uses a SyncLock to assure not to engines use the inner Cache at the same time.
@@ -78,41 +87,48 @@ def attach_medical_correctness(trainer, validator, vocab):
         validator -- ignite.Engine or None
         vocab -- dataset vocabulary (dict)
     """
-    lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
+    def _actually_attach():
+        LOGGER.info('Attaching medical correctness metrics')
 
-    if not lock.acquire():
-        LOGGER.warning(
-            'Cannot attach medical correctness metric, cache is locked',
+        lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
+
+        if not lock.acquire():
+            LOGGER.warning(
+                'Cannot attach medical correctness metric, cache is locked',
+            )
+            return
+
+        for engine in (trainer, validator):
+            if engine is None:
+                continue
+
+            if engine is trainer:
+                run_every_n_steps = steps
+            else:
+                run_every_n_steps = None
+
+            labeler = ChexpertLightLabeler(vocab)
+            _attach_labeler(engine, labeler, 'chex', run_every_n_steps)
+
+            # TODO: apply for MIRQI as well
+            # _attach_labeler(engine, MirqiLightLabeler(vocab), 'mirqi')
+
+
+        def _release_locks(unused_engine, err=None):
+            lock.release()
+
+            if err is not None:
+                raise err
+
+        trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
+        trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
+
+        if validator is not None:
+            validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
+
+    if not after:
+        _actually_attach()
+    else:
+        trainer.add_event_handler(
+            Events.EPOCH_COMPLETED(once=after), _actually_attach, # pylint: disable=not-callable
         )
-        return
-
-    for engine in (trainer, validator):
-        if engine is None:
-            continue
-
-        labeler = ChexpertLightLabeler(vocab)
-        _attach_medical_labeler_correctness(engine, labeler, 'chex')
-
-
-    def _release_locks(unused_engine, err=None):
-        lock.release()
-
-        if err is not None:
-            raise err
-
-    trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
-    trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
-
-    if validator is not None:
-        validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
-
-
-    ## TODO: awake metrics only after N epochs,
-    ## to avoid calculating for non-sense random reports
-    # @trainer.on(Events.EPOCH_STARTED(once=5))
-    # def _awake_after_epochs():
-    #     LOGGER.info('Awaking metrics...')
-    #     chexpert.has_started = True
-
-    # TODO: apply for MIRQI as well
-    # _attach_medical_labeler_correctness(engine, MirqiLightLabeler(vocab), 'mirqi')
