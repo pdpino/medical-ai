@@ -258,7 +258,7 @@ def sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
 
     sentence_so_far = []
     for word in flat_report:
-        if word == PAD_IDX:
+        if word in (PAD_IDX, END_IDX):
             continue
 
         sentence_so_far.append(word)

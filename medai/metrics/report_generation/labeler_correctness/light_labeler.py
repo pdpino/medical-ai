@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import logging
 import pandas as pd
 import numpy as np
 
@@ -11,6 +12,7 @@ from medai.utils.nlp import (
 )
 from medai.utils.timer import Timer
 
+LOGGER = logging.getLogger(__name__)
 
 class LightLabeler(ABC):
     name = 'some-metric'
@@ -38,17 +40,27 @@ class LightLabeler(ABC):
             np.array of shape batch_size, n_diseases
         """
 
-    def _reduce_report(self, report):
-        """Reduces the labels of a report.
+    def _reduce_sentences(self, report):
+        """Reduces the labels of a report, given as labels by sentences.
 
         Iterates over the sentences' labels, and apply a reduction to obtain
         an array of report labels.
+
+        Reduction is applied as max over NAN (-2), UNC (-1), NEG (0) and POS (1).
+        If one sentence contains a positive mention --> whole report is positive.
+
+        If self.no_finding_idx is defined, it indicates the index of a disease
+        that has to be treated different (as it represents absence of other diseases).
 
         Args:
             report -- iterator of sentences' labels
         Returns:
             report labels, np.array of shape n_diseases
         """
+        if not report:
+            LOGGER.debug('Found empty report')
+            return np.zeros(len(self.diseases))
+
         all_labels = np.array([
             self._labels_by_sentence[sentence]
             for sentence in report
@@ -125,14 +137,8 @@ class LightLabeler(ABC):
             # Insert new labels to cache
             self._labels_by_sentence.insert(cache_miss, new_labels)
 
-
-        # Apply union over sentences
-        # Union is applied as max over NAN (-2), UNC (-1), NEG (0) and POS (1)
-        # If one sentence contains a positive mention --> whole report is positive
-        # and so on
-        # FIXME: for chexpert, the max function is not appropriate for "No Finding"
         reports_labels = np.array([
-            self._reduce_report(report)
+            self._reduce_sentences(report) # shape: n_diseases
             for report in splitted_reports
         ])
         # np.array shape: batch_size, n_diseases

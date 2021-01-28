@@ -81,7 +81,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
 
     LOGGER.info(
         'Loading %s/%s cl-dataset, bs=%d, imgsize=%s, version=%s...',
-        dataset_name, dataset_type, batch_size, image_size, kwargs['images_version'],
+        dataset_name, dataset_type, batch_size, image_size, kwargs.get('images_version'),
     )
 
     dataset = DatasetClass(dataset_type=dataset_type,
