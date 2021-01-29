@@ -78,6 +78,8 @@ def divide_tensors(a, b):
     """Divide two tensors element-wise, avoiding NaN or Inf values in the result."""
     if isinstance(b, numbers.Number):
         if b == 0:
+            if isinstance(a, torch.Tensor):
+                return torch.zeros_like(a, requires_grad=a.requires_grad)
             return 0
         return a / b
 
@@ -95,6 +97,13 @@ def divide_tensors(a, b):
 
 def divide_arrays(a, b):
     """Divide two np.arrays element-wise, avoiding NaN values in the result."""
+    if isinstance(b, numbers.Number):
+        if b == 0:
+            if isinstance(a, np.ndarray):
+                return np.zeros(a.shape)
+            return 0
+        return a / b
+
     dont_use = b == 0
 
     a = a.copy()

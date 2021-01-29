@@ -82,11 +82,25 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
 
     It uses a SyncLock to assure not to engines use the inner Cache at the same time.
 
+    Notes:
+        - allows attaching the metrics after n epochs, by delaying the attaching to
+            a later epoch. This is a HACKy way!
+            If after == 3, in the epoch=4 the metric will be started
+            for validation, and in epoch=5 the metric will be started for training
+            (the metric is attached in 4, so is too late to be run in epoch=4).
+        - allows running the metrics every_n epochs in the training set
+            (though is not working right now)
+
     Args:
         trainer -- ignite.Engine
         validator -- ignite.Engine or None
         vocab -- dataset vocabulary (dict)
     """
+    if steps:
+        # FIXME
+        LOGGER.warning('Setting med-steps is not working, ignoring')
+        steps = None
+
     def _actually_attach():
         LOGGER.info('Attaching medical correctness metrics')
 
@@ -114,10 +128,11 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
             # _attach_labeler(engine, MirqiLightLabeler(vocab), 'mirqi')
 
 
-        def _release_locks(unused_engine, err=None):
+        def _release_locks(engine, err=None):
             lock.release()
 
             if err is not None:
+                LOGGER.error('Error in trainer=%s', engine is trainer)
                 raise err
 
         trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
@@ -126,9 +141,9 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
         if validator is not None:
             validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
 
-    if not after:
+    if not after or after <= trainer.state.epoch:
         _actually_attach()
     else:
         trainer.add_event_handler(
-            Events.EPOCH_COMPLETED(once=after), _actually_attach, # pylint: disable=not-callable
+            Events.EPOCH_STARTED(once=after+1), _actually_attach, # pylint: disable=not-callable
         )

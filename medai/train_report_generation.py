@@ -112,6 +112,17 @@ def train_model(run_name,
                                  training=True,
                                  supervise_attention=supervise_attention,
                                  device=device))
+    # Set state dict
+    # Since the state is explictly set here:
+    #  - n_epochs must not be passed to `trainer.run()`, or this state will be overriden
+    #  - initial_epoch must not be passed to attach_log_metrics
+    #    (the trainer knows the correct current epoch)
+    trainer.load_state_dict({
+        'epoch': initial_epoch,
+        'max_epochs': initial_epoch + n_epochs,
+        'epoch_length': len(train_dataloader),
+    })
+
     attach_metrics_report_generation(trainer,
                                      hierarchical=hierarchical,
                                      supervise_attention=supervise_attention,
@@ -138,7 +149,6 @@ def train_model(run_name,
                        tb_writer,
                        timer,
                        logger=LOGGER,
-                       initial_epoch=initial_epoch,
                        print_metrics=print_metrics,
                        )
 
@@ -162,12 +172,12 @@ def train_model(run_name,
     # Train!
     LOGGER.info('-' * 51)
     LOGGER.info('Training...')
-    trainer.run(train_dataloader, n_epochs)
+    trainer.run(train_dataloader)
 
     # Capture time
     secs_per_epoch = timer.value()
     LOGGER.info('Average time per epoch: %s', duration_to_str(secs_per_epoch))
-    LOGGER.info('-'*50)
+    LOGGER.info('-' * 50)
 
     # Close stuff
     tb_writer.close()
