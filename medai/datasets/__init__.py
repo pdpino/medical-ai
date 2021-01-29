@@ -15,6 +15,7 @@ from medai.datasets.jsrt import JSRTDataset
 from medai.datasets.tools.oversampler import OneLabelOverSampler
 from medai.datasets.tools.undersampler import OneLabelUnderSampler
 from medai.datasets.tools.augmentation import Augmentator
+from medai.datasets.tools.balanced_sampler import MultilabelBalancedSampler
 
 from medai.utils.nlp import count_sentences
 
@@ -59,6 +60,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 oversample_label=0, oversample_class=None,
                                 oversample_ratio=None, oversample_max_ratio=None,
                                 undersample=False, undersample_label=0,
+                                balanced_sampler=False,
                                 batch_size=10, shuffle=False,
                                 num_workers=2,
                                 **kwargs,
@@ -116,13 +118,19 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                       force_class=oversample_class,
                                       ratio=oversample_ratio,
                                       max_ratio=oversample_max_ratio)
-        dataloader = DataLoader(dataset, sampler=sampler, **dataloader_kwargs)
+        dataloader_kwargs['sampler'] = sampler
     elif undersample:
         sampler = OneLabelUnderSampler(dataset, label=undersample_label)
-        dataloader = DataLoader(dataset, sampler=sampler, **dataloader_kwargs)
+        dataloader_kwargs['sampler'] = sampler
+    elif balanced_sampler:
+        if not dataset.multilabel:
+            LOGGER.error('Balanced sampler only works for multilabel datasets, ignoring')
+        else:
+            dataloader_kwargs['sampler'] = MultilabelBalancedSampler(dataset)
     else:
-        dataloader = DataLoader(dataset, shuffle=shuffle, **dataloader_kwargs)
+        dataloader_kwargs['shuffle'] = shuffle
 
+    dataloader = DataLoader(dataset, **dataloader_kwargs)
     return dataloader
 
 

@@ -294,6 +294,7 @@ def train_from_scratch(run_name,
                        oversample_max_ratio=None,
                        undersample=False,
                        undersample_label=None,
+                       balanced_sampler=False,
                        augment=False,
                        augment_label=None,
                        augment_class=None,
@@ -334,6 +335,8 @@ def train_from_scratch(run_name,
             run_name += f'-cl{oversample_class}'
     elif undersample:
         run_name += '_us'
+    elif balanced_sampler:
+        run_name += '_balance'
     if augment:
         run_name += '_aug'
         if augment_label is not None:
@@ -394,6 +397,7 @@ def train_from_scratch(run_name,
         'augment_kwargs': augment_kwargs,
         'undersample': undersample,
         'undersample_label': undersample_label,
+        'balanced_sampler': balanced_sampler,
     }
 
     train_dataloader = prepare_data_classification(dataset_type='train',
@@ -570,6 +574,9 @@ def parse_args():
                              help='Undersample from the majority class \
                                    with a given label (str/int)')
 
+    sampl_group.add_argument('--balanced-sampler', action='store_true',
+                             help='Use a multilabel balanced sampler')
+
     parsers.add_args_tb(parser)
     parsers.add_args_early_stopping(parser, metric='roc_auc')
     parsers.add_args_lr_sch(parser, lr=None, metric='roc_auc')
@@ -681,6 +688,7 @@ if __name__ == '__main__':
             augment_kwargs=ARGS.augment_kwargs,
             undersample=ARGS.undersample is not None,
             undersample_label=ARGS.undersample,
+            balanced_sampler=ARGS.balanced_sampler,
             debug=ARGS.debug,
             tb_kwargs=ARGS.tb_kwargs,
             multiple_gpu=ARGS.multiple_gpu,

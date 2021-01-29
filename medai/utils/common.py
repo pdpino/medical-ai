@@ -153,10 +153,10 @@ def print_hw_options(device, args):
     LOGGER.info('Using: %s', info_str)
 
 
-def config_logging():
+def config_logging(basic_level=logging.WARNING):
     # Root logger
     logging.basicConfig(
-        level=logging.WARNING,
+        level=basic_level,
         format='%(levelname)s(%(asctime)s) %(message)s', # [%(name)s]
         datefmt='%m-%d %H:%M',
     )

@@ -297,3 +297,6 @@ class IUXRayDataset(Dataset):
             (index, filename_to_label[report['filename']])
             for index, report in enumerate(self.reports)
         ]
+
+    def get_presence_for_no_finding(self):
+        return self.get_labels_presence_for('No Finding')

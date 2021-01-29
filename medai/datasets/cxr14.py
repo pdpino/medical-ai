@@ -238,3 +238,11 @@ class CXR14Dataset(Dataset):
             target_label = self.labels[target_label]
 
         return list(enumerate(self.label_index[target_label]))
+
+    def get_presence_for_no_finding(self):
+        some_disease = self.label_index[self.labels].max(axis=1)
+        # series with (index, some_disease_present)
+
+        no_finding = 1 - some_disease
+
+        return list(no_finding.items())
