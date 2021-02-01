@@ -1,3 +1,4 @@
+import logging
 import torch.nn as nn
 from torchvision import models
 
@@ -5,6 +6,8 @@ from medai.models.common import (
     get_adaptive_pooling_layer,
     get_linear_layers,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 def _extract_densenet_121_features(densenet_121):
     return densenet_121.features, 1024
@@ -42,6 +45,7 @@ class ImageNetModel(nn.Module):
         model_constructor, extractor = _LOADERS[model_name]
 
         # Load base CNN
+        LOGGER.info('CNN: %s, ig=%s, pre=%s', model_name, imagenet, pretrained_cnn)
         base_cnn = model_constructor(pretrained=imagenet)
         if pretrained_cnn is not None:
             base_cnn.load_state_dict(pretrained_cnn.state_dict())
@@ -58,11 +62,19 @@ class ImageNetModel(nn.Module):
 
         self.global_pool = get_adaptive_pooling_layer(gpool)
 
-        self.prediction = get_linear_layers(
-            self.features_size,
-            len(self.labels),
-            fc_layers,
-        )
+        # Create additional FC layers, if any
+        pred_input_size = self.features_size
+        if fc_layers:
+            self.fc = get_linear_layers(
+                self.features_size,
+                fc_layers,
+            )
+            pred_input_size = fc_layers[-1]
+        else:
+            self.fc = None
+
+        self.prediction = nn.Linear(pred_input_size, len(self.labels))
+
 
     def forward(self, x, features=False):
         x = self.features(x)
@@ -75,6 +87,9 @@ class ImageNetModel(nn.Module):
         # shape: batch_size, n_features
 
         embedding = x
+
+        if self.fc:
+            x = self.fc(x) # shape: batch_size, n_fc
 
         x = self.prediction(x) # shape: batch_size, n_diseases
 

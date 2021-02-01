@@ -1,11 +1,6 @@
 import torch
 import torch.nn as nn
 
-from medai.models.common import (
-    get_adaptive_pooling_layer,
-    get_linear_layers,
-)
-
 class _ResBlock(nn.Module):
     def __init__(self, n_channels, kernel):
         super().__init__()
@@ -60,7 +55,7 @@ class ScanFCN(nn.Module):
     """(Attempting to) reproduce model from:
     SCAN: Structure Correcting Adversarial Network for Organ Segmentation in Chest X-Rays.
     """
-    def __init__(self, n_classes=4, **unused):
+    def __init__(self, n_classes=4, **unused_kwargs):
         super().__init__()
 
         self.fcn = nn.Sequential(

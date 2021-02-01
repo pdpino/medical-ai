@@ -1,7 +1,7 @@
-import torch
 from torch import nn
 
 from medai.utils.conv import calc_module_output_size
+
 
 def _cbr_layer(in_ch, out_ch, kernel_size=(7, 7), stride=1, max_pool=True):
     modules = [
@@ -40,7 +40,7 @@ def _conv_config(name, in_ch=3):
         in_ch = out_ch
 
     return layers
-    
+
 
 def class_wrapper(name):
     def constructor(*args, **kwargs):
@@ -50,22 +50,22 @@ def class_wrapper(name):
 
 class TransfusionCBRCNN(nn.Module):
     """Based on CBR models seen on Transfusion paper.
-    
+
     Paper: Transfusion: Understanding Transfer Learning for medical imaging
     """
-    def __init__(self, labels, multilabel=True, pretrained_cnn=None,
-                 n_channels=3, name='tall', **unused):
+    def __init__(self, labels, pretrained_cnn=None,
+                 n_channels=3, name='tall', **unused_kwargs):
         super().__init__()
 
         self.labels = list(labels)
         self.name = name
 
-        self.conv = nn.Sequential(
+        self.features = nn.Sequential(
             *_conv_config(name, in_ch=n_channels),
         )
 
         # NOTE: height and width passed are dummy, only number of channels is relevant
-        out_channels, _ = calc_module_output_size(self.conv, (512, 512))
+        out_channels, _ = calc_module_output_size(self.features, (512, 512))
         self.features_size = out_channels
 
         self.global_pool = nn.Sequential(
@@ -73,7 +73,7 @@ class TransfusionCBRCNN(nn.Module):
             nn.Flatten(),
         )
 
-        self.fc = nn.Linear(out_channels, len(self.labels))
+        self.prediction = nn.Linear(out_channels, len(self.labels))
 
         if pretrained_cnn is not None:
             self.load_state_dict(pretrained_cnn.state_dict())
@@ -83,7 +83,7 @@ class TransfusionCBRCNN(nn.Module):
     def forward(self, x, features=False):
         # x shape: batch_size, channels, height, width
 
-        x = self.conv(x)
+        x = self.features(x)
         # x shape: batch_size, out_channels, h2, w2
 
         if features:
@@ -92,7 +92,7 @@ class TransfusionCBRCNN(nn.Module):
         x = self.global_pool(x)
         # x shape: batch_size, out_channels
 
-        x = self.fc(x)
+        x = self.prediction(x)
         # x shape: batch_size, n_labels
 
-        return x,
+        return (x,)

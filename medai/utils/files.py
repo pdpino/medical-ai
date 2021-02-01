@@ -43,5 +43,6 @@ def _build_dir_getter(folder):
 
 
 get_tb_log_folder = _build_dir_getter('runs')
+get_tb_large_log_folder = _build_dir_getter('runs-large')
 get_results_folder = _build_dir_getter('results')
 get_checkpoint_folder = _build_dir_getter('models')

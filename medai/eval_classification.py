@@ -7,7 +7,7 @@ from ignite.engine import Engine
 
 from medai.datasets import prepare_data_classification
 from medai.losses import get_loss_function
-from medai.metrics import save_results
+from medai.metrics import save_results, are_results_saved
 from medai.metrics.classification import (
     attach_metrics_classification,
     attach_metric_cm,
@@ -63,9 +63,15 @@ def evaluate_run(run_name,
                  max_samples=None,
                  debug=True,
                  multiple_gpu=False,
+                 override=False,
+                 quiet=False,
                  device='cuda',
                  ):
     """Evaluate a model."""
+    if not override and are_results_saved(run_name, task='cls', debug=debug):
+        LOGGER.info('Skipping run, already calculated')
+        return {}
+
     # Load model
     compiled_model = load_compiled_model_classification(run_name,
                                                         debug=debug,
@@ -111,7 +117,8 @@ def evaluate_run(run_name,
 
     save_results(metrics, run_name, task='cls', debug=debug)
 
-    pprint(metrics)
+    if not quiet:
+        pprint(metrics)
 
     return metrics
 
@@ -131,6 +138,10 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--override', action='store_true',
+                        help='Override previous results')
+    parser.add_argument('--quiet', action='store_true',
+                        help='Do not print results to stdout')
 
     parsers.add_args_hw(parser)
 
@@ -154,6 +165,8 @@ if __name__ == '__main__':
                  batch_size=ARGS.batch_size,
                  n_epochs=ARGS.epochs,
                  debug=not ARGS.no_debug,
+                 override=ARGS.override,
+                 quiet=ARGS.quiet,
                  multiple_gpu=ARGS.multiple_gpu,
                  device=DEVICE,
                 )

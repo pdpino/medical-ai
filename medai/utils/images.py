@@ -1,8 +1,13 @@
 import os
+import numpy as np
 import torch
+from torch.nn.functional import interpolate
 from torchvision import transforms
 from tqdm.auto import tqdm
 from PIL import Image
+
+from medai.datasets.common import BatchItem
+from medai.utils import tensor_to_range01
 
 
 class ImageFolderIterator:
@@ -34,7 +39,8 @@ def compute_mean_std(image_iterator, n_channels=3, show=False):
     """Computes mean and std of a dataset.
 
     Args:
-      image_iterator -- should yield one image at the time; each image is a tensor of shape (n_channels=3, height, width)
+        image_iterator -- should yield one image at the time; each image is
+            a tensor of shape (n_channels, height, width)
 
     Returns:
       Channel wise mean, std (i.e. tensors of shape n_channels)
@@ -127,3 +133,51 @@ def bbox_coordinates_to_map(bboxes, valid, image_size):
             bboxes_map[i_batch, j_label, min_y:max_y, min_x:max_x] = 1
 
     return bboxes_map
+
+
+def create_sprite_atlas(dataset,
+                        target_h=50,
+                        target_w=50,
+                        n_channels=3,
+                        max_size=8192, # TB-frontend max-size available
+                        ):
+    """Creates an atlas of a dataset of images.
+
+    Args:
+        dataset -- Classification dataset or image iterator
+    """
+    n_images = len(dataset)
+
+    def _resize_image(image):
+        image = interpolate(image.unsqueeze(0), (target_h, target_w), mode='nearest')
+        return image.squeeze(0)
+
+    n_cols = int(np.ceil(np.sqrt(n_images)))
+    n_rows = int(np.ceil(n_images / n_cols))
+
+    total_height = target_h * n_rows
+    total_width = target_w * n_cols
+    if total_height > max_size or total_width > max_size:
+        raise Exception(f'Atlas would be too big: {total_height}x{total_width}')
+
+    atlas = torch.zeros(n_channels, total_height, total_width)
+
+    for index, item in enumerate(dataset):
+        if isinstance(item, BatchItem):
+            image = item.image
+        elif isinstance(item, torch.Tensor):
+            image = item
+        else:
+            raise Exception(f'Item type not recognized: {type(item)}')
+
+        image = tensor_to_range01(image) # shape: n_channels, height, width
+        resized_image = _resize_image(image) # shape: n_channels, target_h, target_w
+
+        row_from = (index // n_cols) * target_h
+        row_to = row_from + target_h
+        col_from = (index % n_cols) * target_w
+        col_to = col_from + target_w
+
+        atlas[:, row_from:row_to, col_from:col_to] = resized_image
+
+    return atlas

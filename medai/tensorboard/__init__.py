@@ -6,7 +6,7 @@ from tensorboardX import SummaryWriter
 from torch import nn
 
 from medai import utils
-from medai.utils.files import get_tb_log_folder
+from medai.utils.files import get_tb_log_folder, get_tb_large_log_folder
 
 IGNORE_METRICS = [
     r'\Acm', # Confusion-matrix, no sense to put it in TB
@@ -18,9 +18,16 @@ class TBWriter:
                  ignore_metrics=IGNORE_METRICS,
                  dryrun=False,
                  histogram=False,
+                 large=False,
                  workspace_dir=utils.WORKSPACE_DIR, debug=True, **kwargs):
-        self.log_dir = get_tb_log_folder(run_name, task=task,
-                                    workspace_dir=workspace_dir, debug=debug)
+        if large:
+            _get_tb_folder = get_tb_large_log_folder
+        else:
+            _get_tb_folder = get_tb_log_folder
+
+        self.log_dir = _get_tb_folder(
+            run_name, task=task, workspace_dir=workspace_dir, debug=debug,
+        )
 
         self.writer = SummaryWriter(self.log_dir,
                                     write_to_disk=not dryrun,
