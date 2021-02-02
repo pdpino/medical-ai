@@ -2,10 +2,17 @@ import torch
 from torch import nn
 
 class WeigthedBCELoss(nn.Module):
-    def __init__(self, epsilon=1e-5):
+    def __init__(self, reduction='mean', epsilon=1e-5):
         super().__init__()
 
         self.epsilon = epsilon
+
+        if reduction == 'mean':
+            self.reduction = torch.mean
+        elif reduction == 'sum':
+            self.reduction = torch.sum
+        else:
+            self.reduction = None
 
     def forward(self, output, target):
         """Computes weighted binary cross entropy loss.
@@ -31,7 +38,9 @@ class WeigthedBCELoss(nn.Module):
 
         loss = -BP * target * torch.log(output) - BN * (1 - target) * torch.log(1 - output)
 
-        return torch.mean(loss)
+        if self.reduction:
+            return self.reduction(loss)
+        return loss
 
 
 class WeigthedBCEByDiseaseLoss(nn.Module):

@@ -3,7 +3,8 @@ import numpy as np
 import torch
 
 
-def plot_cm(cm, labels=None, title=None, percentage=False, colorbar=False):
+def plot_cm(cm, labels=None, title=None,
+            percentage=False, colorbar=False, xlabel=True, ylabel=True):
     """Plots a confusion matrix."""
     if labels is None:
         labels = list(range(len(cm)))
@@ -27,8 +28,10 @@ def plot_cm(cm, labels=None, title=None, percentage=False, colorbar=False):
     plt.yticks(ticks, labels)
     if title:
         plt.title(title)
-    plt.xlabel('Prediction')
-    plt.ylabel('True')
+    if xlabel:
+        plt.xlabel('Prediction')
+    if ylabel:
+        plt.ylabel('True')
 
     total = cm.sum()
 
@@ -40,7 +43,7 @@ def plot_cm(cm, labels=None, title=None, percentage=False, colorbar=False):
 
             value_str = f'{int(value):d}'
             if percentage:
-                value /= total
-                value_str += f'\n({value:.2f}%)'
+                value = value / total * 100
+                value_str += f'\n({value:.1f}%)'
 
             plt.text(col, row, value_str, ha='center', va='center', color=color)
