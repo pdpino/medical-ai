@@ -18,7 +18,10 @@ _DATASET_MEAN = 0.5946
 _DATASET_STD = 0.2733
 
 class JSRTDataset(Dataset):
-    def __init__(self, dataset_type='all', image_size=(512, 512), norm_by_sample=False, image_format='L', **unused):
+    def __init__(self, dataset_type='all',
+                 image_size=(512, 512), norm_by_sample=False,
+                 image_format='L', **unused_kwargs):
+        super().__init__()
 
         assert DATASET_DIR is not None, 'DATASET_DIR is None'
 

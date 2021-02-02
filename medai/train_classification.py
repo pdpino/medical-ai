@@ -264,6 +264,7 @@ def train_from_scratch(run_name,
                        dataset_name,
                        shuffle=False,
                        clahe=False,
+                       image_format='RGB',
                        cnn_name='resnet-50',
                        imagenet=True,
                        freeze=False,
@@ -381,7 +382,8 @@ def train_from_scratch(run_name,
         'num_workers': num_workers,
         'norm_by_sample': norm_by_sample,
         'masks': grad_cam or hint,
-        'images_version': 'clahe' if clahe else None
+        'images_version': 'clahe' if clahe else None,
+        'image_format': image_format,
     }
     dataset_train_kwargs = {
         'shuffle': shuffle,
@@ -549,6 +551,8 @@ def parse_args():
                                     (instead of using dataset stats)')
     images_group.add_argument('--clahe', action='store_true',
                               help='Use CLAHE normalized images')
+    images_group.add_argument('--image-format', type=str, default='RGB', choices=['RGB', 'L'],
+                              help='Image format to use')
 
     grad_cam_group = parser.add_argument_group('Grad-CAM evaluation params')
     grad_cam_group.add_argument('--grad-cam', action='store_true',
@@ -592,10 +596,15 @@ def parse_args():
         if args.model is None:
             parser.error('A model must be selected')
 
+    # Require frontal_only
     if args.grad_cam or args.hint:
         if not args.frontal_only:
             parser.error('If grad_cam or hint, frontal_only must be True')
 
+    # Require correct image-format
+    if args.model in ('tiny-res-scan',):
+        if not args.image_format == 'L':
+            parser.error(f'For model {args.model}, image-format must be "L"')
 
     # Build loss params
     if args.loss_name == 'focal':
@@ -653,6 +662,7 @@ if __name__ == '__main__':
             ARGS.dataset,
             shuffle=ARGS.shuffle,
             clahe=ARGS.clahe,
+            image_format=ARGS.image_format,
             cnn_name=ARGS.model,
             imagenet=not ARGS.no_imagenet,
             freeze=ARGS.freeze,

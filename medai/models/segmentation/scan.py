@@ -58,13 +58,14 @@ class ScanFCN(nn.Module):
     def __init__(self, n_classes=4, **unused_kwargs):
         super().__init__()
 
+        # height and width sizes are considering input size (400 x 400)
         self.fcn = nn.Sequential(
             _ParallelResBlocks(8, 1, 7), # output: 8 x 400 x 400
             _ResBlock(8, 3),
             nn.AvgPool2d((2, 2), (2, 2)), # output: 8 x 200 x 200
             _ParallelResBlocks(2, 8, 3), # output: 16 x 200 x 200
             nn.AvgPool2d((2, 2), (2, 2)), # output: 16 x 100 x 100
-            _ParallelResBlocks(2, 16, 3), # output: 32 X 100 x 100
+            _ParallelResBlocks(2, 16, 3), # output: 32 x 100 x 100
             nn.AvgPool2d((2, 2), (2, 2)), # output: 32 x 50 x 50
             _ParallelResBlocks(2, 32, 3), # output: 64 x 50 x 50
             nn.AvgPool2d((2, 2), (2, 2)), # output: 64 x 25 x 25

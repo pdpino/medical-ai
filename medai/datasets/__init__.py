@@ -81,9 +81,16 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         LOGGER.warning('images_version is not implemented in %s', dataset_name)
         kwargs['images_version'] = None
 
+
+    _info = {
+        'bs': batch_size,
+        'imgsize': image_size,
+        'version': kwargs.get('images_version'),
+        'format': kwargs.get('image_format', 'RGB'),
+    }
+    _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
     LOGGER.info(
-        'Loading %s/%s cl-dataset, bs=%d, imgsize=%s, version=%s...',
-        dataset_name, dataset_type, batch_size, image_size, kwargs.get('images_version'),
+        'Loading %s/%s cl-dataset, %s', dataset_name, dataset_type, _info_str,
     )
 
     dataset = DatasetClass(dataset_type=dataset_type,

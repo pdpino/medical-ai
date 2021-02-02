@@ -5,6 +5,7 @@ from medai.models.classification import (
     transfusion,
     vgg,
     mobilenet,
+    tiny_res_scan,
 )
 from medai.models.classification.load_imagenet import ImageNetModel
 
@@ -20,6 +21,7 @@ _MODELS_DEF = {
     'resnet-50-v2': partial(ImageNetModel, model_name='resnet-50'),
     'densenet-121-v2': partial(ImageNetModel, model_name='densenet-121'),
     'mobilenet-v2': partial(ImageNetModel, model_name='mobilenet'),
+    'tiny-res-scan': tiny_res_scan.TinyResScanCNN,
 }
 
 DEPRECATED_CNNS = set([
