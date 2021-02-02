@@ -12,6 +12,10 @@ from medai.metrics.classification import (
     attach_metrics_classification,
     attach_metric_cm,
 )
+from medai.metrics.classification.writer import (
+    attach_prediction_writer,
+    delete_previous_outputs,
+)
 from medai.models.checkpoint import load_compiled_model_classification
 from medai.training.classification import get_step_fn
 from medai.utils import (
@@ -25,11 +29,13 @@ from medai.utils import (
 LOGGER = logging.getLogger('medai.cl.eval')
 
 
-def evaluate_model(model,
+def evaluate_model(run_name,
+                   model,
                    dataloader,
                    loss_name='wbce',
                    loss_kwargs={},
                    n_epochs=1,
+                   debug=True,
                    device='cuda'):
     """Evaluate a classification model on a dataloader."""
     if dataloader is None:
@@ -49,6 +55,9 @@ def evaluate_model(model,
                                ))
     attach_metrics_classification(engine, labels, multilabel=multilabel)
     attach_metric_cm(engine, labels, multilabel=multilabel)
+    attach_prediction_writer(
+        engine, run_name, labels, assert_n_samples=len(dataloader.dataset), debug=debug,
+    )
 
     engine.run(dataloader, n_epochs)
 
@@ -69,8 +78,11 @@ def evaluate_run(run_name,
                  ):
     """Evaluate a model."""
     if not override and are_results_saved(run_name, task='cls', debug=debug):
-        LOGGER.info('Skipping run, already calculated')
+        LOGGER.warning('Skipping run, already calculated')
         return {}
+
+    # Delete previous CSV outputs
+    delete_previous_outputs(run_name, debug=debug)
 
     # Load model
     compiled_model = load_compiled_model_classification(run_name,
@@ -105,6 +117,7 @@ def evaluate_run(run_name,
         'loss_kwargs': loss_kwargs,
         'device': device,
         'n_epochs': n_epochs,
+        'debug': debug,
     }
 
     metrics = {}
@@ -113,7 +126,9 @@ def evaluate_run(run_name,
         if dataloader is None:
             continue
         dataset_type = dataloader.dataset.dataset_type
-        metrics[dataset_type] = evaluate_model(compiled_model.model, dataloader, **eval_kwargs)
+        metrics[dataset_type] = evaluate_model(
+            run_name, compiled_model.model, dataloader, **eval_kwargs,
+        )
 
     save_results(metrics, run_name, task='cls', debug=debug)
 
