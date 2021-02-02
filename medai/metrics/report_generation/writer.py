@@ -83,8 +83,6 @@ def attach_report_writer(engine, run_name, vocab, assert_n_samples=None, debug=T
 
     @engine.on(Events.COMPLETED)
     def _close_writer():
-        # sample_counter = writer.line_counter
-
         writer.close()
 
         sample_counter = engine.state.line_counter

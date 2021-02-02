@@ -2,7 +2,6 @@ from datetime import datetime
 import numbers
 import time
 import os
-import logging
 import numpy as np
 
 import torch
@@ -10,8 +9,6 @@ import torch
 WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
 TMP_DIR = os.path.join(WORKSPACE_DIR, 'tmp')
 CACHE_DIR = os.path.join(WORKSPACE_DIR, 'cache')
-
-LOGGER = logging.getLogger(__name__)
 
 
 def get_timestamp(short=True):
@@ -132,38 +129,6 @@ def parse_str_or_int(s):
         return int(s)
     except ValueError:
         return s
-
-
-def print_hw_options(device, args):
-    """Prints hardware options (device selected) and args provided."""
-    def _safe_get_attr(obj, attr, default_value=None):
-        if not hasattr(obj, attr):
-            return default_value
-        return getattr(obj, attr)
-
-    _CUDA_VISIBLE = os.environ.get('CUDA_VISIBLE_DEVICES', '')
-    d = {
-        'device': device,
-        'visible': _CUDA_VISIBLE,
-        'multiple': _safe_get_attr(args, 'multiple_gpu'),
-        'num_workers': _safe_get_attr(args, 'num_workers'),
-        'num_threads': _safe_get_attr(args, 'num_threads'),
-    }
-    info_str = ' '.join(f'{k}={v}' for k, v in d.items())
-    LOGGER.info('Using: %s', info_str)
-
-
-def config_logging(basic_level=logging.WARNING):
-    # Root logger
-    logging.basicConfig(
-        level=basic_level,
-        format='%(levelname)s(%(asctime)s) %(message)s', # [%(name)s]
-        datefmt='%m-%d %H:%M',
-    )
-
-    # Own loggers level
-    main_logger = logging.getLogger('medai')
-    main_logger.setLevel(logging.INFO)
 
 
 def timeit_main(logger):
