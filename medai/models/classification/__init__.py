@@ -24,6 +24,7 @@ _MODELS_DEF = {
     'mobilenet-v2': partial(ImageNetModel, model_name='mobilenet'),
     'tiny-res-scan': tiny_res_scan.TinyResScanCNN,
     'tiny-densenet': tiny_densenet.TinyDenseNetCNN,
+    'small-densenet': tiny_densenet.SmallDenseNetCNN,
 }
 
 DEPRECATED_CNNS = set([
