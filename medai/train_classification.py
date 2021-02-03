@@ -12,7 +12,7 @@ from medai.datasets import (
     prepare_data_classification,
     AVAILABLE_CLASSIFICATION_DATASETS,
 )
-from medai.losses import get_loss_function, AVAILABLE_LOSSES
+from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
 from medai.metrics.classification import attach_metrics_classification
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.classification import (
@@ -24,7 +24,6 @@ from medai.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
     save_metadata,
-    # load_metadata,
     load_compiled_model_classification,
 )
 from medai.training.classification import get_step_fn
@@ -99,6 +98,7 @@ def train_model(run_name,
     if loss_name == 'focal':
         loss_kwargs['multilabel'] = multilabel
     loss = get_loss_function(loss_name, **loss_kwargs)
+    loss = loss.to(device)
     LOGGER.info('Using loss: %s, %s', loss_name, loss_kwargs)
 
     # Create validator engine
@@ -324,6 +324,8 @@ def train_from_scratch(run_name,
         run_name += '_hint'
     if not imagenet:
         run_name += '_noig'
+    if cnn_pooling != 'max':
+        run_name += f'_g{cnn_pooling}'
     if freeze:
         run_name += '_frz'
     if oversample:
@@ -349,6 +351,9 @@ def train_from_scratch(run_name,
         if loss_name == 'focal':
             _kwargs_str = '-'.join(f'{k[0]}{v}' for k, v in loss_kwargs.items())
             run_name += f'-{_kwargs_str}' if _kwargs_str else ''
+        elif loss_name == 'bce':
+            if 'pos_weight' in loss_kwargs:
+                run_name += '-w'
     if labels and dataset_name == 'cxr14':
         # labels only works in CXR-14, for now
         labels_str = '_'.join(labels)
@@ -369,6 +374,10 @@ def train_from_scratch(run_name,
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
     if not early_stopping:
         run_name += '_noes'
+    # else:
+    #     metric = early_stopping_kwargs['metric']
+    #     patience = early_stopping_kwargs['patience']
+    #     run_name += f'_es-{metric}-p{patience}'
 
 
     # Load data
@@ -539,6 +548,7 @@ def parse_args():
                             help='Loss to use')
     loss_group.add_argument('--focal-alpha', type=float, default=0.75, help='Focal alpha param')
     loss_group.add_argument('--focal-gamma', type=float, default=2, help='Focal gamma param')
+    loss_group.add_argument('--bce-pos-weight', action='store_true', help='Use pos weights in BCE')
 
 
     images_group = parser.add_argument_group('Images params')
@@ -611,6 +621,12 @@ def parse_args():
         args.loss_kwargs = {
             'alpha': args.focal_alpha,
             'gamma': args.focal_gamma,
+        }
+    elif args.loss_name == 'bce' and args.bce_pos_weight:
+        if args.dataset not in POS_WEIGHTS_BY_DATASET:
+            parser.error(f'bce-pos-weights not available for dataset {args.dataset}')
+        args.loss_kwargs = {
+            'pos_weight': POS_WEIGHTS_BY_DATASET[args.dataset],
         }
     else:
         args.loss_kwargs = {}

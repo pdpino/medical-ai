@@ -44,7 +44,7 @@ class WeigthedBCELoss(nn.Module):
 
 
 class WeigthedBCEByDiseaseLoss(nn.Module):
-    def __init__(self, epsilon=1e-5):
+    def __init__(self, epsilon=1e-7):
         super().__init__()
 
         self.epsilon = epsilon
@@ -56,12 +56,10 @@ class WeigthedBCEByDiseaseLoss(nn.Module):
 
         batch_size, unused_n_diseases = target.size()
 
-        # total = torch.Tensor().new_full((n_diseases,), batch_size).type(torch.float)
         positive = torch.sum(target == 1, dim=0).type(torch.float)
         negative = torch.sum(target == 0, dim=0).type(torch.float)
         total = positive + negative
         # shapes: n_diseases
-
 
         # If a value is zero, is set to batch_size (so the division results in 1 for that disease)
         positive = positive + ((positive == 0)*batch_size).type(positive.dtype)

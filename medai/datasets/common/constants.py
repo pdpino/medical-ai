@@ -24,6 +24,23 @@ CXR14_DISEASES = [
     'Hernia',
 ]
 
+CXR14_POS_WEIGHTS = [
+    9,
+    50,
+    9,
+    5,
+    20,
+    17,
+    98,
+    31,
+    29,
+    61,
+    57,
+    67,
+    37,
+    600,
+]
+
 ORGAN_BACKGROUND = 'background'
 ORGAN_HEART = 'heart'
 ORGAN_RIGHT_LUNG = 'right lung'
