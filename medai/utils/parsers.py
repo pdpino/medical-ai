@@ -69,13 +69,13 @@ def add_args_hw(parser, num_workers=4):
                           help='Number of threads for pytorch')
 
 
-def add_args_lr_sch(parser, lr=0.0001, metric='loss'):
+def add_args_lr_sch(parser, lr=0.0001, patience=5, metric='loss'):
     lr_group = parser.add_argument_group('LR scheduler params')
     lr_group.add_argument('-lr', '--learning-rate', type=float, default=lr,
                           help='Initial learning rate')
     lr_group.add_argument('--lr-metric', type=str, default=metric,
                           help='Select the metric to regulate the LR')
-    lr_group.add_argument('--lr-patience', type=int, default=5,
+    lr_group.add_argument('--lr-patience', type=int, default=patience,
                           help='Patience value for LR-scheduler')
     lr_group.add_argument('--lr-factor', type=float, default=0.1,
                           help='Factor to multiply the LR on each update')
