@@ -7,13 +7,14 @@ def _calc_output_size(input_size, kernel_size, stride, dilation=1, padding=0):
     Should work with Conv and MaxPool layers.
     See formula in docs https://pytorch.org/docs/stable/nn.html#conv2d
     """
+    # pylint: disable=not-callable
     if not isinstance(input_size, torch.Tensor):
-        input_size = torch.LongTensor(input_size)
+        input_size = torch.tensor(input_size)
 
-    kernel_size = torch.LongTensor(kernel_size)
-    stride = torch.LongTensor(stride)
-    dilation = torch.LongTensor(dilation)
-    padding = torch.LongTensor(padding)
+    kernel_size = torch.tensor(kernel_size)
+    stride = torch.tensor(stride)
+    dilation = torch.tensor(dilation)
+    padding = torch.tensor(padding)
 
     value = (input_size + 2*padding - dilation * (kernel_size - 1) - 1)
     value = value.true_divide(stride)

@@ -1,6 +1,7 @@
 from torch import nn
 
 from medai.utils.conv import calc_module_output_size
+from medai.models.common import get_adaptive_pooling_layer
 
 
 def _cbr_layer(in_ch, out_ch, kernel_size=(7, 7), stride=1, max_pool=True):
@@ -42,36 +43,27 @@ def _conv_config(name, in_ch=3):
     return layers
 
 
-def class_wrapper(name):
-    def constructor(*args, **kwargs):
-        return TransfusionCBRCNN(*args, name=name, **kwargs)
-    return constructor
-
-
 class TransfusionCBRCNN(nn.Module):
     """Based on CBR models seen on Transfusion paper.
 
     Paper: Transfusion: Understanding Transfer Learning for medical imaging
     """
     def __init__(self, labels, pretrained_cnn=None,
-                 n_channels=3, name='tall', **unused_kwargs):
+                 n_channels=3, model_name='tall', gpool='max', **unused_kwargs):
         super().__init__()
 
         self.labels = list(labels)
-        self.name = name
+        self.model_name = model_name
 
         self.features = nn.Sequential(
-            *_conv_config(name, in_ch=n_channels),
+            *_conv_config(model_name, in_ch=n_channels),
         )
 
         # NOTE: height and width passed are dummy, only number of channels is relevant
         out_channels, _ = calc_module_output_size(self.features, (512, 512))
         self.features_size = out_channels
 
-        self.global_pool = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(),
-        )
+        self.global_pool = get_adaptive_pooling_layer(gpool)
 
         self.prediction = nn.Linear(out_channels, len(self.labels))
 
