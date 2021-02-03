@@ -378,6 +378,7 @@ def train_from_scratch(run_name,
     #     metric = early_stopping_kwargs['metric']
     #     patience = early_stopping_kwargs['patience']
     #     run_name += f'_es-{metric}-p{patience}'
+    run_name = run_name.replace(' ', '-')
 
 
     # Load data

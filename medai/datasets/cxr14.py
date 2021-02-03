@@ -234,6 +234,9 @@ class CXR14Dataset(Dataset):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
             label for each sample.
         """
+        if target_label == 'No Finding':
+            return self.get_presence_for_no_finding()
+
         if isinstance(target_label, int):
             target_label = self.labels[target_label]
 
