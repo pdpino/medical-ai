@@ -7,6 +7,8 @@ CHEXPERT_LABELS = [
     'Pleural Other', 'Fracture', 'Support Devices',
 ]
 
+CHEXPERT_DISEASES = list(CHEXPERT_LABELS) # Alias for the same list
+
 CXR14_DISEASES = [
     'Atelectasis',
     'Cardiomegaly',

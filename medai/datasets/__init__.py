@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, Subset
 from torch.utils.data.dataloader import default_collate
 
 from medai.datasets.cxr14 import CXR14Dataset
+from medai.datasets.chexpert import ChexpertDataset
 from medai.datasets.covid_kaggle import CovidKaggleDataset
 from medai.datasets.covid_x import CovidXDataset
 from medai.datasets.covid_actual import CovidActualDataset
@@ -21,6 +22,7 @@ from medai.utils.nlp import count_sentences
 
 _CL_DATASETS = {
     'cxr14': CXR14Dataset,
+    'chexpert': ChexpertDataset,
     'covid-kaggle': CovidKaggleDataset,
     'covid-x': CovidXDataset,
     'covid-actual': CovidActualDataset,
@@ -41,6 +43,12 @@ AVAILABLE_CLASSIFICATION_DATASETS = list(_CL_DATASETS)
 AVAILABLE_SEGMENTATION_DATASETS = list(_SEG_DATASETS)
 
 LOGGER = logging.getLogger(__name__)
+
+
+_MISSING_SPLITS = set([
+    ('chexpert', 'test'),
+])
+
 
 def _classification_collate_fn(batch_items):
     batch_items = [
@@ -65,6 +73,10 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 num_workers=2,
                                 **kwargs,
                                 ):
+    if (dataset_name, dataset_type) in _MISSING_SPLITS:
+        LOGGER.warning('Split is not available: %s/%s', dataset_name, dataset_type)
+        return None
+
     assert image_size is None or isinstance(image_size, (tuple, list)), (
         f'Image size must be a tuple, list, or None, got {image_size}'
     )
