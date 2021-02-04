@@ -12,6 +12,7 @@ from medai.datasets.tools.transforms import (
     RandomResizedCropMany,
     RandomAffineMany,
     ColorJitterMany,
+    GaussianNoiseMany,
 )
 
 _SPATIAL_TRANSFORMS = set([
@@ -22,6 +23,22 @@ _SPATIAL_TRANSFORMS = set([
     ])
 _TRANSFORM_METHOD_NAME = 'transform' # Transform method name in each dataset
 
+# For each augmentation method, should it be applied to PIL or tensors
+_APPLY_TO_PIL = 'apply_to_pil'
+_APPLY_TO_TENSOR_NONORM = 'apply_to_tensor_nonorm'
+_APPLY_TO_TENSOR_NORM = 'apply_to_tensor_norm'
+_PRE_POST_METHOD_BY_AUG = {
+    None: _APPLY_TO_PIL,
+    'crop': _APPLY_TO_PIL,
+    'translate': _APPLY_TO_PIL,
+    'rotation': _APPLY_TO_PIL,
+    'shear': _APPLY_TO_PIL,
+    'contrast-down': _APPLY_TO_PIL,
+    'contrast-up': _APPLY_TO_PIL,
+    'brightness-down': _APPLY_TO_PIL,
+    'brightness-up': _APPLY_TO_PIL,
+    'noise-gaussian': _APPLY_TO_TENSOR_NORM,
+}
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +51,7 @@ class Augmentator(Dataset):
                  dont_shuffle=False,
                  crop=0.8, translate=0.1, rotation=15, contrast=0.8, brightness=0.8,
                  shear=(10, 10),
+                 noise_gaussian=0.1,
                  ):
         """Init class.
 
@@ -56,6 +74,7 @@ class Augmentator(Dataset):
             contrast -- value provided to ColorJitter
             brightness -- value provided to ColorJitter
             shear -- shear angles (x, y), provided to RandomAffineMany as shear=(-x, x, -y, y)
+            noise_gaussian -- Amplifier value to add the gaussian noise
         """
         super().__init__()
 
@@ -125,6 +144,9 @@ class Augmentator(Dataset):
                 brightness=(brightness_up_min, brightness_up_min + brightness),
             )
 
+        if noise_gaussian is not None:
+            self._aug_fns['noise-gaussian'] = GaussianNoiseMany(amplifier=noise_gaussian)
+
         # Create new indices array
         self.indices = []
         for idx, should_augment in samples_idxs:
@@ -165,9 +187,12 @@ class Augmentator(Dataset):
 
         item = self.dataset[inner_idx]
 
+        pre_post_method = _PRE_POST_METHOD_BY_AUG[aug_method]
+        pre_transform, post_transform = self.pre_post_transforms[pre_post_method]
+
         # Prepare PIL images
         fields = {
-            'image': self.pre_transform(item.image),
+            'image': pre_transform(item.image),
         }
 
         apply_to_seg_mask = self.augment_masks and aug_method in _SPATIAL_TRANSFORMS
@@ -180,7 +205,7 @@ class Augmentator(Dataset):
             fields = aug_instance(fields)
 
         # Apply post transformation
-        fields['image'] = self.post_transform(fields['image'])
+        fields['image'] = post_transform(fields['image'])
 
         if apply_to_seg_mask:
             fields['masks'] = post_transform_masks(fields['masks'])
@@ -204,9 +229,21 @@ class Augmentator(Dataset):
         assert isinstance(_transforms[0], transforms.Resize), '1st transform should be Resize'
         assert isinstance(_transforms[1], transforms.ToTensor), '2d transform should be ToTensor'
 
-        # Break in two steps
-        self.pre_transform = _transforms[0]
-        self.post_transform = transforms.Compose(_transforms[1:])
+        # Break in two steps, before and after augmenting
+        self.pre_post_transforms = {
+            _APPLY_TO_PIL: (
+                _transforms[0], # Resize before
+                transforms.Compose(_transforms[1:]), # ToTensor after
+            ),
+            _APPLY_TO_TENSOR_NONORM: (
+                transforms.Compose(_transforms[:2]), # Resize and to-tensor before
+                transforms.Compose(_transforms[2:]), # Rest after
+            ),
+            _APPLY_TO_TENSOR_NORM: (
+                tf_instance, # Resize, to-tensor and norm before
+                lambda x: x, # Nothing after
+            )
+        }
 
         # Set as identity
         setattr(self.dataset, _TRANSFORM_METHOD_NAME, lambda x: x)

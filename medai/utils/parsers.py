@@ -12,6 +12,7 @@ def add_args_augment(parser):
                               positive (1) or negative (0) samples')
     aug_group.add_argument('--augment-times', type=int, default=1,
                         help='Number of times to randomly augment by each method')
+
     aug_group.add_argument('--aug-crop', type=float, default=0.8,
                            help='Augment samples by cropping a random fraction')
     aug_group.add_argument('--aug-translate', type=float, default=0.1,
@@ -24,6 +25,8 @@ def add_args_augment(parser):
                            help='Augment samples by changing the brightness randomly')
     aug_group.add_argument('--aug-shear', nargs=2, default=(10, 10),
                            help='Augment samples by applying a shear transformation.')
+    aug_group.add_argument('--aug-gaussian', type=float, default=0.1,
+                           help='Augment samples by adding N(0,1)*value noise.')
 
 
 def build_args_augment_(args):
@@ -36,6 +39,7 @@ def build_args_augment_(args):
             'contrast': args.aug_contrast,
             'brightness': args.aug_brightness,
             'shear': args.aug_shear,
+            'noise_gaussian': args.aug_gaussian
         }
     else:
         args.augment_kwargs = {}

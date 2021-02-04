@@ -116,6 +116,24 @@ class ColorJitterMany(transforms.ColorJitter):
         return apply_to_many(transform_fn, images)
 
 
+class GaussianNoiseMany:
+    """Adds gaussian noise to images.
+
+    Assumes images are tensors of shape (n_channels, height, width)
+    """
+    def __init__(self, amplifier):
+        self.amplifier = amplifier
+
+    def __call__(self, images):
+        image = get_first(images)
+        unused_n_channels, height, width = image.size()
+        noise = torch.randn(height, width, device=image.device) * self.amplifier
+
+        transform_fn = lambda image: image + noise
+
+        return apply_to_many(transform_fn, images)
+
+
 class WIP_TransformMany:
     """WIP: Class not implemented.
 
