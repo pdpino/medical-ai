@@ -7,11 +7,13 @@ from medai.models.common import (
 )
 
 class CustomDenseNetCNN(nn.Module):
-    def __init__(self, labels, gpool='avg',
+    def __init__(self, labels, gpool='avg', model_name='densenet',
                  growth_rate=12, block_config=(6, 6, 6, 12),
                  num_init_features=64, bn_size=4, drop_rate=0,
                  **unused_kwargs):
         super().__init__()
+
+        self.model_name = model_name
 
         densenet = dn.DenseNet(
             growth_rate=growth_rate,
@@ -49,6 +51,7 @@ TinyDenseNetCNN = partial(
     num_init_features=64, # TODO: create version with only 32?
     bn_size=4,
     drop_rate=0,
+    model_name='tiny-densenet',
 )
 
 # Num of params: 1,096,181
@@ -59,4 +62,5 @@ SmallDenseNetCNN = partial(
     num_init_features=32,
     bn_size=4,
     drop_rate=0,
+    model_name='tiny-densenet-v2',
 )

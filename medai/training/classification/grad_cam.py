@@ -5,7 +5,7 @@ from torch.nn.functional import interpolate, softmax
 from ignite.engine import Engine, Events
 from captum.attr import LayerGradCam
 
-from medai.models.classification.load_imagenet import ImageNetModel
+from medai.models.classification import get_last_layer
 from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
 from medai.metrics.segmentation import attach_metrics_image_saliency
 from medai.utils.images import bbox_coordinates_to_map
@@ -30,42 +30,13 @@ class ModelWrapper(nn.Module):
         return output
 
 
-def _get_last_layer(model):
-    if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
-        model = model.module
-
-    model_name = model.model_name
-
-    if isinstance(model, ImageNetModel):
-        if model_name == 'mobilenet':
-            return model.features[-1][0] # -1
-        if model_name == 'densenet-121':
-            return model.features.denseblock4.denselayer16.conv2 # norm5
-        if model_name == 'resnet-50':
-            return model.features[-1][-1].conv3 # relu
-
-    # DEPRECATED MODELS
-    else:
-        if model_name == 'mobilenet':
-            # return model.base_cnn.features[-1][0] # Last conv
-            return model.base_cnn.features[-1][-1] # Actual last
-        if model_name == 'densenet-121':
-            # return model.base_cnn.features.denseblock4.denselayer16.conv2 # Last conv
-            return model.base_cnn.features.norm5 # Actual last
-        if model_name == 'resnet-50':
-            # return model.base_cnn.layer4[-1].conv3 # Last conv
-            return model.base_cnn.layer4[-1].relu # Actual last
-
-    raise Exception(f'Last layer not hardcoded for: {model_name}')
-
-
 def create_grad_cam(model, device='cuda', multiple_gpu=False):
     wrapped_model = ModelWrapper(model).to(device)
     if multiple_gpu:
         raise NotImplementedError('Grad-CAM with multiple_gpu=True is not implemented')
         # wrapped_model = nn.DataParallel(wrapped_model)
 
-    layer = _get_last_layer(model)
+    layer = get_last_layer(model)
     grad_cam = LayerGradCam(wrapped_model, layer)
 
     return grad_cam

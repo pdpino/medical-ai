@@ -47,17 +47,20 @@ def _get_latest_filepath(folder):
     return os.path.join(folder, latest_fname)
 
 
-def _load_meta(folder):
+def _load_meta(folder, run_name):
     filepath = os.path.join(folder, 'metadata.json')
 
     with open(filepath, 'r') as f:
         data = json.load(f)
 
+    if 'run_name' not in data:
+        data['run_name'] = run_name
+
     return data
 
 
 def load_metadata(run_name, task, debug=True):
-    """Public wrapper to call _load_meta()."""
+    """Loads metadata for a run."""
     folder = get_checkpoint_folder(run_name,
                                    task=task,
                                    debug=debug,
@@ -65,7 +68,7 @@ def load_metadata(run_name, task, debug=True):
                                    assert_exists=True,
                                    )
 
-    return _load_meta(folder)
+    return _load_meta(folder, run_name)
 
 
 def save_metadata(data, run_name, task, debug=True):
@@ -98,7 +101,7 @@ def load_compiled_model_classification(run_name,
                                    )
 
     # Load metadata
-    metadata = _load_meta(folder)
+    metadata = _load_meta(folder, run_name)
 
     # Create empty model and optimizer
     model = create_cnn(**metadata['model_kwargs']).to(device)
@@ -145,7 +148,7 @@ def load_compiled_model_segmentation(run_name,
                                    )
 
     # Load metadata
-    metadata = _load_meta(folder)
+    metadata = _load_meta(folder, run_name)
 
     # Create empty model and optimizer
     model = create_fcn(**metadata['model_kwargs']).to(device)
@@ -188,7 +191,7 @@ def load_compiled_model_report_generation(run_name,
                                    )
 
     # Load metadata
-    metadata = _load_meta(folder)
+    metadata = _load_meta(folder, run_name)
 
     # Create CNN
     cnn_kwargs = metadata.get('cnn_kwargs', None)
