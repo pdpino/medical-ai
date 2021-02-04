@@ -77,7 +77,7 @@ def get_last_layer(model):
         if model_name == 'tiny-densenet':
             return model.features.denseblock4.denselayer12.conv2
         if model_name == 'small-densenet':
-            pass # TODO: define this one
+            return model.features.denseblock4.denselayer12.conv2
 
     # DEPRECATED MODELS
     else:
