@@ -1,4 +1,5 @@
 from functools import partial
+import logging
 from torch import nn
 
 from medai.models.classification import (
@@ -11,6 +12,8 @@ from medai.models.classification import (
     tiny_densenet,
 )
 from medai.models.classification.load_imagenet import ImageNetModel
+
+LOGGER = logging.getLogger(__name__)
 
 _MODELS_DEF = {
     'resnet-50': resnet.Resnet50CNN,
@@ -36,9 +39,19 @@ DEPRECATED_CNNS = set([
 AVAILABLE_CLASSIFICATION_MODELS = list(_MODELS_DEF)
 
 
+_MODELS_WITH_DROPOUT_IMPLEMENTED = (
+    'tiny-densenet',
+    'small-densenet',
+    'densenet-121-v2',
+)
+
 def create_cnn(model_name, labels, **kwargs):
     if model_name not in _MODELS_DEF:
         raise Exception(f'Model not found: {model_name}')
+
+    dropout = kwargs.get('dropout', 0)
+    if dropout != 0 and model_name not in _MODELS_WITH_DROPOUT_IMPLEMENTED:
+        LOGGER.error('Dropout not implemented for %s, ignoring', model_name)
 
     ModelClass = _MODELS_DEF[model_name]
     model = ModelClass(labels, **kwargs)

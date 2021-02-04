@@ -38,15 +38,19 @@ class ImageNetModel(nn.Module):
     """Loads a torchvision model."""
     def __init__(self, labels=[], model_name='densenet-121',
                  imagenet=True, freeze=False,
-                 pretrained_cnn=None, gpool='max', fc_layers=(),
+                 pretrained_cnn=None, gpool='max', fc_layers=(), dropout=0,
                  **unused_kwargs):
         super().__init__()
+        LOGGER.info('CNN: %s, ig=%s, pre=%s', model_name, imagenet, pretrained_cnn)
+
         # Config by model
         model_constructor, extractor = _LOADERS[model_name]
 
         # Load base CNN
-        LOGGER.info('CNN: %s, ig=%s, pre=%s', model_name, imagenet, pretrained_cnn)
-        base_cnn = model_constructor(pretrained=imagenet)
+        kwargs = {'pretrained': imagenet}
+        if dropout != 0 and model_name == 'densenet-121':
+            kwargs['drop_rate'] = dropout
+        base_cnn = model_constructor(**kwargs)
         if pretrained_cnn is not None:
             base_cnn.load_state_dict(pretrained_cnn.state_dict())
 

@@ -266,6 +266,7 @@ def train_from_scratch(run_name,
                        clahe=False,
                        image_format='RGB',
                        cnn_name='resnet-50',
+                       dropout=0,
                        imagenet=True,
                        freeze=False,
                        cnn_pooling='max',
@@ -326,6 +327,8 @@ def train_from_scratch(run_name,
         run_name += '_noig'
     if cnn_pooling != 'max':
         run_name += f'_g{cnn_pooling}'
+    if dropout != 0:
+        run_name += f'_drop{dropout}'
     if freeze:
         run_name += '_frz'
     if oversample:
@@ -440,6 +443,7 @@ def train_from_scratch(run_name,
         'freeze': freeze,
         'gpool': cnn_pooling,
         'fc_layers': fc_layers,
+        'dropout': dropout,
     }
     model = create_cnn(**model_kwargs).to(device)
 
@@ -533,6 +537,8 @@ def parse_args():
     cnn_group.add_argument('-m', '--model', type=str, default=None,
                         choices=AVAILABLE_CLASSIFICATION_MODELS,
                         help='Choose base CNN to use')
+    cnn_group.add_argument('-drop', '--dropout', type=float, default=0,
+                        help='dropout-rate to use (only available for some models)')
     cnn_group.add_argument('-noig', '--no-imagenet', action='store_true',
                         help='If present, dont use imagenet pretrained weights')
     cnn_group.add_argument('-frz', '--freeze', action='store_true',
@@ -681,6 +687,7 @@ if __name__ == '__main__':
             clahe=ARGS.clahe,
             image_format=ARGS.image_format,
             cnn_name=ARGS.model,
+            dropout=ARGS.dropout,
             imagenet=not ARGS.no_imagenet,
             freeze=ARGS.freeze,
             cnn_pooling=ARGS.cnn_pooling,
