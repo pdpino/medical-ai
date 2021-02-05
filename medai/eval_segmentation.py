@@ -54,6 +54,7 @@ def evaluate_run(run_name,
                  device='cuda',
                  multiple_gpu=False,
                  quiet=False,
+                 ignore_augment=False,
                  ):
     """Evaluates a saved run."""
     # Load model
@@ -66,6 +67,8 @@ def evaluate_run(run_name,
     metadata = compiled_model.metadata
     dataset_kwargs = metadata['dataset_kwargs']
     dataset_train_kwargs = metadata['dataset_train_kwargs']
+    if ignore_augment:
+        dataset_train_kwargs = {}
 
     if batch_size is not None:
         dataset_kwargs['batch_size'] = batch_size
@@ -90,6 +93,10 @@ def evaluate_run(run_name,
         if dataloader is None:
             continue
         name = dataloader.dataset.dataset_type
+
+        if name == 'train' and ignore_augment:
+            name = 'train-no-aug'
+
         metrics[name] = evaluate_model(compiled_model.model, dataloader, **eval_kwargs)
 
     save_results(metrics, run_name, task='seg', debug=debug)
@@ -115,6 +122,8 @@ def parse_args():
     data_group = parser.add_argument_group('Data')
     data_group.add_argument('-bs', '--batch-size', type=int, default=None,
                             help='Batch size')
+    data_group.add_argument('--ignore-aug', action='store_true',
+                            help='Ignore augmentation and oversampling params in train')
     # data_group.add_argument('--image-size', type=int, default=512,
     #                           help='Image size in pixels')
     # data_group.add_argument('--norm-by-sample', action='store_true',
@@ -146,4 +155,5 @@ if __name__ == '__main__':
                  device=DEVICE,
                  multiple_gpu=ARGS.multiple_gpu,
                  quiet=ARGS.quiet,
+                 ignore_augment=ARGS.ignore_aug,
                  )
