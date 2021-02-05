@@ -10,7 +10,7 @@ from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
 
 LOGGER = logging.getLogger(__name__)
 
-_CHECK_NAN_OR_INF = True
+_CHECK_NAN_OR_INF = False
 
 def get_step_fn(model, loss_fn, optimizer=None, training=True,
                 multilabel=True, hint=False, diseases=None,

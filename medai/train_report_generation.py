@@ -49,6 +49,8 @@ from medai.utils import (
     print_hw_options,
     parsers,
     config_logging,
+    set_seed,
+    set_seed_from_metadata,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -204,6 +206,7 @@ def resume_training(run_name,
 
     # Load metadata (contains all configuration)
     metadata = compiled_model.metadata
+    set_seed_from_metadata(metadata)
 
     # Decide hierarchical
     decoder_name = metadata['decoder_kwargs']['decoder_name']
@@ -287,6 +290,7 @@ def train_from_scratch(run_name,
                        multiple_gpu=False,
                        num_workers=2,
                        device='cuda',
+                       seed=None,
                        ):
     """Train a model from scratch."""
     # Create run name
@@ -321,6 +325,8 @@ def train_from_scratch(run_name,
     # Is deprecated
     if decoder_name in DEPRECATED_DECODERS:
         raise Exception(f'RG model is deprecated: {decoder_name}')
+
+    set_seed(seed)
 
     # Decide hierarchical
     hierarchical = is_decoder_hierarchical(decoder_name)
@@ -452,6 +458,7 @@ def train_from_scratch(run_name,
             'batch_size': batch_size,
         },
         'other_train_kwargs': other_train_kwargs,
+        'seed': seed,
     }
     save_metadata(metadata, run_name, task='rg', debug=debug)
 
@@ -493,6 +500,8 @@ def parse_args():
                         help='If present, does not use teacher forcing')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--seed', type=int, default=1234,
+                        help='Set a seed (initial run only)')
 
     data_group = parser.add_argument_group('Data')
     data_group.add_argument('--image-size', type=int, default=512,
@@ -601,6 +610,7 @@ if __name__ == '__main__':
                            multiple_gpu=ARGS.multiple_gpu,
                            num_workers=ARGS.num_workers,
                            device=DEVICE,
+                           seed=ARGS.seed,
                            )
 
     total_time = time.time() - start_time

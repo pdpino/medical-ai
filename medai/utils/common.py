@@ -2,13 +2,37 @@ from datetime import datetime
 import numbers
 import time
 import os
+import random
+import logging
 import numpy as np
-
 import torch
 
 WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
 TMP_DIR = os.path.join(WORKSPACE_DIR, 'tmp')
 CACHE_DIR = os.path.join(WORKSPACE_DIR, 'cache')
+
+LOGGER = logging.getLogger(__name__)
+
+def set_seed(num):
+    """Sets a seed.
+
+    Notice this does not ensure full reproducibility in pytorch,
+    see here: https://pytorch.org/docs/stable/notes/randomness.html
+    """
+    if num is None:
+        return
+
+    random.seed(num)
+    torch.manual_seed(num)
+    np.random.seed(num)
+
+
+def set_seed_from_metadata(metadata):
+    seed = metadata.get('seed', None)
+    if seed is not None:
+        set_seed(seed)
+    else:
+        LOGGER.warning('Seed not found in metadata')
 
 
 def get_timestamp(short=True):
@@ -33,17 +57,6 @@ def duration_to_str(all_seconds):
         return f'{minutes}m {seconds}s'
     return f'{seconds}s'
 
-
-def labels_to_str(values, labels, thresh=0.5, sort_values=False, show_value=False):
-    positive = [(val, label) for val, label in zip(values, labels) if val > thresh]
-    if sort_values:
-        positive = sorted(positive, reverse=True)
-
-    if len(positive) > 0:
-        format_str = '{1} ({0:.3f})' if show_value else '{1}'
-        return ', '.join(format_str.format(val, label) for val, label in positive)
-    else:
-        return 'No Findings'
 
 
 def arr_to_range(arr, min_value=0, max_value=1):

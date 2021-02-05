@@ -37,6 +37,8 @@ from medai.utils import (
     parsers,
     config_logging,
     timeit_main,
+    set_seed,
+    set_seed_from_metadata,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -208,9 +210,10 @@ def resume_training(run_name,
 
     # Metadata (contains all configuration)
     metadata = compiled_model.metadata
-    dataset_kwargs = metadata['dataset_kwargs']
+    set_seed_from_metadata(metadata)
 
-    # Override values
+    # Dataset kwargs
+    dataset_kwargs = metadata['dataset_kwargs']
     dataset_kwargs['max_samples'] = max_samples
     if batch_size is not None:
         dataset_kwargs['batch_size'] = batch_size
@@ -307,6 +310,7 @@ def train_from_scratch(run_name,
                        multiple_gpu=False,
                        num_workers=2,
                        device='cuda',
+                       seed=None,
                        ):
     """Train a model from scratch."""
     # Default values
@@ -383,6 +387,7 @@ def train_from_scratch(run_name,
     #     run_name += f'_es-{metric}-p{patience}'
     run_name = run_name.replace(' ', '-')
 
+    set_seed(seed)
 
     # Load data
     dataset_kwargs = {
@@ -485,6 +490,7 @@ def train_from_scratch(run_name,
         'other_train_kwargs': other_train_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
+        'seed': seed,
     }
     save_metadata(metadata, run_name, task='cls', debug=debug)
 
@@ -532,6 +538,8 @@ def parse_args():
                         help='If is a non-debugging run')
     parser.add_argument('--hint', action='store_true',
                         help='Use HINT training')
+    parser.add_argument('--seed', type=int, default=1234,
+                        help='Set a seed (initial run only)')
 
     cnn_group = parser.add_argument_group('CNN params')
     cnn_group.add_argument('-m', '--model', type=str, default=None,
@@ -728,4 +736,5 @@ if __name__ == '__main__':
             multiple_gpu=ARGS.multiple_gpu,
             num_workers=ARGS.num_workers,
             device=DEVICE,
+            seed=ARGS.seed,
             )

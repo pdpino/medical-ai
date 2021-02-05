@@ -31,6 +31,8 @@ from medai.utils import (
     parsers,
     config_logging,
     timeit_main,
+    set_seed,
+    set_seed_from_metadata,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -163,6 +165,8 @@ def resume_training(run_name,
 
     # Metadata (contains all configuration)
     metadata = compiled_model.metadata
+    set_seed_from_metadata(metadata)
+
     dataset_kwargs = metadata['dataset_kwargs']
 
     # Load data
@@ -214,6 +218,7 @@ def train_from_scratch(run_name,
                        num_workers=2,
                        multiple_gpu=False,
                        device='cuda',
+                       seed=None,
                        ):
     run_name = f'{run_name}_{dataset_name}_{fcn_name}_lr{lr}'
 
@@ -234,6 +239,8 @@ def train_from_scratch(run_name,
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
     if not early_stopping:
         run_name += '_noes'
+
+    set_seed(seed)
 
     # Load data
     dataset_kwargs = {
@@ -294,6 +301,7 @@ def train_from_scratch(run_name,
         'hparams': other_train_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
+        'seed': seed,
     }
     save_metadata(metadata, run_name, task='seg', debug=debug)
 
@@ -334,6 +342,8 @@ def parse_args():
                         help='Additional metrics to print to stdout')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--seed', type=int, default=1234,
+                        help='Set a seed (initial run only)')
 
     # fcn_group = parser.add_argument_group('FCN params')
     # fcn_group.add_argument('-m', '--model', type=str, default=None,
@@ -423,4 +433,5 @@ if __name__ == '__main__':
             multiple_gpu=ARGS.multiple_gpu,
             num_workers=ARGS.num_workers,
             device=DEVICE,
+            seed=ARGS.seed,
             )
