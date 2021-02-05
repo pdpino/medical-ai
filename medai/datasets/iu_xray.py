@@ -35,6 +35,7 @@ _DATASET_STD = 0.2374
 class IUXRayDataset(Dataset):
     _sentence_to_organ = None
     organs = list(JSRT_ORGANS)
+    dataset_dir = DATASET_DIR
 
     def __init__(self, dataset_type='train', max_samples=None,
                  labels=None,
@@ -42,7 +43,7 @@ class IUXRayDataset(Dataset):
                  frontal_only=False, image_size=(512, 512),
                  norm_by_sample=False,
                  image_format='RGB',
-                 masks=False,
+                 masks=False, masks_version=None,
                  vocab=None, recompute_vocab=False, **unused_kwargs):
         super().__init__()
 
@@ -68,7 +69,6 @@ class IUXRayDataset(Dataset):
         # Only frontal masks are available
         assert not masks or frontal_only, 'if masks is True, set frontal_only=True'
 
-        self.masks_dir = os.path.join(DATASET_DIR, 'masks')
         self.enable_masks = masks
         self.transform_mask = transforms.Compose([
             transforms.Resize(image_size),
@@ -101,6 +101,11 @@ class IUXRayDataset(Dataset):
 
         if self.enable_masks:
             self._init_sentence_to_organ()
+
+            masks_version = masks_version or 'v0' # backward compatibility
+            self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
+            if not os.path.isdir(self.masks_dir):
+                raise Exception(f'Masks do not exist! {self.masks_dir}')
 
 
     def __len__(self):

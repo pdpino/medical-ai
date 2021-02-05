@@ -37,10 +37,11 @@ def _calculate_bbox_scale(image_size):
 
 class CXR14Dataset(Dataset):
     organs = list(JSRT_ORGANS)
+    dataset_dir = DATASET_DIR
 
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
-                 masks=False, images_version=None,
+                 masks=False, images_version=None, masks_version=None,
                  **unused_kwargs):
         super().__init__()
 
@@ -66,8 +67,6 @@ class CXR14Dataset(Dataset):
             raise ValueError(
                 f'Image version not found: {images_version} (in {self.image_dir})',
             )
-
-        self.masks_dir = os.path.join(DATASET_DIR, 'masks')
 
         # Load split images
         SPLITS_DIR = os.path.join(DATASET_DIR, 'splits')
@@ -135,6 +134,12 @@ class CXR14Dataset(Dataset):
                 transforms.Resize(image_size),
                 transforms.ToTensor(),
             ])
+
+            masks_version = masks_version or 'v0' # backward compatibility
+            self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
+
+            if not os.path.isdir(self.masks_dir):
+                raise Exception(f'Masks do not exist! {self.masks_dir}')
 
         self.bbox_scale = _calculate_bbox_scale(self.image_size)
 

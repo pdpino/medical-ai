@@ -1,11 +1,13 @@
 import argparse
 import logging
+from pprint import pprint
 import torch
 from ignite.engine import Engine
 
 from medai.datasets import prepare_data_segmentation
 from medai.metrics import save_results
 from medai.metrics.segmentation import attach_metrics_segmentation
+from medai.metrics.segmentation.shapes import attach_organ_shapes_metric
 from medai.models.checkpoint import load_compiled_model_segmentation
 from medai.training.segmentation import get_step_fn
 from medai.utils import (
@@ -37,6 +39,7 @@ def evaluate_model(model,
                                 device=device,
                                 ))
     attach_metrics_segmentation(engine, labels, multilabel=False)
+    attach_organ_shapes_metric(engine, labels, gt=True)
 
     engine.run(dataloader, n_epochs)
 
@@ -46,9 +49,11 @@ def evaluate_model(model,
 @timeit_main(LOGGER)
 def evaluate_run(run_name,
                  dataset_types=('train', 'val', 'test'),
+                 batch_size=None,
                  debug=True,
                  device='cuda',
                  multiple_gpu=False,
+                 quiet=False,
                  ):
     """Evaluates a saved run."""
     # Load model
@@ -61,6 +66,9 @@ def evaluate_run(run_name,
     metadata = compiled_model.metadata
     dataset_kwargs = metadata['dataset_kwargs']
     dataset_train_kwargs = metadata['dataset_train_kwargs']
+
+    if batch_size is not None:
+        dataset_kwargs['batch_size'] = batch_size
 
     # Create dataloaders
     dataloaders = [
@@ -86,6 +94,9 @@ def evaluate_run(run_name,
 
     save_results(metrics, run_name, task='seg', debug=debug)
 
+    if not quiet:
+        pprint(metrics)
+
     return metrics
 
 
@@ -98,16 +109,17 @@ def parse_args():
                         help='If is a non-debugging run')
     parser.add_argument('--eval-in', nargs='*', default=['train', 'val', 'test'],
                         help='Eval in datasets')
+    parser.add_argument('--quiet', action='store_true',
+                        help='Do not print metrics to stdout')
 
-    # data_group = parser.add_argument_group('Data')
-    # data_group.add_argument('-bs', '--batch-size', type=int, default=10,
-    #                         help='Batch size')
+    data_group = parser.add_argument_group('Data')
+    data_group.add_argument('-bs', '--batch-size', type=int, default=None,
+                            help='Batch size')
     # data_group.add_argument('--image-size', type=int, default=512,
     #                           help='Image size in pixels')
     # data_group.add_argument('--norm-by-sample', action='store_true',
     #                           help='If present, normalize each sample \
     #                                (instead of using dataset stats)')
-
 
     parsers.add_args_hw(parser, num_workers=2)
 
@@ -129,7 +141,9 @@ if __name__ == '__main__':
 
     evaluate_run(ARGS.run_name,
                  dataset_types=ARGS.eval_in,
+                 batch_size=ARGS.batch_size,
                  debug=not ARGS.no_debug,
                  device=DEVICE,
                  multiple_gpu=ARGS.multiple_gpu,
+                 quiet=ARGS.quiet,
                  )
