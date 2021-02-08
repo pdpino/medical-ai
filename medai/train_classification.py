@@ -280,6 +280,7 @@ def train_from_scratch(run_name,
                        loss_kwargs={},
                        print_metrics=None,
                        lr=None,
+                       weight_decay=0,
                        labels=None,
                        batch_size=None,
                        norm_by_sample=False,
@@ -335,6 +336,8 @@ def train_from_scratch(run_name,
         run_name += f'_drop{dropout}'
     if freeze:
         run_name += '_frz'
+    if fc_layers and len(fc_layers) > 0:
+        run_name += '_fc' + '-'.join(str(l) for l in fc_layers)
     if oversample:
         run_name += '_os'
         if oversample_ratio is not None:
@@ -363,18 +366,18 @@ def train_from_scratch(run_name,
                 run_name += '-w'
     if labels and dataset_name == 'cxr14':
         # labels only works in CXR-14, for now
-        labels_str = '_'.join(labels)
+        labels_str = '-'.join(labels)
         run_name += f'_{labels_str}'
     if norm_by_sample:
         run_name += '_normS'
     else:
         run_name += '_normD'
+    if weight_decay != 0:
+        run_name += f'_wd{weight_decay}'
     if image_size != 512:
         run_name += f'_size{image_size}'
     if n_epochs == 0:
         run_name += '_e0'
-    if fc_layers and len(fc_layers) > 0:
-        run_name += '_fc' + '-'.join(str(l) for l in fc_layers)
     if lr_sch_metric:
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
@@ -460,6 +463,7 @@ def train_from_scratch(run_name,
     # Create optimizer
     opt_kwargs = {
         'lr': lr,
+        'weight_decay': weight_decay,
     }
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
@@ -561,6 +565,8 @@ def parse_args():
     loss_group.add_argument('-l', '--loss-name', type=str, default=None,
                             choices=AVAILABLE_LOSSES,
                             help='Loss to use')
+    loss_group.add_argument('--weight-decay', type=float, default=0,
+                            help='Weight decay passed to the optimizer')
     loss_group.add_argument('--focal-alpha', type=float, default=0.75, help='Focal alpha param')
     loss_group.add_argument('--focal-gamma', type=float, default=2, help='Focal gamma param')
     loss_group.add_argument('--bce-pos-weight', action='store_true', help='Use pos weights in BCE')
@@ -707,6 +713,7 @@ if __name__ == '__main__':
             print_metrics=ARGS.print_metrics,
             labels=ARGS.labels,
             lr=ARGS.learning_rate,
+            weight_decay=ARGS.weight_decay,
             batch_size=ARGS.batch_size,
             norm_by_sample=ARGS.norm_by_sample,
             n_epochs=ARGS.epochs,

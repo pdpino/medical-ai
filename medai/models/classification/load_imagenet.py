@@ -41,7 +41,7 @@ class ImageNetModel(nn.Module):
                  pretrained_cnn=None, gpool='max', fc_layers=(), dropout=0,
                  **unused_kwargs):
         super().__init__()
-        LOGGER.info('CNN: %s, ig=%s, pre=%s', model_name, imagenet, pretrained_cnn)
+        LOGGER.info('CNN: %s, ig=%s, gpool=%s, fc=%s', model_name, imagenet, gpool, fc_layers)
 
         # Config by model
         model_constructor, extractor = _LOADERS[model_name]
