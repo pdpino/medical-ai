@@ -43,6 +43,7 @@ def evaluate_model(run_name,
 
     LOGGER.info('Evaluating model in %s...', dataloader.dataset.dataset_type)
     loss = get_loss_function(loss_name, **loss_kwargs)
+    loss = loss.to(device)
 
     labels = dataloader.dataset.labels
     multilabel = dataloader.dataset.multilabel

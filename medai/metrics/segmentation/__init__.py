@@ -58,7 +58,7 @@ def attach_metrics_segmentation(engine, labels, multilabel=False, device='cuda')
     _attach_metric_for_label(engine, labels, dice, 'dice')
 
 
-def attach_metrics_image_saliency(engine, labels, keys, multilabel=True, device='cuda'):
+def attach_metrics_image_saliency(engine, labels, keys, multilabel=True):
     if not multilabel:
         raise NotImplementedError()
 
@@ -73,12 +73,10 @@ def attach_metrics_image_saliency(engine, labels, keys, multilabel=True, device=
     for (name, key_gt, key_valid) in keys:
         iou = IoU(
             reduce_sum=False,
-            output_transform=partial(_extract_maps, key_gt=key_gt, key_valid=key_valid),
-            device=device)
+            output_transform=partial(_extract_maps, key_gt=key_gt, key_valid=key_valid))
         _attach_metric_for_label(engine, labels, iou, f'iou-{name}')
 
         iobb = IoBB(
             reduce_sum=False,
-            output_transform=partial(_extract_maps, key_gt=key_gt, key_valid=key_valid),
-            device=device)
+            output_transform=partial(_extract_maps, key_gt=key_gt, key_valid=key_valid))
         _attach_metric_for_label(engine, labels, iobb, f'iobb-{name}')

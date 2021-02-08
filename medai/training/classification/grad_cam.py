@@ -178,7 +178,7 @@ def create_grad_cam_evaluator(trainer,
                                          device=device))
 
     keys = [('masks', 'masks', None)]
-    attach_metrics_image_saliency(grad_cam_engine, labels, keys, multilabel=True, device=device)
+    attach_metrics_image_saliency(grad_cam_engine, labels, keys, multilabel=True)
 
 
     def run_grad_cam_evaluation(main_engine):

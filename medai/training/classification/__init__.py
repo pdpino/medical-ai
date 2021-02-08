@@ -73,7 +73,7 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
 
             images.requires_grad = False
 
-            masks = reduce_masks_for_diseases(
+            masks = reduce_masks_for_diseases( # TODO: move this to collate_fn()
                 diseases,
                 data_batch.masks.to(device),
             )
@@ -84,6 +84,10 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
         else:
             hint_loss = torch.tensor(-1) # pylint: disable=not-callable
             total_loss = cl_loss
+
+            grad_cam_attrs = torch.tensor(-1) # pylint: disable=not-callable
+            masks = torch.tensor(-1) # pylint: disable=not-callable
+
 
         if training:
             total_loss.backward()
@@ -105,8 +109,10 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
             'loss': total_loss.item(),
             'cl_loss': cl_loss.item(),
             'hint_loss': hint_loss.item(),
-            'pred_labels': outputs,
+            'pred_labels': outputs.detach(),
             'gt_labels': labels,
+            'activations': grad_cam_attrs.detach(),
+            'gt_activations': masks,
         }
 
     return step_fn

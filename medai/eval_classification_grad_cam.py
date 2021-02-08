@@ -67,7 +67,7 @@ def run_evaluation(run_name,
         ('bbox', 'bboxes_map', 'bboxes_valid'),
         ('masks', 'masks', None),
     ]
-    attach_metrics_image_saliency(engine, labels, keys, multilabel=True, device=device)
+    attach_metrics_image_saliency(engine, labels, keys, multilabel=True)
 
     # Run!
     engine.run(dataloader, 1)

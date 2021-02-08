@@ -19,6 +19,7 @@ from medai.metrics.classification.hamming import Hamming
 from medai.metrics.classification.roc_auc import RocAucMetric
 from medai.metrics.classification.pr_auc import PRAucMetric
 from medai.metrics.classification.specificity import Specificity
+from medai.metrics.segmentation import attach_metrics_image_saliency
 
 
 def _get_transform_one_label(label_index, use_round=True):
@@ -194,6 +195,12 @@ def attach_metrics_classification(engine, labels, multilabel=True, hint=False):
                            get_transform_fn=_get_transform_one_class)
         _attach_binary_metrics(engine, labels, 'spec', Specificity,
                            get_transform_fn=_get_transform_one_class)
+
+    if hint:
+        keys = [
+            ('grad-cam', 'gt_activations', None),
+        ]
+        attach_metrics_image_saliency(engine, labels, keys, multilabel=multilabel)
 
 
 def attach_metric_cm(engine, labels, multilabel=True):
