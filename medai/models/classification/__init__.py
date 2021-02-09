@@ -53,6 +53,9 @@ def create_cnn(model_name, labels, **kwargs):
     if dropout != 0 and model_name not in _MODELS_WITH_DROPOUT_IMPLEMENTED:
         LOGGER.error('Dropout not implemented for %s, ignoring', model_name)
 
+    info_str = ' '.join(f'{k}={v}' for k, v in kwargs.items())
+    LOGGER.info('Creating CNN: %s, %s', model_name, info_str)
+
     ModelClass = _MODELS_DEF[model_name]
     model = ModelClass(labels, **kwargs)
 
@@ -66,29 +69,33 @@ def get_last_layer(model):
 
     model_name = model.model_name
 
+    layer = None
+
     if isinstance(model, ImageNetModel):
         if model_name == 'mobilenet':
-            return model.features[-1][0] # -1
+            layer = model.features[-1][0] # -1
         if model_name == 'densenet-121':
-            return model.features.denseblock4.denselayer16.conv2 # norm5
+            layer = model.features.denseblock4.denselayer16.conv2 # norm5
         if model_name == 'resnet-50':
-            return model.features[-1][-1].conv3 # relu
+            layer = model.features[-1][-1].conv3 # relu
     elif isinstance(model, tiny_densenet.CustomDenseNetCNN):
         if model_name == 'tiny-densenet':
-            return model.features.denseblock4.denselayer12.conv2
+            layer = model.features.denseblock4.denselayer12.conv2
         if model_name == 'small-densenet':
-            return model.features.denseblock4.denselayer12.conv2
+            layer = model.features.denseblock4.denselayer12.conv2
 
     # DEPRECATED MODELS
     else:
         if model_name == 'mobilenet':
-            # return model.base_cnn.features[-1][0] # Last conv
-            return model.base_cnn.features[-1][-1] # Actual last
+            # layer = model.base_cnn.features[-1][0] # Last conv
+            layer = model.base_cnn.features[-1][-1] # Actual last
         if model_name == 'densenet-121':
-            # return model.base_cnn.features.denseblock4.denselayer16.conv2 # Last conv
-            return model.base_cnn.features.norm5 # Actual last
+            # layer = model.base_cnn.features.denseblock4.denselayer16.conv2 # Last conv
+            layer = model.base_cnn.features.norm5 # Actual last
         if model_name == 'resnet-50':
-            # return model.base_cnn.layer4[-1].conv3 # Last conv
-            return model.base_cnn.layer4[-1].relu # Actual last
+            # layer = model.base_cnn.layer4[-1].conv3 # Last conv
+            layer = model.base_cnn.layer4[-1].relu # Actual last
 
-    raise Exception(f'Last layer not defined for: {model_name}')
+    if layer is None:
+        raise Exception(f'Last layer not defined for: {model_name}')
+    return layer

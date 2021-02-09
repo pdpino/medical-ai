@@ -1,4 +1,3 @@
-import logging
 import torch.nn as nn
 from torchvision import models
 
@@ -6,8 +5,6 @@ from medai.models.common import (
     get_adaptive_pooling_layer,
     get_linear_layers,
 )
-
-LOGGER = logging.getLogger(__name__)
 
 def _extract_densenet_121_features(densenet_121):
     return densenet_121.features, 1024
@@ -41,8 +38,6 @@ class ImageNetModel(nn.Module):
                  pretrained_cnn=None, gpool='max', fc_layers=(), dropout=0,
                  **unused_kwargs):
         super().__init__()
-        LOGGER.info('CNN: %s, ig=%s, gpool=%s, fc=%s', model_name, imagenet, gpool, fc_layers)
-
         # Config by model
         model_constructor, extractor = _LOADERS[model_name]
 

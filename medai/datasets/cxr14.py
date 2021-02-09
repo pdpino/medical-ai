@@ -19,6 +19,10 @@ LOGGER = logging.getLogger(__name__)
 
 DATASET_DIR = os.environ.get('DATASET_DIR_CXR14')
 
+_BROKEN_IMAGES = set((
+    '00007160_002.png', # Looks empty (all gray)
+))
+
 _DATASET_MEAN = 0.5058
 _DATASET_STD = 0.232
 
@@ -111,8 +115,11 @@ class CXR14Dataset(Dataset):
         columns = ['FileName'] + self.labels
         self.label_index = self.label_index[columns]
 
+        # Remove broken images
+        split_images = set(split_images) - _BROKEN_IMAGES
+
         # Keep only the images in the directory
-        available_images = set(split_images).intersection(set(os.listdir(self.image_dir)))
+        available_images = split_images.intersection(set(os.listdir(self.image_dir)))
         available_images = set(self.label_index['FileName']).intersection(available_images)
 
         if len(split_images) > len(available_images):

@@ -1,10 +1,12 @@
 from collections import defaultdict
+import logging
 import torch
 import numpy as np
 import mahotas.polygon
 import rasterio.features
 from shapely.geometry import Polygon
 
+LOGGER = logging.getLogger(__name__)
 
 def calculate_polygons(mask, ignore_idx=0):
     """Finds the polygons in a mask.
@@ -59,6 +61,11 @@ def get_largest_shapes(polygons):
 
     for organ_idx in range(1, 4):
         organ_polys = polygons_by_organ[organ_idx]
+        if len(organ_polys) == 0:
+            largest_polygons.append(([], organ_idx))
+            LOGGER.warning('Empty polygon for organ=%d', organ_idx)
+            continue
+
         organ_polys = sorted(organ_polys, key=lambda p: p.area, reverse=True)
         largest_poly = organ_polys[0]
 
@@ -86,6 +93,9 @@ def polygons_to_array(polygons, size):
     arr = np.zeros(size, dtype=np.uint8)
 
     for coords, color in polygons:
+        if len(coords) == 0:
+            continue
+
         coords = [
             (_safe_to_int(y), _safe_to_int(x))
             for x, y in coords
