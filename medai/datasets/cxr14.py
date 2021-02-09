@@ -20,7 +20,21 @@ LOGGER = logging.getLogger(__name__)
 DATASET_DIR = os.environ.get('DATASET_DIR_CXR14')
 
 _BROKEN_IMAGES = set((
-    '00007160_002.png', # Looks empty (all gray)
+    # Looks empty (all gray)
+    '00007160_002.png',
+    '00012249_001.png',
+    # Lateral images # TODO: mark as lateral!
+    # NOTE: this is not a comprehensive list of lateral images,
+    # but images that have been casually found.
+    # They are poorly labeled in the Data_Entry_2017.csv file
+    # (i.e. are marked as frontal)
+    '00013774_015.png',
+    # Color-inverted:
+    '00020006_001.png',
+    '00021201_042.png',
+    # One lung patient:
+    '00029041_016.png',
+    '00029041_017.png',
 ))
 
 _DATASET_MEAN = 0.5058
@@ -46,6 +60,7 @@ class CXR14Dataset(Dataset):
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
                  masks=False, images_version=None, masks_version=None,
+                 xrv_norm=False,
                  **unused_kwargs):
         super().__init__()
 
@@ -60,6 +75,7 @@ class CXR14Dataset(Dataset):
             norm_by_sample=norm_by_sample,
             mean=_DATASET_MEAN,
             std=_DATASET_STD,
+            xrv_norm=xrv_norm,
         )
 
         self.image_dir = os.path.join(

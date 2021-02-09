@@ -11,6 +11,7 @@ from ignite.handlers import Timer
 from medai.datasets import (
     prepare_data_classification,
     AVAILABLE_CLASSIFICATION_DATASETS,
+    UP_TO_DATE_MASKS_VERSION,
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
 from medai.metrics.classification import attach_metrics_classification
@@ -75,6 +76,7 @@ def train_model(run_name,
                 early_stopping=True,
                 early_stopping_kwargs={},
                 hint=False,
+                hint_lambda=1,
                 lr_sch_metric='loss',
                 debug=True,
                 dryrun=False,
@@ -109,6 +111,7 @@ def train_model(run_name,
                                    training=False,
                                    multilabel=multilabel,
                                    hint=hint,
+                                   hint_lambda=hint_lambda,
                                    diseases=labels,
                                    device=device,
                                    ))
@@ -122,6 +125,7 @@ def train_model(run_name,
                                  training=True,
                                  multilabel=multilabel,
                                  hint=hint,
+                                 hint_lambda=hint_lambda,
                                  diseases=labels,
                                  device=device,
                                  ))
@@ -286,6 +290,7 @@ def train_from_scratch(run_name,
                        norm_by_sample=False,
                        n_epochs=10,
                        hint=False,
+                       hint_lambda=1,
                        grad_cam=True,
                        grad_cam_thresh=0.5,
                        early_stopping=True,
@@ -328,6 +333,10 @@ def train_from_scratch(run_name,
 
     if hint:
         run_name += '_hint'
+        if hint_lambda != 1:
+            run_name += f'-{hint_lambda}'
+        if UP_TO_DATE_MASKS_VERSION != 'v0':
+            run_name += f'_masks-{UP_TO_DATE_MASKS_VERSION}'
     if not imagenet:
         run_name += '_noig'
     if cnn_pooling != 'max':
@@ -403,6 +412,7 @@ def train_from_scratch(run_name,
         'num_workers': num_workers,
         'norm_by_sample': norm_by_sample,
         'masks': grad_cam or hint,
+        'masks_version': UP_TO_DATE_MASKS_VERSION,
         'images_version': 'clahe' if clahe else None,
         'image_format': image_format,
     }
@@ -478,6 +488,7 @@ def train_from_scratch(run_name,
         'grad_cam': grad_cam,
         'grad_cam_thresh': grad_cam_thresh,
         'hint': hint,
+        'hint_lambda': hint_lambda,
     }
 
 
@@ -542,6 +553,8 @@ def parse_args():
                         help='If is a non-debugging run')
     parser.add_argument('--hint', action='store_true',
                         help='Use HINT training')
+    parser.add_argument('--hint-lambda', type=float, default=1,
+                        help='Factor to multiply hint-loss')
     parser.add_argument('--seed', type=int, default=1234,
                         help='Set a seed (initial run only)')
 
@@ -718,6 +731,7 @@ if __name__ == '__main__':
             norm_by_sample=ARGS.norm_by_sample,
             n_epochs=ARGS.epochs,
             hint=ARGS.hint,
+            hint_lambda=ARGS.hint_lambda,
             grad_cam=ARGS.grad_cam,
             grad_cam_thresh=ARGS.grad_cam_thresh,
             early_stopping=ARGS.early_stopping,

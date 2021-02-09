@@ -97,6 +97,7 @@ def evaluate_run(run_name,
 
     # Load data
     dataset_kwargs = metadata['dataset_kwargs']
+    # REVIEW: use dataset_train_kwargs??
     if max_samples is not None:
         dataset_kwargs['max_samples'] = max_samples
     if batch_size is not None:

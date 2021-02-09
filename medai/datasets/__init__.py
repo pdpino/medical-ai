@@ -49,6 +49,8 @@ _MISSING_SPLITS = set([
     ('chexpert', 'test'),
 ])
 
+UP_TO_DATE_MASKS_VERSION = 'v1'
+
 
 def _classification_collate_fn(batch_items):
     batch_items = [
@@ -88,6 +90,14 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         if dataset_name not in ('cxr14', 'iu-x-ray'):
             raise NotImplementedError(f'Dataset {dataset_name} does not have \
                                         masks yet (masks=True)')
+
+        masks_version_used = kwargs.get('masks_version', None)
+        if masks_version_used != UP_TO_DATE_MASKS_VERSION:
+            LOGGER.warning(
+                'Not using the up-to-date masks_version, found=%s vs up-to-date=%s',
+                masks_version_used, UP_TO_DATE_MASKS_VERSION,
+            )
+
 
     if kwargs.get('images_version') and dataset_name not in ('cxr14',):
         LOGGER.warning('images_version is not implemented in %s', dataset_name)

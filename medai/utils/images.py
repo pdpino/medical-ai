@@ -85,28 +85,52 @@ class NormalizeBySample:
         return (image - sample_mean) / (sample_std + self.epsilon)
 
 
+class ScaleValues:
+    """Scale values to a [-N, N] range."""
+    def __init__(self, target=1024):
+        self.target = target
+
+    def __call__(self, image):
+        n_channels, unused_height, unused_width = image.size()
+        sample = image.view(n_channels, -1)
+
+        sample_max = sample.max()
+        sample_range = (sample_max - sample.min())
+
+        slope = self.target * 2 / sample_range
+        intersect = self.target - 2 * self.target * sample_max.true_divide(sample_range)
+
+        return image * slope + intersect
+
+
+
 def get_default_image_transform(image_size=(512, 512),
                                 norm_by_sample=True,
                                 mean=0,
                                 std=1,
+                                xrv_norm=False,
                                 ):
     def _to_channel_list(value):
         if isinstance(value, (list, tuple)):
             return value
         return [value]
 
+    composed_tfs = [
+        transforms.Resize(image_size),
+        transforms.ToTensor(),
+    ]
+
     if norm_by_sample:
-        norm_transform = NormalizeBySample()
+        composed_tfs.append(NormalizeBySample())
     else:
         mean = _to_channel_list(mean)
         std = _to_channel_list(std)
-        norm_transform = transforms.Normalize(mean, std)
+        composed_tfs.append(transforms.Normalize(mean, std))
 
-    return transforms.Compose([
-        transforms.Resize(image_size),
-        transforms.ToTensor(),
-        norm_transform,
-    ])
+    if xrv_norm:
+        composed_tfs.append(ScaleValues(target=1024))
+
+    return transforms.Compose(composed_tfs)
 
 
 def bbox_coordinates_to_map(bboxes, valid, image_size):

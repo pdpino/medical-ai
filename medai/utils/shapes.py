@@ -40,7 +40,7 @@ def calculate_polygons(mask, ignore_idx=0):
     return polygons
 
 
-def get_largest_shapes(polygons):
+def get_largest_shapes(polygons, name=None):
     """Returns the largest shapes in a list of polygons.
 
     Args:
@@ -63,7 +63,7 @@ def get_largest_shapes(polygons):
         organ_polys = polygons_by_organ[organ_idx]
         if len(organ_polys) == 0:
             largest_polygons.append(([], organ_idx))
-            LOGGER.warning('Empty polygon for organ=%d', organ_idx)
+            LOGGER.warning('Empty polygon for organ=%d, name=%s', organ_idx, name)
             continue
 
         organ_polys = sorted(organ_polys, key=lambda p: p.area, reverse=True)

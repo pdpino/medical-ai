@@ -13,7 +13,8 @@ LOGGER = logging.getLogger(__name__)
 _CHECK_NAN_OR_INF = False
 
 def get_step_fn(model, loss_fn, optimizer=None, training=True,
-                multilabel=True, hint=False, diseases=None,
+                multilabel=True, hint=False, hint_lambda=1,
+                diseases=None,
                 device='cuda'):
     """Creates a step function for an Engine."""
     if hint:
@@ -80,7 +81,7 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
             # shape: (batch_size, n_diseases, height, width)
 
             hint_loss = hint_loss_fn(grad_cam_attrs, masks) # shape: 1
-            total_loss = cl_loss + hint_loss
+            total_loss = cl_loss + hint_lambda * hint_loss
         else:
             hint_loss = torch.tensor(-1) # pylint: disable=not-callable
             total_loss = cl_loss
