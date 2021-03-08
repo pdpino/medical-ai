@@ -117,7 +117,8 @@ def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
                            use_round=True,
                            get_transform_fn=None,
                            include_macro=True,
-                           metric_args=()):
+                           metric_args=(),
+                           device='cuda'):
     """Attaches one metric per label to an engine."""
     metrics = []
     for index, disease in enumerate(labels):
@@ -126,7 +127,7 @@ def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
         else:
             transform_fn = _get_transform_one_label(index, use_round=use_round)
 
-        metric = MetricClass(*metric_args, output_transform=transform_fn)
+        metric = MetricClass(*metric_args, output_transform=transform_fn, device=device)
         metric.attach(engine, f'{metric_name}_{disease}')
         metrics.append(metric)
 
@@ -152,7 +153,7 @@ def _transform_remove_loss_and_round(output):
     return torch.round(y_pred), y_true
 
 
-def attach_metrics_classification(engine, labels, multilabel=True, hint=False):
+def attach_metrics_classification(engine, labels, multilabel=True, hint=False, device='cuda'):
     """Attach classification metrics to an engine, to use during training.
 
     Note: most multilabel metrics are treated as binary,
@@ -168,42 +169,46 @@ def attach_metrics_classification(engine, labels, multilabel=True, hint=False):
         loss_metric.attach(engine, loss_name)
 
     if multilabel:
-        acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round)
+        acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round, device=device)
         acc.attach(engine, 'acc')
 
-        ham = Hamming(output_transform=_transform_remove_loss_and_round)
+        ham = Hamming(output_transform=_transform_remove_loss_and_round, device=device)
         ham.attach(engine, 'hamming')
 
         bce_loss = Loss(binary_cross_entropy,
-                        output_transform=_transform_remove_loss_and_round)
+                        output_transform=_transform_remove_loss_and_round,
+                        device=device)
         bce_loss.attach(engine, 'bce')
 
         _attach_binary_metrics(engine, labels, 'acc', Accuracy, True,
-                               include_macro=False)
-        _attach_binary_metrics(engine, labels, 'prec', Precision, True)
-        _attach_binary_metrics(engine, labels, 'recall', Recall, True)
-        _attach_binary_metrics(engine, labels, 'spec', Specificity, True)
-        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False)
-        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric, False)
+                               include_macro=False, device=device)
+        _attach_binary_metrics(engine, labels, 'prec', Precision, True, device=device)
+        _attach_binary_metrics(engine, labels, 'recall', Recall, True, device=device)
+        _attach_binary_metrics(engine, labels, 'spec', Specificity, True, device=device)
+        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False, device=device)
+        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric, False, device=device)
     else:
-        acc = Accuracy(output_transform=_transform_remove_loss)
+        acc = Accuracy(output_transform=_transform_remove_loss, device=device)
         acc.attach(engine, 'acc')
 
         _attach_binary_metrics(engine, labels, 'prec', Precision,
-                           get_transform_fn=_get_transform_one_class)
+                               get_transform_fn=_get_transform_one_class,
+                               device=device)
         _attach_binary_metrics(engine, labels, 'recall', Recall,
-                           get_transform_fn=_get_transform_one_class)
+                               get_transform_fn=_get_transform_one_class,
+                               device=device)
         _attach_binary_metrics(engine, labels, 'spec', Specificity,
-                           get_transform_fn=_get_transform_one_class)
+                               get_transform_fn=_get_transform_one_class,
+                               device=device)
 
     if hint:
         keys = [
             ('grad-cam', 'gt_activations', None),
         ]
-        attach_metrics_image_saliency(engine, labels, keys, multilabel=multilabel)
+        attach_metrics_image_saliency(engine, labels, keys, multilabel=multilabel, device=device)
 
 
-def attach_metric_cm(engine, labels, multilabel=True):
+def attach_metric_cm(engine, labels, multilabel=True, device='cuda'):
     """Attach ConfusionMatrix metrics to an engine.
 
     Note that CMs are not attached during training, since they are not easily visualized (e.g. TB).
@@ -214,5 +219,9 @@ def attach_metric_cm(engine, labels, multilabel=True):
                                metric_args=(2,), include_macro=False,
                                )
     else:
-        cm = ConfusionMatrix(len(labels), output_transform=_transform_remove_loss_and_round)
+        cm = ConfusionMatrix(
+            len(labels),
+            output_transform=_transform_remove_loss_and_round,
+            device=device,
+        )
         cm.attach(engine, 'cm')

@@ -54,8 +54,8 @@ def evaluate_model(run_name,
                                 multilabel=multilabel,
                                 device=device,
                                ))
-    attach_metrics_classification(engine, labels, multilabel=multilabel)
-    attach_metric_cm(engine, labels, multilabel=multilabel)
+    attach_metrics_classification(engine, labels, multilabel=multilabel, device=device)
+    attach_metric_cm(engine, labels, multilabel=multilabel, device=device)
     attach_prediction_writer(
         engine, run_name, labels, assert_n_samples=len(dataloader.dataset), debug=debug,
     )

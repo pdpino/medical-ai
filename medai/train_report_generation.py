@@ -106,6 +106,7 @@ def train_model(run_name,
     attach_metrics_report_generation(validator,
                                      hierarchical=hierarchical,
                                      supervise_attention=supervise_attention,
+                                     device=device,
                                      )
 
     # Create trainer engine
@@ -128,6 +129,7 @@ def train_model(run_name,
     attach_metrics_report_generation(trainer,
                                      hierarchical=hierarchical,
                                      supervise_attention=supervise_attention,
+                                     device=device,
                                      )
 
     # Attach medical correctness metrics
@@ -137,8 +139,8 @@ def train_model(run_name,
 
     decoder_name = compiled_model.metadata['decoder_kwargs']['decoder_name']
     if decoder_name.startswith('h-lstm-att'):
-        attach_attention_vs_masks(trainer)
-        attach_attention_vs_masks(validator)
+        attach_attention_vs_masks(trainer, device=device)
+        attach_attention_vs_masks(validator, device=device)
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)

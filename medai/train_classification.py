@@ -116,7 +116,8 @@ def train_model(run_name,
                                    device=device,
                                    ))
     attach_metrics_classification(validator, labels,
-                                  multilabel=multilabel, hint=hint)
+                                  multilabel=multilabel, hint=hint,
+                                  device=device)
 
     # Create trainer engine
     trainer = Engine(get_step_fn(model,
@@ -130,7 +131,8 @@ def train_model(run_name,
                                  device=device,
                                  ))
     attach_metrics_classification(trainer, labels,
-                                  multilabel=multilabel, hint=hint)
+                                  multilabel=multilabel, hint=hint,
+                                  device=device)
 
     if grad_cam:
         create_grad_cam_evaluator(

@@ -69,6 +69,7 @@ def _evaluate_model_in_dataloader(
                                      hierarchical=hierarchical,
                                      free=free,
                                      supervise_attention=supervise_attention,
+                                     device=device,
                                      )
     attach_report_writer(engine, run_name,
                          vocab, assert_n_samples=len(dataset),
@@ -78,7 +79,7 @@ def _evaluate_model_in_dataloader(
         attach_medical_correctness(engine, None, vocab)
 
     if att_vs_masks and not free:
-        attach_attention_vs_masks(engine)
+        attach_attention_vs_masks(engine, device=device)
 
     engine.run(dataloader, n_epochs)
 

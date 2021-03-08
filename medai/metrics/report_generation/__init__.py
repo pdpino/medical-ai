@@ -7,9 +7,9 @@ from ignite.metrics import RunningAverage, MetricsLambda
 from medai.metrics.segmentation.iou import IoU
 from medai.metrics.segmentation.iobb import IoBB
 from medai.metrics.report_generation.word_accuracy import WordAccuracy
-from medai.metrics.report_generation.bleu import Bleu
-from medai.metrics.report_generation.rouge import RougeL
-from medai.metrics.report_generation.cider import CiderD
+from medai.metrics.report_generation.nlp.bleu import Bleu
+from medai.metrics.report_generation.nlp.rouge import RougeL
+from medai.metrics.report_generation.nlp.cider import CiderD
 from medai.metrics.report_generation.distinct_sentences import DistinctSentences
 from medai.metrics.report_generation.distinct_words import DistinctWords
 from medai.metrics.report_generation.transforms import get_flat_reports
@@ -28,7 +28,7 @@ def _attach_bleu(engine, up_to_n=4,
     bleu_avg.attach(engine, 'bleu')
 
 
-def attach_attention_vs_masks(engine):
+def attach_attention_vs_masks(engine, device='cuda'):
     """Attaches metrics that evaluate attention scores vs gt-masks."""
     def _get_masks_and_attention(outputs):
         """Extracts generated and GT masks.
@@ -66,16 +66,21 @@ def attach_attention_vs_masks(engine):
 
         return gen_masks, gt_masks, gt_valid
 
+    metrics_kwargs = {
+        'reduce_sum': True,
+        'output_transform': _get_masks_and_attention,
+        'device': device,
+    }
 
-    iou = IoU(reduce_sum=True, output_transform=_get_masks_and_attention)
+    iou = IoU(**metrics_kwargs)
     iou.attach(engine, 'att_iou')
 
-    iobb = IoBB(reduce_sum=True, output_transform=_get_masks_and_attention)
+    iobb = IoBB(**metrics_kwargs)
     iobb.attach(engine, 'att_iobb')
 
 
 def attach_metrics_report_generation(engine, hierarchical=False, free=False,
-                                     supervise_attention=False):
+                                     supervise_attention=False, device='cuda'):
     losses = ['loss']
     if hierarchical:
         losses.extend(['word_loss', 'stop_loss'])
@@ -84,27 +89,32 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False,
 
     # Attach losses
     for loss_name in losses:
-        loss = RunningAverage(output_transform=operator.itemgetter(loss_name))
+        loss = RunningAverage(output_transform=operator.itemgetter(loss_name), device=device)
         loss.attach(engine, loss_name)
+
+    metric_kwargs = {
+        'output_transform': get_flat_reports,
+        'device': device,
+    }
 
     # Attach word accuracy
     if not free:
         pass
-        # word_acc = WordAccuracy(output_transform=get_flat_reports)
+        # word_acc = WordAccuracy(**metric_kwargs)
         # word_acc.attach(engine, 'word_acc')
 
     # Attach multiple bleu
     _attach_bleu(engine, 4)
 
-    rouge = RougeL(output_transform=get_flat_reports)
+    rouge = RougeL(**metric_kwargs)
     rouge.attach(engine, 'rougeL')
 
-    cider = CiderD(output_transform=get_flat_reports)
+    cider = CiderD(**metric_kwargs)
     cider.attach(engine, 'ciderD')
 
     # Attach variability
-    distinct_words = DistinctWords(output_transform=get_flat_reports)
+    distinct_words = DistinctWords(**metric_kwargs)
     distinct_words.attach(engine, 'distinct_words')
 
-    distinct_sentences = DistinctSentences(output_transform=get_flat_reports)
+    distinct_sentences = DistinctSentences(**metric_kwargs)
     distinct_sentences.attach(engine, 'distinct_sentences')
