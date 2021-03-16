@@ -12,6 +12,7 @@ from medai.datasets.covid_fig1 import CovidFig1Dataset
 from medai.datasets.covid_uc import CovidUCDataset
 from medai.datasets.iu_xray import IUXRayDataset
 from medai.datasets.jsrt import JSRTDataset
+from medai.datasets.vinbig import VinBigDataset
 
 from medai.datasets.tools.oversampler import OneLabelOverSampler
 from medai.datasets.tools.undersampler import OneLabelUnderSampler
@@ -29,6 +30,7 @@ _CL_DATASETS = {
     'covid-fig1': CovidFig1Dataset,
     'covid-uc': CovidUCDataset,
     'iu-x-ray': IUXRayDataset,
+    'vinbig': VinBigDataset,
 }
 
 _RG_DATASETS = {

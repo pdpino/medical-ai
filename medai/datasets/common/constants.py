@@ -57,3 +57,22 @@ JSRT_ORGANS = [
     # 'right clavicle',
     # 'left clavicle',
 ]
+
+
+VINBIG_DISEASES = [
+    'Aortic enlargement',
+    'Atelectasis',
+    'Calcification',
+    'Cardiomegaly',
+    'Consolidation',
+    'ILD',
+    'Infiltration',
+    'Lung Opacity',
+    'Nodule/Mass',
+    'Other lesion',
+    'Pleural effusion',
+    'Pleural thickening',
+    'Pneumothorax',
+    'Pulmonary fibrosis',
+    'No finding',
+]
