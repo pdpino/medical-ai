@@ -2,6 +2,7 @@
 import os
 import re
 import json
+import logging
 
 import torch
 from torch import nn
@@ -17,6 +18,8 @@ from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.checkpoint.compiled_model import CompiledModel
 from medai.utils.files import get_checkpoint_folder
 
+
+LOGGER = logging.getLogger(__name__)
 
 _CHECKPOINT_EPOCH_REGEX = re.compile(r'_\d+')
 
@@ -245,7 +248,12 @@ def attach_checkpoint_saver(run_name,
         return
 
     def score_fn(unused_engine):
-        value = validator.state.metrics[metric]
+        value = validator.state.metrics.get(metric, -1)
+        if value == -1:
+            LOGGER.warning(
+                'Checkpoint-saver received %s=-1, will keep oldest checkpoint',
+                metric,
+            )
         if metric == 'loss':
             value = -value
         return value
@@ -254,8 +262,11 @@ def attach_checkpoint_saver(run_name,
         early_kwargs = {
             'score_function': score_fn,
             'score_name': metric,
+            'greater_or_equal': True,
         }
+        LOGGER.info('Saving checkpoint by best "%s" value', metric)
     else:
+        LOGGER.warning('Model checkpoint is not saved by best metric value (not provided)')
         early_kwargs = {}
 
     initial_epoch = compiled_model.get_current_epoch()

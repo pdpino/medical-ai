@@ -77,19 +77,22 @@ def attach_early_stopping(trainer,
                           ):
     """Attaches an early stopping handler to a trainer.
 
-    NOTEs:
+    Notes:
         - The handler should be attached after every other handler,
         so those will get executed completely
         - The handler is attached to the trainer, not the validator (as in most examples),
         so the stop signal is sent at the very end of the epoch (i.e. after every handler is run),
         and not after the `validator.run(...)` is run.
+        - If a metric value is not present or is -1, the early-stopping handler will be called
+        anyway, implying that the run may be terminated even if no values are observed. (This
+        is relevant for metrics that may not be calculated on every epoch, such as chex_f1).
     """
     # Set early-stopping to info level
     es_logger = logging.getLogger('ignite.handlers.early_stopping.EarlyStopping')
     es_logger.setLevel(logging.INFO)
 
     def score_fn(unused_engine):
-        value = validator.state.metrics[metric]
+        value = validator.state.metrics.get(metric, -1)
         if metric == 'loss':
             value = -value
         return value
@@ -108,12 +111,23 @@ def attach_lr_scheduler_handler(lr_scheduler,
                                 validator,
                                 target_metric='loss',
                                 ):
-    """Attaches a callback that updates the lr_scheduler."""
-    def update_scheduler(unused_engine):
+    """Attaches a callback that updates the lr_scheduler.
+
+    Note: if the metric value is -1, the scheduler will not be called.
+        For metrics that may not be calculated on every epoch, such as chex_f1,
+        this implies the scheduler patience will be accounted only in the epochs
+        where the value is indeed calculated; other epochs will be skipped.
+        For metrics that are calculated on every epoch, this has no effect.
+    """
+    def _update_scheduler(unused_engine):
         val_metrics = validator.state.metrics
         if target_metric not in val_metrics:
             LOGGER.warning('Cannot step LR-scheduler, %s not found in val_metrics', target_metric)
             return
-        lr_scheduler.step(val_metrics[target_metric])
+        value = val_metrics[target_metric]
 
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, update_scheduler)
+        # NOTE: ignores -1 values
+        if value != -1:
+            lr_scheduler.step(value)
+
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, _update_scheduler)

@@ -1,4 +1,3 @@
-import time
 import argparse
 import logging
 
@@ -51,6 +50,7 @@ from medai.utils import (
     config_logging,
     set_seed,
     set_seed_from_metadata,
+    timeit_main,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -157,12 +157,13 @@ def train_model(run_name,
                        )
 
     # Attach checkpoint
+    checkpoint_metric = 'chex_f1' if medical_correctness else None
     attach_checkpoint_saver(run_name,
                             compiled_model,
                             trainer,
                             validator,
                             task='rg',
-                            metric=early_stopping_kwargs.get('metric') if early_stopping else None,
+                            metric=checkpoint_metric,
                             debug=debug,
                             dryrun=dryrun or (not save_model),
                            )
@@ -191,6 +192,7 @@ def train_model(run_name,
     return trainer, validator
 
 
+@timeit_main(LOGGER)
 def resume_training(run_name,
                     n_epochs=10,
                     max_samples=None,
@@ -258,6 +260,7 @@ def resume_training(run_name,
                 )
 
 
+@timeit_main(LOGGER)
 def train_from_scratch(run_name,
                        decoder_name='lstm',
                        supervise_attention=False,
@@ -319,8 +322,6 @@ def train_from_scratch(run_name,
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
-    if not early_stopping:
-        run_name += '_noes'
     if frontal_only and not supervise_attention: # If supervise attention, frontal_only is implied
         run_name += '_front'
 
@@ -432,7 +433,7 @@ def train_from_scratch(run_name,
         lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs)
         LOGGER.info('Using ReduceLROnPlateau')
     else:
-        LOGGER.info('Not using a LR scheduler')
+        LOGGER.warning('Not using a LR scheduler')
         lr_scheduler = None
 
     # Other training params
@@ -528,7 +529,7 @@ def parse_args():
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                         help='Run name of a pretrained CNN')
 
-    parsers.add_args_early_stopping(parser)
+    parsers.add_args_early_stopping(parser, metric='chex_f1')
     parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
     parsers.add_args_tb(parser)
     parsers.add_args_augment(parser)
@@ -565,8 +566,6 @@ if __name__ == '__main__':
     DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
 
     print_hw_options(DEVICE, ARGS)
-
-    start_time = time.time()
 
     if ARGS.resume:
         resume_training(ARGS.resume,
@@ -614,7 +613,3 @@ if __name__ == '__main__':
                            device=DEVICE,
                            seed=ARGS.seed,
                            )
-
-    total_time = time.time() - start_time
-    LOGGER.info('Total time: %s', duration_to_str(total_time))
-    LOGGER.info('=' * 80)

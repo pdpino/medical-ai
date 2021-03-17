@@ -117,7 +117,7 @@ def train_model(run_name,
                             trainer,
                             validator,
                             task='seg',
-                            metric=early_stopping_kwargs['metric'] if early_stopping else None,
+                            metric='iou',
                             debug=debug,
                             )
 
@@ -237,8 +237,6 @@ def train_from_scratch(run_name,
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
-    if not early_stopping:
-        run_name += '_noes'
 
     set_seed(seed)
 

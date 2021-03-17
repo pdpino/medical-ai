@@ -166,7 +166,7 @@ def train_model(run_name,
                             trainer,
                             validator,
                             task='cls',
-                            metric=early_stopping_kwargs['metric'] if early_stopping else None,
+                            metric='roc_auc',
                             debug=debug,
                             dryrun=dryrun,
                             )
@@ -395,8 +395,8 @@ def train_from_scratch(run_name,
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
-    if not early_stopping:
-        run_name += '_noes'
+    # if not early_stopping:
+    #     run_name += '_noes'
     # else:
     #     metric = early_stopping_kwargs['metric']
     #     patience = early_stopping_kwargs['patience']
