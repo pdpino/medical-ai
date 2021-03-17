@@ -53,6 +53,13 @@ _MISSING_SPLITS = set([
 
 UP_TO_DATE_MASKS_VERSION = 'v1'
 
+_DATASETS_WITH_MASKS_IMPLEMENTED = set([
+    'cxr14', 'iu-x-ray', 'vinbig',
+])
+_DATASETS_WITH_MASKS_VERSION_IMPLEMENTED = set([
+    'cxr14', 'iu-x-ray',
+])
+
 
 def _classification_collate_fn(batch_items):
     batch_items = [
@@ -89,16 +96,17 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
     DatasetClass = _CL_DATASETS[dataset_name]
 
     if kwargs.get('masks', False):
-        if dataset_name not in ('cxr14', 'iu-x-ray'):
-            raise NotImplementedError(f'Dataset {dataset_name} does not have \
-                                        masks yet (masks=True)')
+        if dataset_name not in _DATASETS_WITH_MASKS_IMPLEMENTED:
+            err = f'Dataset {dataset_name} does not have masks yet (masks=True)'
+            raise NotImplementedError(err)
 
-        masks_version_used = kwargs.get('masks_version', None)
-        if masks_version_used != UP_TO_DATE_MASKS_VERSION:
-            LOGGER.warning(
-                'Not using the up-to-date masks_version, found=%s vs up-to-date=%s',
-                masks_version_used, UP_TO_DATE_MASKS_VERSION,
-            )
+        if dataset_name in _DATASETS_WITH_MASKS_VERSION_IMPLEMENTED:
+            masks_version_used = kwargs.get('masks_version', None)
+            if masks_version_used != UP_TO_DATE_MASKS_VERSION:
+                LOGGER.warning(
+                    'Not using the up-to-date masks_version, found=%s vs up-to-date=%s',
+                    masks_version_used, UP_TO_DATE_MASKS_VERSION,
+                )
 
 
     if kwargs.get('images_version') and dataset_name not in ('cxr14',):

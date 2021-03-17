@@ -15,11 +15,8 @@ from medai.datasets import (
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
 from medai.metrics.classification import attach_metrics_classification
-from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.classification import (
     create_cnn,
-    AVAILABLE_CLASSIFICATION_MODELS,
-    DEPRECATED_CNNS,
 )
 from medai.models.checkpoint import (
     CompiledModel,
@@ -33,7 +30,6 @@ from medai.tensorboard import TBWriter
 from medai.utils import (
     get_timestamp,
     duration_to_str,
-    parse_str_or_int,
     print_hw_options,
     parsers,
     config_logging,
@@ -458,8 +454,6 @@ def train_from_scratch(run_name,
 
 
     # Create model
-    if cnn_name in DEPRECATED_CNNS:
-        raise Exception(f'CNN is deprecated: {cnn_name}')
     model_kwargs = {
         'model_name': cnn_name,
         'labels': train_dataloader.dataset.labels,
@@ -485,7 +479,10 @@ def train_from_scratch(run_name,
 
     # Create lr_scheduler
     lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
-    LOGGER.info('Using LR-scheduler=%s', lr_scheduler is not None)
+    LOGGER.info(
+        'Using LR-scheduler=%s, metric=%s, args=%s',
+        lr_scheduler is not None, lr_sch_metric, lr_sch_kwargs,
+    )
 
     other_train_kwargs = {
         'early_stopping': early_stopping,
@@ -564,21 +561,7 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=1234,
                         help='Set a seed (initial run only)')
 
-    cnn_group = parser.add_argument_group('CNN params')
-    cnn_group.add_argument('-m', '--model', type=str, default=None,
-                        choices=AVAILABLE_CLASSIFICATION_MODELS,
-                        help='Choose base CNN to use')
-    cnn_group.add_argument('-drop', '--dropout', type=float, default=0,
-                        help='dropout-rate to use (only available for some models)')
-    cnn_group.add_argument('-noig', '--no-imagenet', action='store_true',
-                        help='If present, dont use imagenet pretrained weights')
-    cnn_group.add_argument('-frz', '--freeze', action='store_true',
-                        help='If present, freeze base cnn parameters (only train FC layers)')
-    cnn_group.add_argument('--cnn-pooling', type=str, default='max',
-                        choices=AVAILABLE_POOLING_REDUCTIONS,
-                        help='Choose reduction for global-pooling layer')
-    cnn_group.add_argument('--fc-layers', nargs='+', type=int, default=(),
-                        help='Choose sizes for FC layers at the end')
+    parsers.add_args_cnn(parser)
 
     loss_group = parser.add_argument_group('Loss params')
     loss_group.add_argument('-l', '--loss-name', type=str, default=None,
@@ -591,18 +574,9 @@ def parse_args():
     loss_group.add_argument('--bce-pos-weight', action='store_true', help='Use pos weights in BCE')
 
 
-    images_group = parser.add_argument_group('Images params')
-    images_group.add_argument('--image-size', type=int, default=512,
-                              help='Image size in pixels')
-    images_group.add_argument('--frontal-only', action='store_true',
-                              help='Use only frontal images')
-    images_group.add_argument('--norm-by-sample', action='store_true',
-                              help='If present, normalize each sample \
-                                    (instead of using dataset stats)')
+    images_group = parsers.add_args_images(parser)
     images_group.add_argument('--clahe', action='store_true',
                               help='Use CLAHE normalized images')
-    images_group.add_argument('--image-format', type=str, default='RGB', choices=['RGB', 'L'],
-                              help='Image format to use')
 
     grad_cam_group = parser.add_argument_group('Grad-CAM evaluation params')
     grad_cam_group.add_argument('--grad-cam', action='store_true',
@@ -611,25 +585,7 @@ def parse_args():
                               help='Threshold to apply to activations')
 
     parsers.add_args_augment(parser)
-
-    sampl_group = parser.add_argument_group('Data sampling params')
-    sampl_group.add_argument('-os', '--oversample', default=None,
-                             help='Oversample samples with a given label present (str/int)')
-    sampl_group.add_argument('--os-ratio', type=int, default=None,
-                             help='Specify oversample ratio. If none, chooses ratio \
-                                   to level positive and negative samples')
-    sampl_group.add_argument('--os-class', type=int, choices=[0,1], default=None,
-                             help='Force class value to oversample (0=neg, 1=pos). \
-                                   If none, chooses least represented')
-    sampl_group.add_argument('--os-max-ratio', type=int, default=None,
-                             help='Max ratio to oversample by')
-
-    sampl_group.add_argument('-us', '--undersample', default=None,
-                             help='Undersample from the majority class \
-                                   with a given label (str/int)')
-
-    sampl_group.add_argument('--balanced-sampler', action='store_true',
-                             help='Use a multilabel balanced sampler')
+    parsers.add_args_sampling(parser)
 
     parsers.add_args_tb(parser)
     parsers.add_args_early_stopping(parser, metric='roc_auc')
@@ -671,16 +627,11 @@ def parse_args():
     else:
         args.loss_kwargs = {}
 
-    # Enable passing str or int for oversample labels
-    if args.oversample is not None:
-        args.oversample = parse_str_or_int(args.oversample)
-    if args.undersample is not None:
-        args.undersample = parse_str_or_int(args.undersample)
-
     # Shortcuts
     args.debug = not args.no_debug
 
     # Build params
+    parsers.build_args_sampling_(args)
     parsers.build_args_early_stopping_(args)
     parsers.build_args_lr_sch_(args)
     parsers.build_args_tb_(args)

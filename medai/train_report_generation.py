@@ -17,7 +17,6 @@ from medai.metrics.report_generation.labeler_correctness import attach_medical_c
 from medai.models.classification import (
     create_cnn,
     AVAILABLE_CLASSIFICATION_MODELS,
-    DEPRECATED_CNNS,
 )
 from medai.models.report_generation import (
     is_decoder_hierarchical,
@@ -394,8 +393,6 @@ def train_from_scratch(run_name,
         cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
     else:
         # Create new
-        if cnn_model_name in DEPRECATED_CNNS:
-            raise Exception(f'CNN is deprecated: {cnn_model_name}')
         cnn_kwargs = {
             'model_name': cnn_model_name,
             'labels': [], # headless
@@ -493,6 +490,8 @@ def parse_args():
                         help='If present, supervise the attention')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
                         help='Batch size')
+    parser.add_argument('--max-samples', type=int, default=None,
+                        help='Max samples to load (debugging)')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
     parser.add_argument('-emb', '--embedding-size', type=int, default=100,
@@ -509,8 +508,6 @@ def parse_args():
     data_group = parser.add_argument_group('Data')
     data_group.add_argument('--image-size', type=int, default=512,
                             help='Input image sizes')
-    data_group.add_argument('--max-samples', type=int, default=None,
-                            help='Max samples to load (debugging)')
     data_group.add_argument('--no-sort', action='store_true',
                             help='Do not sort samples')
     data_group.add_argument('--shuffle', action='store_true',

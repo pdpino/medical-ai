@@ -107,7 +107,7 @@ def load_compiled_model_classification(run_name,
     metadata = _load_meta(folder, run_name)
 
     # Create empty model and optimizer
-    model = create_cnn(**metadata['model_kwargs']).to(device)
+    model = create_cnn(allow_deprecated=True, **metadata['model_kwargs']).to(device)
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
         model = nn.DataParallel(model)

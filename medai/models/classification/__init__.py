@@ -32,7 +32,7 @@ _MODELS_DEF = {
     'small-densenet': tiny_densenet.SmallDenseNetCNN,
 }
 
-DEPRECATED_CNNS = set([
+_DEPRECATED_CNNS = set([
     'resnet-50', 'densenet-121', 'mobilenet', # Use v2 instead
 ])
 
@@ -45,9 +45,12 @@ _MODELS_WITH_DROPOUT_IMPLEMENTED = (
     'densenet-121-v2',
 )
 
-def create_cnn(model_name, labels, **kwargs):
+def create_cnn(model_name=None, allow_deprecated=False, **kwargs):
     if model_name not in _MODELS_DEF:
         raise Exception(f'Model not found: {model_name}')
+
+    if not allow_deprecated and model_name in _DEPRECATED_CNNS:
+        raise Exception(f'CNN is deprecated: {model_name}')
 
     dropout = kwargs.get('dropout', 0)
     if dropout != 0 and model_name not in _MODELS_WITH_DROPOUT_IMPLEMENTED:
@@ -57,7 +60,7 @@ def create_cnn(model_name, labels, **kwargs):
     LOGGER.info('Creating CNN: %s, %s', model_name, info_str)
 
     ModelClass = _MODELS_DEF[model_name]
-    model = ModelClass(labels, **kwargs)
+    model = ModelClass(**kwargs)
 
     return model
 

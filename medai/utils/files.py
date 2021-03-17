@@ -8,6 +8,7 @@ def _get_task_folder(task):
         'cls': 'classification',
         'rg': 'report_generation',
         'seg': 'segmentation',
+        'det': 'detection',
     }
     task = task.lower()
     if task not in folder_by_task:
