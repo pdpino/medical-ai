@@ -552,6 +552,12 @@ def parse_args():
     parsers.build_args_tb_(args)
     parsers.build_args_med_(args)
 
+    if not args.no_med and args.early_stopping and args.es_patience <= args.med_after:
+        LOGGER.warning(
+            'ES-patience (%d) is less than med-after (%d), run may get preempted',
+            args.es_patience, args.med_after,
+        )
+
     return args
 
 
