@@ -56,7 +56,7 @@ class ChexpertDataset(Dataset):
             # Keep only the ones that exist
             self.labels = [d for d in labels if d in CHEXPERT_DISEASES]
 
-            not_found_diseases = list(set(self.labels) - set(CHEXPERT_DISEASES))
+            not_found_diseases = list(set(labels) - set(CHEXPERT_DISEASES))
             if not_found_diseases:
                 LOGGER.warning('Diseases not found: %s (ignoring)', not_found_diseases)
 

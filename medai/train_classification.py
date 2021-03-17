@@ -81,7 +81,7 @@ def train_model(run_name,
                 debug=True,
                 dryrun=False,
                 tb_kwargs={},
-                print_metrics=['loss', 'acc'],
+                print_metrics=['loss'],
                 device='cuda',
                 ):
     # Prepare run
@@ -331,7 +331,7 @@ def train_from_scratch(run_name,
     if clahe:
         run_name += '-clahe'
 
-    run_name += f'_{cnn_name}_lr{lr}'
+    run_name += f'_{cnn_name}'
 
     if hint:
         run_name += '_hint'
@@ -341,7 +341,7 @@ def train_from_scratch(run_name,
             run_name += f'_masks-{UP_TO_DATE_MASKS_VERSION}'
     if not imagenet:
         run_name += '_noig'
-    if cnn_pooling != 'max':
+    if cnn_pooling not in ('avg', 'mean'):
         run_name += f'_g{cnn_pooling}'
     if dropout != 0:
         run_name += f'_drop{dropout}'
@@ -375,10 +375,11 @@ def train_from_scratch(run_name,
         elif loss_name == 'bce':
             if 'pos_weight' in loss_kwargs:
                 run_name += '-w'
-    if labels and dataset_name == 'cxr14':
-        # labels only works in CXR-14, for now
-        labels_str = '-'.join(labels)
-        run_name += f'_{labels_str}'
+    if isinstance(labels, (tuple, list)):
+        if len(labels) == 1:
+            run_name += f'_{labels[0]}'
+        else:
+            run_name += f'_labels{len(labels)}'
     if norm_by_sample:
         run_name += '_normS'
     else:
@@ -389,6 +390,7 @@ def train_from_scratch(run_name,
         run_name += f'_size{image_size}'
     if n_epochs == 0:
         run_name += '_e0'
+    run_name += f'_lr{lr}'
     if lr_sch_metric:
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
@@ -399,6 +401,8 @@ def train_from_scratch(run_name,
     #     metric = early_stopping_kwargs['metric']
     #     patience = early_stopping_kwargs['patience']
     #     run_name += f'_es-{metric}-p{patience}'
+    if shuffle:
+        run_name += '_shuffle'
     run_name = run_name.replace(' ', '-')
 
     set_seed(seed)
@@ -580,7 +584,7 @@ def parse_args():
     loss_group.add_argument('-l', '--loss-name', type=str, default=None,
                             choices=AVAILABLE_LOSSES,
                             help='Loss to use')
-    loss_group.add_argument('--weight-decay', type=float, default=0,
+    loss_group.add_argument('-wd', '--weight-decay', type=float, default=0,
                             help='Weight decay passed to the optimizer')
     loss_group.add_argument('--focal-alpha', type=float, default=0.75, help='Focal alpha param')
     loss_group.add_argument('--focal-gamma', type=float, default=2, help='Focal gamma param')

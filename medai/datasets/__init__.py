@@ -111,6 +111,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         'imgsize': image_size,
         'version': kwargs.get('images_version'),
         'format': kwargs.get('image_format', 'RGB'),
+        'n_labels': labels and len(labels),
     }
     _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
     LOGGER.info(

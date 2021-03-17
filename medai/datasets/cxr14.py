@@ -118,7 +118,7 @@ class CXR14Dataset(Dataset):
             # Keep only the ones that exist
             self.labels = [d for d in labels if d in CXR14_DISEASES]
 
-            not_found_diseases = list(set(self.labels) - set(CXR14_DISEASES))
+            not_found_diseases = list(set(labels) - set(CXR14_DISEASES))
             if not_found_diseases:
                 LOGGER.warning('Diseases not found: %s (ignoring)', not_found_diseases)
 
