@@ -76,7 +76,7 @@ def _evaluate_model_in_dataloader(
                          free=free, debug=debug)
 
     if medical_correctness:
-        attach_medical_correctness(engine, None, vocab)
+        attach_medical_correctness(engine, None, vocab, device=device)
 
     if att_vs_masks and not free:
         attach_attention_vs_masks(engine, device=device)

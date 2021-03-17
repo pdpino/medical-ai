@@ -19,7 +19,8 @@ _LOCK_FOLDER = LABELER_CACHE_DIR
 _LOCK_NAME = 'medical-correctness-cache'
 
 
-def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=True):
+def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=True,
+                    device='cuda'):
     """Attaches MedicalLabelerCorrectness metrics to an engine.
 
     It will attach metrics in the form <basename>_<metric_name>_<disease>
@@ -28,6 +29,7 @@ def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=Tru
         engine -- ignite engine to attach metrics to
         labeler -- labeler instance to pass to the MedicalLabelerCorrectness metric
         basename -- to use when attaching metrics
+        device -- passed to Metrics
     """
     if run_every_n_steps:
         kwargs = {
@@ -38,10 +40,12 @@ def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=Tru
 
 
     if timer:
-        timer_metric = LabelerTimerMetric(labeler=labeler)
+        timer_metric = LabelerTimerMetric(labeler=labeler, device=device)
         timer_metric.attach(engine, f'{basename}_timer', **kwargs)
 
-    metric_obj = MedicalLabelerCorrectness(labeler, output_transform=get_flat_reports)
+    metric_obj = MedicalLabelerCorrectness(
+        labeler, output_transform=get_flat_reports, device=device,
+    )
 
     def _disease_metric_getter(result, metric_name, metric_index):
         """Given the MedicalLabelerCorrectness output returns a disease metric value.
@@ -77,10 +81,11 @@ def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=Tru
     return metric_obj
 
 
-def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None):
+def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None,
+                               device='cuda'):
     """Attaches medical correctness metrics to engines.
 
-    It uses a SyncLock to assure not to engines use the inner Cache at the same time.
+    It uses a SyncLock to assure not two engines use the inner Cache at the same time.
 
     Notes:
         - allows attaching the metrics after n epochs, by delaying the attaching to
@@ -95,6 +100,7 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
         trainer -- ignite.Engine
         validator -- ignite.Engine or None
         vocab -- dataset vocabulary (dict)
+        device -- passed to Metrics
     """
     if steps:
         # FIXME
@@ -122,7 +128,7 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
                 run_every_n_steps = None
 
             labeler = ChexpertLightLabeler(vocab)
-            _attach_labeler(engine, labeler, 'chex', run_every_n_steps)
+            _attach_labeler(engine, labeler, 'chex', run_every_n_steps, device=device)
 
             # TODO: apply for MIRQI as well
             # _attach_labeler(engine, MirqiLightLabeler(vocab), 'mirqi')

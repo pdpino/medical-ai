@@ -18,8 +18,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _attach_bleu(engine, up_to_n=4,
-                 output_transform=get_flat_reports):
-    bleu_up_to_n = Bleu(n=up_to_n, output_transform=output_transform)
+                 output_transform=get_flat_reports,
+                 device='cuda',
+                 ):
+    bleu_up_to_n = Bleu(n=up_to_n, output_transform=output_transform, device=device)
     for i in range(up_to_n):
         bleu_n = MetricsLambda(operator.itemgetter(i), bleu_up_to_n)
         bleu_n.attach(engine, f'bleu{i+1}')
@@ -104,7 +106,7 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False,
         # word_acc.attach(engine, 'word_acc')
 
     # Attach multiple bleu
-    _attach_bleu(engine, 4)
+    _attach_bleu(engine, 4, **metric_kwargs)
 
     rouge = RougeL(**metric_kwargs)
     rouge.attach(engine, 'rougeL')

@@ -169,8 +169,8 @@ def attach_metrics_classification(engine, labels, multilabel=True, hint=False, d
         loss_metric.attach(engine, loss_name)
 
     if multilabel:
-        acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round, device=device)
-        acc.attach(engine, 'acc')
+        # acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round, device=device)
+        # acc.attach(engine, 'acc')
 
         ham = Hamming(output_transform=_transform_remove_loss_and_round, device=device)
         ham.attach(engine, 'hamming')
@@ -180,11 +180,17 @@ def attach_metrics_classification(engine, labels, multilabel=True, hint=False, d
                         device=device)
         bce_loss.attach(engine, 'bce')
 
-        _attach_binary_metrics(engine, labels, 'acc', Accuracy, True,
-                               include_macro=False, device=device)
-        _attach_binary_metrics(engine, labels, 'prec', Precision, True, device=device)
-        _attach_binary_metrics(engine, labels, 'recall', Recall, True, device=device)
-        _attach_binary_metrics(engine, labels, 'spec', Specificity, True, device=device)
+        # _attach_binary_metrics(engine, labels, 'acc', Accuracy, True,
+        #                        include_macro=False, device=device)
+        # FIXME: Precision and Recall are failing with
+        # "Metric  must have at least one example before it can be computed"
+        # (After pytorch-ignite upgrade to 0.4.3)
+        # FIXME: Accuracy, MultilabelAccuracy, Specificity, Precision and Recall
+        # use round-in-0.5, instead of optimizing the threshold.
+        # FIXME: two accuracies were attached before??
+        # _attach_binary_metrics(engine, labels, 'prec', Precision, True, device=device)
+        # _attach_binary_metrics(engine, labels, 'recall', Recall, True, device=device)
+        # _attach_binary_metrics(engine, labels, 'spec', Specificity, True, device=device)
         _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False, device=device)
         _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric, False, device=device)
     else:

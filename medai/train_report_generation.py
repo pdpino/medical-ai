@@ -135,7 +135,7 @@ def train_model(run_name,
     # Attach medical correctness metrics
     if medical_correctness:
         vocab = train_dataloader.dataset.get_vocab()
-        attach_medical_correctness(trainer, validator, vocab, **med_kwargs)
+        attach_medical_correctness(trainer, validator, vocab, device=device, **med_kwargs)
 
     decoder_name = compiled_model.metadata['decoder_kwargs']['decoder_name']
     if decoder_name.startswith('h-lstm-att'):

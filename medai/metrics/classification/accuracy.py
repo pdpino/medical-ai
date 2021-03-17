@@ -5,7 +5,7 @@ from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 class MultilabelAccuracy(Metric):
     """Computes multilabel accuracy.
-    
+
     Using calculation described here: https://stats.stackexchange.com/a/168952/221232
     """
     @reinit__is_reduced
@@ -18,7 +18,7 @@ class MultilabelAccuracy(Metric):
     @reinit__is_reduced
     def update(self, output):
         """Updates the metric state after a batch/epoch.
-        
+
         output = (outputs, labels)
             - shape for both arrays: batch_size, n_labels
             - in binary format (rounded)
@@ -36,7 +36,7 @@ class MultilabelAccuracy(Metric):
         accuracies = correct.true_divide(total)
         # shape: batch_size
 
-        self._n_samples += accuracies.size()[0]
+        self._n_samples += accuracies.size(0)
         self._result += accuracies.sum().item()
 
     @sync_all_reduce('_n_samples', '_result')
