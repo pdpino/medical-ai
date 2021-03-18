@@ -45,6 +45,12 @@ _MODELS_WITH_DROPOUT_IMPLEMENTED = (
     'densenet-121-v2',
 )
 
+def _get_printable_kwargs(kwargs):
+    info_str = ' '.join(f'{k}={v}' for k, v in kwargs.items() if k != 'labels')
+    info_str += f' n_labels={len(kwargs.get("labels", []))}'
+    return info_str
+
+
 def create_cnn(model_name=None, allow_deprecated=False, **kwargs):
     if model_name not in _MODELS_DEF:
         raise Exception(f'Model not found: {model_name}')
@@ -56,8 +62,7 @@ def create_cnn(model_name=None, allow_deprecated=False, **kwargs):
     if dropout != 0 and model_name not in _MODELS_WITH_DROPOUT_IMPLEMENTED:
         LOGGER.error('Dropout not implemented for %s, ignoring', model_name)
 
-    info_str = ' '.join(f'{k}={v}' for k, v in kwargs.items())
-    LOGGER.info('Creating CNN: %s, %s', model_name, info_str)
+    LOGGER.info('Creating CNN: %s, %s', model_name, _get_printable_kwargs(kwargs))
 
     ModelClass = _MODELS_DEF[model_name]
     model = ModelClass(**kwargs)

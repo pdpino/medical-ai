@@ -30,6 +30,10 @@ def _build_dir_getter(folder):
         Args:
             run_name -- str with the full run-name, or the timestamp
                 (i.e. DATE_HOUR format).
+            save_mode -- If True, ensures the folder is created
+            assert_exists -- If True raise an Exception if the folder does not exist.
+                (Notice if save_mode is True, the folder will be created, and no
+                exception will be raised).
         """
         debug_folder = 'debug' if debug else ''
         task_folder = _get_task_folder(task)

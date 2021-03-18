@@ -36,6 +36,8 @@ class OrganShapesAndHolesMetric(Metric):
 
         self._n_samples = 0
 
+        super().reset()
+
     def _calculate_shapes_by_organ(self, arr_tensor):
         """Calculate the shapes for an array.
 

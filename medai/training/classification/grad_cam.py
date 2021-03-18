@@ -95,6 +95,9 @@ def calculate_attributions(grad_cam, images, label_index,
 def calculate_attributions_for_labels(grad_cam, images, labels, **kwargs):
     """Calls calculate_attributions() for multiple labels,
     and stack the results."""
+    if isinstance(labels, int):
+        labels = range(labels)
+
     return torch.stack([
         calculate_attributions(grad_cam, images, index, **kwargs) # (bs, h, w)
         for index, _ in enumerate(labels)

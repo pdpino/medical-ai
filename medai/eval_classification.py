@@ -141,7 +141,7 @@ def evaluate_run(run_name,
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(usage='%(prog)s [options]')
 
     parser.add_argument('--run-name', type=str, default=None, required=True,
                         help='Run-name to load')

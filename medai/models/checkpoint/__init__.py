@@ -93,11 +93,14 @@ def load_compiled_model_classification(run_name,
                                        debug=True,
                                        device='cuda',
                                        multiple_gpu=False,
+                                       task='cls',
                                        ):
     """Load a compiled classification model."""
+    assert task in ('cls', 'det'), 'Task not available'
+
     # Folder contains all pertaining files
     folder = get_checkpoint_folder(run_name,
-                                   task='cls',
+                                   task=task,
                                    debug=debug,
                                    save_mode=False,
                                    assert_exists=True,

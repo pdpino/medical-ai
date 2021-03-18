@@ -36,9 +36,11 @@ from medai.utils.handlers import (
 
 LOGGER = logging.getLogger('medai.det.train')
 
+_DEFAULT_PRINT_METRICS = ['cl_loss', 'hint_loss', 'roc_auc']
+
 
 def _choose_print_metrics(additional=None):
-    print_metrics = ['loss', 'roc_auc']
+    print_metrics = list(_DEFAULT_PRINT_METRICS)
 
     if additional is not None:
         print_metrics += [m for m in additional if m not in print_metrics]
@@ -58,7 +60,7 @@ def train_model(run_name,
                 debug=True,
                 dryrun=False,
                 tb_kwargs={},
-                print_metrics=['loss', 'roc_auc'],
+                print_metrics=_DEFAULT_PRINT_METRICS,
                 device='cuda',
                 ):
     # Prepare run
@@ -319,8 +321,8 @@ def train_from_scratch(run_name,
     # Create lr_scheduler
     lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
     LOGGER.info(
-        'Using LR-scheduler=%s, metric=%s, args=%s',
-        lr_scheduler is not None, lr_sch_metric, lr_sch_kwargs,
+        'Using LR-scheduler=%s, metric=%s',
+        lr_scheduler is not None, lr_sch_metric,
     )
 
     other_train_kwargs = {
@@ -365,7 +367,7 @@ def train_from_scratch(run_name,
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(usage='%(prog)s [options]')
 
     # parser.add_argument('--resume', type=str, default=None,
     #                     help='If present, resume a previous run')

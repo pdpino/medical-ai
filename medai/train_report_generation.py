@@ -480,7 +480,7 @@ def train_from_scratch(run_name,
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(usage='%(prog)s [options]')
 
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from a previous run')

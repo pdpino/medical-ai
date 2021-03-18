@@ -480,8 +480,8 @@ def train_from_scratch(run_name,
     # Create lr_scheduler
     lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
     LOGGER.info(
-        'Using LR-scheduler=%s, metric=%s, args=%s',
-        lr_scheduler is not None, lr_sch_metric, lr_sch_kwargs,
+        'Using LR-scheduler=%s, metric=%s',
+        lr_scheduler is not None, lr_sch_metric,
     )
 
     other_train_kwargs = {
@@ -533,7 +533,7 @@ def train_from_scratch(run_name,
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(usage='%(prog)s [options]')
 
     parser.add_argument('--resume', type=str, default=None,
                         help='If present, resume a previous run')

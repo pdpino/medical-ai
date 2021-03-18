@@ -20,8 +20,8 @@ class MetricsEncoder(json.JSONEncoder):
         return obj
 
 
-def get_results_fpath(run_name, task, debug=True, suffix='', save_mode=False):
-    folder = get_results_folder(run_name, task=task, debug=debug, save_mode=save_mode)
+def _get_results_fpath(run_name, task, debug=True, suffix='', **kwargs):
+    folder = get_results_folder(run_name, task=task, debug=debug, **kwargs)
 
     filename = 'metrics'
     if suffix:
@@ -33,14 +33,16 @@ def get_results_fpath(run_name, task, debug=True, suffix='', save_mode=False):
 
 
 def are_results_saved(run_name, task, debug=True, suffix=''):
-    filepath = get_results_fpath(run_name, task, debug=debug, suffix=suffix, save_mode=False)
+    # FIXME: run_name cannot be passed as timestamp-only (throws error)
+    filepath = _get_results_fpath(run_name, task, debug=debug, suffix=suffix,
+                                  save_mode=False)
 
-    return os.path.isfile(filepath)
+    return filepath is not None and os.path.isfile(filepath)
 
 
 def save_results(metrics_dict, run_name, task, debug=True,
                  suffix='', merge_prev=True):
-    filepath = get_results_fpath(run_name, task, debug=debug, suffix=suffix, save_mode=True)
+    filepath = _get_results_fpath(run_name, task, debug=debug, suffix=suffix, save_mode=True)
 
     if os.path.isfile(filepath) and merge_prev:
         with open(filepath, 'r') as f:
