@@ -25,7 +25,7 @@ class VinBigDataset(Dataset):
 
     def __init__(self, dataset_type='train', max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
-                 masks=False, **unused_kwargs):
+                 masks=False, bboxes=False, **unused_kwargs):
         super().__init__()
 
         if DATASET_DIR is None:
@@ -56,6 +56,8 @@ class VinBigDataset(Dataset):
         with open(split_fpath, 'r') as f:
             split_images = [l.strip().replace('.png', '') for l in f.readlines()]
 
+        if dataset_type == 'test':
+            LOGGER.warning('Vinbig test-dataset labels are dummy (not real)!!')
 
         # Load csv files
         fpath = os.path.join(DATASET_DIR, 'labels.csv')
@@ -79,9 +81,13 @@ class VinBigDataset(Dataset):
 
         self.label_index.reset_index(drop=True, inplace=True)
 
+        self.enable_bboxes = bboxes
         self.enable_masks = masks
         if self.enable_masks:
             self.transform_mask = transforms.Resize(image_size)
+
+        # Used for evaluation with mAP-coco
+        self.coco_gt_df = self._load_gt_df_for_coco(self.label_index['image_id'])
 
 
     def __len__(self):
@@ -116,11 +122,14 @@ class VinBigDataset(Dataset):
 
         masks = self.load_mask(image_id, original_size) if self.enable_masks else -1
 
+        bboxes = self.load_scaled_bboxes(image_id, original_size) if self.enable_bboxes else -1
+
         return BatchItem(
             image=image,
             labels=labels,
             masks=masks,
             image_fname=image_id,
+            bboxes=bboxes,
         )
 
     def load_mask(self, image_id, original_size):
@@ -143,6 +152,29 @@ class VinBigDataset(Dataset):
 
         return mask
 
+    def load_scaled_bboxes(self, image_id, original_size):
+        bboxes = self.bboxes_by_image.get(image_id, [])
+
+        original_height, original_width = original_size
+        height, width = self.image_size
+
+        horizontal_scale = height / original_height
+        vertical_scale = width / original_width
+
+        scaled_bboxes = []
+        for bbox in bboxes:
+            disease_id = bbox[0]
+            x_min, y_min, x_max, y_max = bbox[1:]
+
+
+            x_min = int(x_min * horizontal_scale)
+            x_max = int(x_max * horizontal_scale)
+            y_min = int(y_min * vertical_scale)
+            y_max = int(y_max * vertical_scale)
+
+            scaled_bboxes.append((disease_id, x_min, y_min, x_max, y_max))
+
+        return scaled_bboxes
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
@@ -163,3 +195,10 @@ class VinBigDataset(Dataset):
         no_finding = 1 - some_disease
 
         return list(no_finding.items())
+
+    def _load_gt_df_for_coco(self, image_names):
+        fpath = os.path.join(DATASET_DIR, 'true_df.csv')
+        df = pd.read_csv(fpath)
+        df = df.loc[df['image_id'].isin(image_names)]
+
+        return df

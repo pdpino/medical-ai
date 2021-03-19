@@ -11,6 +11,8 @@ from ignite.handlers import Timer
 from medai.datasets import prepare_data_classification
 from medai.losses import get_loss_function
 from medai.metrics.classification import attach_metrics_classification
+from medai.metrics.detection import attach_mAP_coco
+from medai.metrics.segmentation import attach_metrics_segmentation
 from medai.models.classification import create_cnn
 from medai.models.checkpoint import (
     CompiledModel,
@@ -36,7 +38,7 @@ from medai.utils.handlers import (
 
 LOGGER = logging.getLogger('medai.det.train')
 
-_DEFAULT_PRINT_METRICS = ['cl_loss', 'hint_loss', 'roc_auc']
+_DEFAULT_PRINT_METRICS = ['cl_loss', 'hint_loss', 'roc_auc', 'mAP', 'iou-grad-cam']
 
 
 def _choose_print_metrics(additional=None):
@@ -94,6 +96,11 @@ def train_model(run_name,
     attach_metrics_classification(validator, labels,
                                   multilabel=multilabel, hint=True,
                                   device=device)
+    attach_mAP_coco(validator, val_dataloader, run_name, debug=debug, device=device)
+    # attach_metrics_segmentation(validator, labels, multilabel=multilabel, device=device)
+    # FIXME: attach_metrics_classification should not attach hint metrics????
+    # attach_metrics_segmentation() should be preferred
+
 
     # Create trainer engine
     trainer = Engine(get_step_fn(model,
@@ -106,6 +113,8 @@ def train_model(run_name,
     attach_metrics_classification(trainer, labels,
                                   multilabel=multilabel, hint=True,
                                   device=device)
+    attach_mAP_coco(trainer, train_dataloader, run_name, debug=debug, device=device)
+    # attach_metrics_segmentation(trainer, labels, multilabel=multilabel, device=device)
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)

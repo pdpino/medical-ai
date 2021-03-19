@@ -8,6 +8,9 @@ from shapely.geometry import Polygon
 
 LOGGER = logging.getLogger(__name__)
 
+
+#################### Functions used with organ-masks ####################
+# TODO: rename functions as "for_organs", or alike
 def calculate_polygons(mask, ignore_idx=0):
     """Finds the polygons in a mask.
 
@@ -104,3 +107,86 @@ def polygons_to_array(polygons, size):
         mahotas.polygon.fill_polygon(coords, arr, color=color)
 
     return arr
+
+################################################################################
+
+
+
+def heatmap_to_bb(mask, thresh=0.5):
+    """Receives a heatmap and return a BB with the largest area.
+
+    Thresholds the mask (i.e. makes it a binary mask), and find the largest polygon
+    with value=1.
+
+    Args:
+        mask -- tensor of shape (height, width), with values between 0 and 1.
+        thresh -- float to find polygons in the heatmap
+    Returns:
+        tuple of (xmin, ymin, xmax, ymax) representing the Bounding-box.
+        None if no polygons are found
+
+    TODO: maybe do not keep the largest one, but the strongest one (i.e. larger values)
+    (new function??)
+    """
+    # Apply threshold
+    mask = mask >= thresh
+
+    # To numpy
+    mask = mask.detach().cpu().numpy().astype(np.uint8)
+
+    # Obtain shapes
+    shapes = rasterio.features.shapes(mask)
+
+    # Get boundaries of the polygons found
+    boundaries = [
+        shape['coordinates']
+        for shape, value in shapes
+        if value == 1
+    ]
+    if len(boundaries) == 0:
+        return None
+
+    # Transform to shapely.Polygons
+    polygons = [
+        Polygon(bounds[0])
+        for bounds in boundaries
+    ]
+
+    # Sort and keep the largest
+    polygons = sorted(polygons, key=lambda p: p.area, reverse=True)
+    largest_polygon = polygons[0]
+
+    # Return the BB
+    return largest_polygon.bounds
+
+
+def calc_area(bbox):
+    """Calculates the area of a bounding-box.
+
+    Args:
+        bbox -- tuple/list of four elements: x_min, y_min, x_max, y_max
+    """
+    x1, y1, x2, y2 = bbox
+    dy = max(0, y2 - y1)
+    dx = max(0, x2 - x1)
+    return dx * dy
+
+def calc_iou(bbox1, bbox2):
+    """Calculates IoU for two bboxes.
+
+    Args:
+        bbox1 -- bbox as tuple
+        bbox2 -- bbox as tuple
+    """
+    x1 = max(bbox1[0], bbox2[0])
+    y1 = max(bbox1[1], bbox2[1])
+    x2 = min(bbox1[2], bbox2[2])
+    y2 = min(bbox1[3], bbox2[3])
+
+    intersection = calc_area((x1, y1, x2, y2))
+
+    area1 = calc_area(bbox1)
+    area2 = calc_area(bbox2)
+    union = area1 + area2 - intersection
+
+    return intersection / union
