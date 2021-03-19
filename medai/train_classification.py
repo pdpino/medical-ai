@@ -589,7 +589,7 @@ def parse_args():
 
     parsers.add_args_tb(parser)
     parsers.add_args_early_stopping(parser, metric='roc_auc')
-    parsers.add_args_lr_sch(parser, lr=None, metric='roc_auc', patience=3)
+    parsers.add_args_lr_sch(parser, lr=None, metric='roc_auc', factor=0.5, patience=3)
 
     parsers.add_args_hw(parser, num_workers=2)
 
