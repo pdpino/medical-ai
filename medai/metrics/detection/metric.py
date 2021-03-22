@@ -14,11 +14,11 @@ _ASSERT_SAME_IMAGES = False
 
 class MAPCocoMetric(Metric):
     """Mean Average-precision (COCO-like) metric."""
-    def __init__(self, gt_df, temp_fpath, **kwargs):
+    def __init__(self, gt_df, temp_fpath, cls_thresh=0.3, **kwargs):
         self.csv_writer = CocoResultsWriter(temp_fpath)
 
         # TODO: pass this as param??
-        self.cls_thresh = 0.3
+        self.cls_thresh = cls_thresh
         self.heat_thresh = 0.5
 
         # Create eval-object

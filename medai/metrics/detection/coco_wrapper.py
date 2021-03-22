@@ -23,19 +23,11 @@ def _gen_categories():
         for index, disease_name in enumerate(VINBIG_DISEASES)
     ]
 
-def _gen_images_list(image_ids):
-    return [
-        {
-            'id': idx,
-        }
-        for idx in range(len(image_ids))
-    ]
-
 
 class VinBigDataEval:
     """Helper class for calculating the competition metric.
 
-    You should remove the duplicated annoatations from the `true_df` dataframe
+    You should remove the duplicated annotations from the `true_df` dataframe
     before using this script. Otherwise it may give incorrect results.
 
         >>> vineval = VinBigDataEval(valid_df)
@@ -57,44 +49,54 @@ class VinBigDataEval:
 
         self.true_df = true_df
 
-        self.image_ids = true_df["image_id"].unique()
-        self.annotations = {
+        image_names = true_df["image_id"].unique()
+        self.image_name_to_idx = {
+            name: idx
+            for idx, name in enumerate(image_names)
+        }
+
+        self.ground_truth = {
             "type": "instances",
-            "images": _gen_images_list(self.image_ids),
             "categories": _gen_categories(),
-            "annotations": self.__gen_annotations(self.true_df, self.image_ids)
+            "annotations": self._gen_gt_annotations()
         }
 
         self.predictions = {
-            "images": self.annotations["images"].copy(),
             "categories": _gen_categories(),
-            "annotations": None,
         }
 
-    def __gen_annotations(self, df, image_ids):
+
+    def _gen_images_list(self, image_names):
+        return [
+            { 'id': self.image_name_to_idx[name] }
+            for name in image_names
+        ]
+
+
+    def _gen_gt_annotations(self):
         LOGGER.debug("Generating annotation data...")
-        # TODO: optimize this function!!
         k = 0
         results = []
 
-        for idx, image_id in enumerate(image_ids):
+        cols = ['class_id', 'x_min', 'y_min', 'x_max', 'y_max']
+        bboxes_by_image_name = self.true_df.groupby('image_id')[cols].apply(
+            lambda x: list(x.values),
+        ).to_dict()
 
-            # Add image annotations
-            for _, row in df[df["image_id"] == image_id].iterrows():
+        for image_name, rows in bboxes_by_image_name.items():
+            idx = self.image_name_to_idx[image_name]
+
+            for row in rows:
+                class_id, x_min, y_min, x_max, y_max = row
 
                 results.append({
                     "id": k,
                     "image_id": idx,
-                    "category_id": row["class_id"],
-                    "bbox": np.array([
-                        row["x_min"],
-                        row["y_min"],
-                        row["x_max"],
-                        row["y_max"]]
-                    ),
+                    "category_id": class_id,
+                    "bbox": row[1:],
                     "segmentation": [],
                     "ignore": 0,
-                    "area":(row["x_max"] - row["x_min"]) * (row["y_max"] - row["y_min"]),
+                    "area": (x_max - x_min) * (y_max - y_min),
                     "iscrowd": 0,
                 })
 
@@ -108,25 +110,24 @@ class VinBigDataEval:
 
         return data.reshape(-1, 6)
 
-    def __gen_predictions(self, df, image_ids):
+    def _gen_pred_annotations(self, df):
         LOGGER.debug("Generating prediction data...")
         k = 0
         results = []
 
         for _, row in df.iterrows():
-
-            image_id = row["image_id"]
+            image_name = row["image_id"]
             preds = self.__decode_prediction_string(row["PredictionString"])
 
-            for _, pred in enumerate(preds):
+            image_idx = self.image_name_to_idx[image_name]
+
+            for pred in preds:
 
                 results.append({
                     "id": k,
-                    "image_id": int(np.where(image_ids == image_id)[0]),
+                    "image_id": image_idx,
                     "category_id": int(pred[0]),
-                    "bbox": np.array([
-                        pred[2], pred[3], pred[4], pred[5]
-                    ]),
+                    "bbox": pred[2:6],
                     "segmentation": [],
                     "ignore": 0,
                     "area": (pred[4] - pred[2]) * (pred[5] - pred[3]),
@@ -153,10 +154,18 @@ class VinBigDataEval:
         """
 
         if pred_df is not None:
-            self.predictions["annotations"] = self.__gen_predictions(pred_df, self.image_ids)
+            # Create predictions data
+            self.predictions["annotations"] = self._gen_pred_annotations(pred_df)
+
+            pred_images = pred_df['image_id'].unique()
+            self.predictions["images"] = self._gen_images_list(pred_images)
+
+            # Set GT data to use only the predicted images
+            self.ground_truth["images"] = self._gen_images_list(pred_images)
+
 
         coco_ds = COCO()
-        coco_ds.dataset = self.annotations
+        coco_ds.dataset = self.ground_truth
         coco_ds.createIndex()
 
         coco_dt = COCO()
