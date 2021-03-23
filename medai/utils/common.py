@@ -58,7 +58,6 @@ def duration_to_str(all_seconds):
     return f'{seconds}s'
 
 
-
 def arr_to_range(arr, min_value=0, max_value=1):
     return np.interp(arr, (arr.min(), arr.max()), (min_value, max_value))
 

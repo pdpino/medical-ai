@@ -11,8 +11,6 @@ LOGGER = logging.getLogger(__name__)
 
 _CHECK_NAN_OR_INF = False
 
-_CLS_THRESH = 0.3 # TODO: set it somewhere else??
-
 def get_step_fn_hint(model, loss_fn, optimizer=None, training=True,
                      hint_lambda=1, device='cuda'):
     """Creates a step function for an Engine."""
@@ -95,10 +93,6 @@ def get_step_fn_hint(model, loss_fn, optimizer=None, training=True,
                 )
                 raise Exception('Total loss is nan or inf')
 
-        # Only use true-positive samples to calculate IoU metrics
-        outputs = outputs.detach()
-        gt_valid = labels.bool() & (outputs > _CLS_THRESH)
-
         return {
             'loss': total_loss.item(),
             'cl_loss': cl_loss.item(),
@@ -107,7 +101,6 @@ def get_step_fn_hint(model, loss_fn, optimizer=None, training=True,
             'gt_labels': labels,
             'activations': grad_cam_attrs.detach(),
             'gt_activations': masks,
-            'gt_valid': gt_valid,
             'image_fnames': data_batch.image_fname,
         }
 

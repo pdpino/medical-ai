@@ -7,8 +7,9 @@ from captum.attr import LayerGradCam
 
 from medai.models.classification import get_last_layer
 from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
-from medai.metrics.segmentation import attach_metrics_image_saliency
+from medai.metrics.classification import attach_metrics_image_saliency
 from medai.utils.images import bbox_coordinates_to_map
+from medai.utils.heatmaps import threshold_attributions
 from medai.utils import tensor_to_range01
 
 
@@ -40,25 +41,6 @@ def create_grad_cam(model, device='cuda', multiple_gpu=False):
     grad_cam = LayerGradCam(wrapped_model, layer)
 
     return grad_cam
-
-
-def threshold_attributions(attributions, thresh=0.5):
-    """Apply a threshold over attributions.
-
-    Args:
-        attributions -- tensor of any shape, with values between 0 and 1
-        threshold -- float to apply the threshold
-    Returns:
-        thresholded attributions, same shape as input
-    """
-    device = attributions.device
-    size = attributions.size()
-
-    ones = torch.ones(size, device=device)
-    zeros = torch.zeros(size, device=device)
-    attributions = torch.where(attributions >= thresh, ones, zeros)
-
-    return attributions
 
 
 def calculate_attributions(grad_cam, images, label_index,

@@ -1,4 +1,4 @@
-from functools import reduce
+from functools import reduce, partial
 import operator
 import torch
 from torch.nn.functional import binary_cross_entropy
@@ -19,7 +19,9 @@ from medai.metrics.classification.hamming import Hamming
 from medai.metrics.classification.roc_auc import RocAucMetric
 from medai.metrics.classification.pr_auc import PRAucMetric
 from medai.metrics.classification.specificity import Specificity
-from medai.metrics.segmentation import attach_metrics_image_saliency
+from medai.metrics.segmentation.iou import IoU
+from medai.metrics.segmentation.iobb import IoBB
+from medai.utils.metrics import attach_metric_for_labels
 
 
 def _get_transform_one_label(label_index, use_round=True):
@@ -207,11 +209,12 @@ def attach_metrics_classification(engine, labels, multilabel=True, hint=False, d
                                get_transform_fn=_get_transform_one_class,
                                device=device)
 
-    if hint:
-        keys = [
-            ('grad-cam', 'gt_activations', None),
-        ]
-        attach_metrics_image_saliency(engine, labels, keys, multilabel=multilabel, device=device)
+
+def attach_hint_saliency(engine, labels, multilabel=True, device='cuda'):
+    keys = [
+        ('grad-cam', 'gt_activations', None),
+    ]
+    attach_metrics_image_saliency(engine, labels, keys, multilabel=multilabel, device=device)
 
 
 def attach_metric_cm(engine, labels, multilabel=True, device='cuda'):
@@ -231,3 +234,35 @@ def attach_metric_cm(engine, labels, multilabel=True, device='cuda'):
             device=device,
         )
         cm.attach(engine, 'cm')
+
+
+def attach_metrics_image_saliency(engine, labels, keys, multilabel=True, device='cuda'):
+    """Wrapper to attach segmentation metrics (IoU, IoBB).
+
+    FIXME: Clarify the semantics, or try not to use it!
+    Confusing stuff: use of keys, metric is attached as "iou-<key>", and so on.
+    """
+    if not multilabel:
+        raise NotImplementedError()
+
+    def _extract_maps(output, key_gt, key_valid=None):
+        activations = output['activations']
+
+        gt_map = output[key_gt]
+        gt_valid = output.get(key_valid, None)
+
+        return activations, gt_map, gt_valid
+
+    for (name, key_gt, key_valid) in keys:
+        iou = IoU(
+            reduce_sum=False,
+            output_transform=partial(_extract_maps, key_gt=key_gt, key_valid=key_valid),
+            device=device,
+            )
+        attach_metric_for_labels(engine, labels, iou, f'iou-{name}')
+
+        iobb = IoBB(
+            reduce_sum=False,
+            output_transform=partial(_extract_maps, key_gt=key_gt, key_valid=key_valid),
+            device=device)
+        attach_metric_for_labels(engine, labels, iobb, f'iobb-{name}')

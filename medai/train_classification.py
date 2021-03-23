@@ -14,7 +14,10 @@ from medai.datasets import (
     UP_TO_DATE_MASKS_VERSION,
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
-from medai.metrics.classification import attach_metrics_classification
+from medai.metrics.classification import (
+    attach_metrics_classification,
+    attach_hint_saliency,
+)
 from medai.models.classification import (
     create_cnn,
 )
@@ -129,6 +132,10 @@ def train_model(run_name,
     attach_metrics_classification(trainer, labels,
                                   multilabel=multilabel, hint=hint,
                                   device=device)
+
+    if hint:
+        attach_hint_saliency(validator, labels, multilabel=multilabel, device=device)
+        attach_hint_saliency(trainer, labels, multilabel=multilabel, device=device)
 
     if grad_cam:
         create_grad_cam_evaluator(

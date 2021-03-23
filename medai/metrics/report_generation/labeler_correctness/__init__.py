@@ -10,7 +10,7 @@ from medai.metrics.report_generation.labeler_correctness.labeler_timer import La
 from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
 from medai.metrics.report_generation.transforms import get_flat_reports
 from medai.utils.lock import SyncLock
-from medai.utils.metrics_usage import EveryNEpochs
+from medai.utils.metrics import EveryNEpochs
 
 LOGGER = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ from ignite.engine import Engine
 
 from medai.datasets import prepare_data_classification
 from medai.metrics import save_results
-from medai.metrics.segmentation import attach_metrics_image_saliency
+from medai.metrics.classification import attach_metrics_image_saliency
 from medai.models.checkpoint import load_compiled_model_classification
 from medai.training.classification.grad_cam import create_grad_cam, get_step_fn
 from medai.utils import (

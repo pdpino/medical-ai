@@ -37,10 +37,10 @@ class IoBB(Metric):
         intersection = (gt_map * activations).sum(dim=(-2, -1))
         # shape: (batch_size, n_labels)
 
-        bouding_box = gt_map.sum(dim=(-2, -1))
+        bounding_box = gt_map.sum(dim=(-2, -1))
         # shape: (batch_size, n_labels)
 
-        iobb = divide_tensors(intersection, bouding_box)
+        iobb = divide_tensors(intersection, bounding_box)
         # shape: (batch_size, n_labels)
 
         if gt_valid is not None:
