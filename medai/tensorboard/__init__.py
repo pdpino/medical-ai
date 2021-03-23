@@ -48,6 +48,9 @@ class TBWriter:
             'iou': 'IoU',
             'iobb': 'IoBB',
             'mAP': 'MAP', # mean Average-precision (coco-challenge)
+            'mse-total': 'MSE-total',
+            'mse-pos': 'MSE-pos',
+            'mse-neg': 'MSE-neg',
         }
 
         self._loss_regex = re.compile(r'(\w+)_loss')

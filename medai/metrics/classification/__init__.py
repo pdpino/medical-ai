@@ -8,7 +8,6 @@ from ignite.metrics import (
     Recall,
     RunningAverage,
     ConfusionMatrix,
-    # VariableAccumulation,
     Loss,
     MetricsLambda,
 )

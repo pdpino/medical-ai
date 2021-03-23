@@ -1,6 +1,10 @@
 import os
+from functools import partial
+
+from ignite.metrics import MetricsLambda
 
 from medai.metrics.detection.coco_map.metric import MAPCocoMetric
+from medai.metrics.detection.mse import HeatmapMSE
 from medai.metrics.segmentation.iou import IoU
 from medai.metrics.segmentation.iobb import IoBB
 from medai.utils.files import get_results_folder
@@ -44,7 +48,10 @@ def _threshold_activations_and_keep_valid(output, cls_thresh=0.3, heat_thresh=0.
     Applies a threshold to activations, and creates a gt_valid array to use only
     TP values for the metric calculation.
     """
-    activations = threshold_attributions(output['activations'], heat_thresh)
+    activations = output['activations']
+    if heat_thresh is not None:
+        activations = threshold_attributions(activations, heat_thresh)
+
     gt_map = output['gt_activations']
 
     # Only use TP samples to calculate metrics
@@ -70,3 +77,28 @@ def attach_metrics_iox(engine, labels, multilabel=False, device='cuda'):
                 output_transform=_threshold_activations_and_keep_valid,
                 device=device)
     attach_metric_for_labels(engine, labels, iobb, 'iobb')
+
+
+def attach_mse(engine, labels, multilabel=True, device='cuda'):
+    if not multilabel:
+        raise NotImplementedError()
+
+    mse = HeatmapMSE(
+        output_transform=partial(_threshold_activations_and_keep_valid, heat_thresh=None),
+        device='cuda',
+    )
+
+    def _i_getter(result, key, index):
+        return result[key][index].item()
+
+    def _avg_getter(result, key):
+        return result[key].mean().item()
+
+    metric_name = 'mse'
+    for key in ['pos', 'neg', 'total']:
+        for index, label in enumerate(labels):
+            metric_for_label_i = MetricsLambda(partial(_i_getter, key=key, index=index), mse)
+            metric_for_label_i.attach(engine, f'{metric_name}-{key}-{label}')
+
+        metric_average = MetricsLambda(partial(_avg_getter, key=key), mse)
+        metric_average.attach(engine, f'{metric_name}-{key}')
