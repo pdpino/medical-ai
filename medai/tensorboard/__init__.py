@@ -44,7 +44,10 @@ class TBWriter:
             'acc': 'Acc',
             'hamming': 'Hamming',
             'bce': 'BCELoss',
-            'roc_auc': 'Roc_auc', # Macro averaged
+            'roc_auc': 'Roc_auc',
+            'iou': 'IoU',
+            'iobb': 'IoBB',
+            'mAP': 'MAP', # mean Average-precision (coco-challenge)
         }
 
         self._loss_regex = re.compile(r'(\w+)_loss')

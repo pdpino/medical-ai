@@ -134,7 +134,7 @@ def train_model(run_name,
                             trainer,
                             validator,
                             task='det',
-                            metric=None, # TODO: choose a metric
+                            metric='mAP',
                             debug=debug,
                             dryrun=dryrun,
                             )
@@ -411,6 +411,7 @@ def parse_args():
     parsers.add_args_tb(parser)
     parsers.add_args_early_stopping(parser, metric='roc_auc')
     parsers.add_args_lr_sch(parser, lr=0.0001, metric='roc_auc', patience=3)
+    # REVIEW: use mAP as metric??
 
     parsers.add_args_hw(parser, num_workers=2)
 

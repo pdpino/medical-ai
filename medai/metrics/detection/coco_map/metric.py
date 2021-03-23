@@ -4,8 +4,8 @@ import pandas as pd
 from ignite.metrics import Metric
 
 from medai.datasets.vinbig import DATASET_DIR
-from medai.metrics.detection.writer import CocoResultsWriter
-from medai.metrics.detection.coco_wrapper import VinBigDataEval
+from medai.metrics.detection.coco_map.writer import CocoResultsWriter
+from medai.metrics.detection.coco_map.coco_wrapper import VinBigDataEval
 from medai.utils.shapes import heatmap_to_bb
 
 LOGGER = logging.getLogger(__name__)

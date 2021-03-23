@@ -1,6 +1,6 @@
 import os
 
-from medai.metrics.detection.metric import MAPCocoMetric
+from medai.metrics.detection.coco_map.metric import MAPCocoMetric
 from medai.metrics.segmentation.iou import IoU
 from medai.metrics.segmentation.iobb import IoBB
 from medai.utils.files import get_results_folder
