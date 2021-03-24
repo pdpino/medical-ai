@@ -1,10 +1,7 @@
 import logging
-import os
 import pandas as pd
 from ignite.metrics import Metric
 
-from medai.datasets.vinbig import DATASET_DIR
-from medai.metrics.detection.coco_map.writer import CocoResultsWriter
 from medai.metrics.detection.coco_map.coco_wrapper import VinBigDataEval
 from medai.utils.shapes import heatmap_to_bb
 
@@ -14,8 +11,11 @@ _ASSERT_SAME_IMAGES = False
 
 class MAPCocoMetric(Metric):
     """Mean Average-precision (COCO-like) metric."""
-    def __init__(self, gt_df, temp_fpath, cls_thresh=0.3, **kwargs):
-        self.csv_writer = CocoResultsWriter(temp_fpath)
+    def __init__(self, gt_df, writer, donotcompute=False, cls_thresh=0.3, **kwargs):
+        self.csv_writer = writer
+
+        # FIXME: using this for test subset, to avoid calculation of the metric
+        self.donotcompute = donotcompute
 
         # TODO: pass this as param??
         self.cls_thresh = cls_thresh
@@ -73,11 +73,14 @@ class MAPCocoMetric(Metric):
     def compute(self):
         self.csv_writer.close()
 
+        if self.donotcompute:
+            return 0
+
         # Load predictions
         pred_df = pd.read_csv(self.csv_writer.filepath)
 
         if _ASSERT_SAME_IMAGES:
-            gt_images = set(self.vineval.image_ids)
+            gt_images = set(self.vineval.image_name_to_idx.keys())
             pred_images = set(pred_df['image_id'])
             if gt_images != pred_images:
                 LOGGER.error(

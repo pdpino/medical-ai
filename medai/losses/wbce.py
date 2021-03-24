@@ -2,9 +2,10 @@ import torch
 from torch import nn
 
 class WeigthedBCELoss(nn.Module):
-    def __init__(self, reduction='mean', epsilon=1e-5):
+    def __init__(self, reduction='mean', sigmoid=True, epsilon=1e-7):
         super().__init__()
 
+        self.sigmoid = sigmoid
         self.epsilon = epsilon
 
         if reduction == 'mean':
@@ -20,7 +21,9 @@ class WeigthedBCELoss(nn.Module):
         If a multi-label array is given, the BCE is averaged across labels.
         Note that the BP and BN weights are calculated by batch, not in the whole dataset.
         """
-        output = torch.sigmoid(output)
+        if self.sigmoid:
+            output = torch.sigmoid(output)
+
         output = output.clamp(min=self.epsilon, max=1-self.epsilon)
         target = target.float()
 

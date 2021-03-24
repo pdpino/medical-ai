@@ -3,6 +3,7 @@ from functools import partial
 
 from ignite.metrics import MetricsLambda
 
+from medai.metrics.detection.coco_writer.writer import get_outputs_fpath, CocoResultsWriter
 from medai.metrics.detection.coco_map.metric import MAPCocoMetric
 from medai.metrics.detection.mse import HeatmapMSE
 from medai.metrics.segmentation.iou import IoU
@@ -20,26 +21,16 @@ def _extract_for_mAP(output):
     return image_names, labels_pred, heatmaps
 
 
-def _get_temp_outputs_fpath(run_name, dataset_type, debug=True):
-    folder = get_results_folder(run_name,
-                                task='det',
-                                debug=debug,
-                                save_mode=True)
-    path = os.path.join(folder, f'temp-outputs-{dataset_type}.csv')
-
-    return path
-
-
-def attach_mAP_coco(engine, dataloader, run_name, debug=True, device='cuda'):
+def attach_mAP_coco(engine, dataloader, run_name, debug=True, task='det', device='cuda'):
     gt_df = dataloader.dataset.coco_gt_df
     dataset_type = dataloader.dataset.dataset_type
-    temp_fpath = _get_temp_outputs_fpath(run_name, dataset_type, debug=debug)
 
-    metric = MAPCocoMetric(gt_df, temp_fpath,
+    temp_fpath = get_outputs_fpath(run_name, dataset_type, task=task, debug=debug)
+    writer = CocoResultsWriter(temp_fpath)
+
+    metric = MAPCocoMetric(gt_df, writer, donotcompute=(dataset_type == 'test'),
                            output_transform=_extract_for_mAP, device=device)
     metric.attach(engine, 'mAP')
-
-    return
 
 
 def _threshold_activations_and_keep_valid(output, cls_thresh=0.3, heat_thresh=0.5):
@@ -85,7 +76,7 @@ def attach_mse(engine, labels, multilabel=True, device='cuda'):
 
     mse = HeatmapMSE(
         output_transform=partial(_threshold_activations_and_keep_valid, heat_thresh=None),
-        device='cuda',
+        device=device,
     )
 
     def _i_getter(result, key, index):

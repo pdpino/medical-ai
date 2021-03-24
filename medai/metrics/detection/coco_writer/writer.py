@@ -1,15 +1,32 @@
 import os
 
+from medai.utils.files import get_results_folder
+
+
+def get_outputs_fpath(run_name, dataset_type, task='det', debug=True, prefix='temp'):
+    folder = get_results_folder(run_name,
+                                task=task,
+                                debug=debug,
+                                save_mode=True)
+    path = os.path.join(folder, f'{prefix}-outputs-{dataset_type}.csv')
+
+    return path
+
 
 class CocoResultsWriter:
     """Writes BB predictions to a csv in the challenge specification."""
-    def __init__(self, temp_fpath):
-        self.filepath = temp_fpath
+    def __init__(self, fpath):
+        self.filepath = fpath
         self.file_pointer = None
 
     def _write_header(self):
         header = 'image_id,PredictionString\n'
         self.file_pointer.write(header)
+
+    def open(self):
+        self.file_pointer = open(self.filepath, 'a')
+
+        self._write_header()
 
     def reset(self):
         self.close()
@@ -17,9 +34,7 @@ class CocoResultsWriter:
         if os.path.isfile(self.filepath):
             os.remove(self.filepath)
 
-        self.file_pointer = open(self.filepath, 'a')
-
-        self._write_header()
+        self.open()
 
     def _format_prediction(self, pred):
         return ' '.join(str(v) for v in pred)

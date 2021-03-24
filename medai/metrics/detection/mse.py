@@ -27,8 +27,8 @@ class HeatmapMSE(Metric):
         E.g. if the target_value is 1, it will average the loss across 1-pixels,
         and will sum across batch_size.
         """
-        values_filter = gt_masks == target_value
-        n_pixels = values_filter.long().sum(dim=(-1, -2)) # bs, n_labels
+        values_filter = (gt_masks == target_value).long()
+        n_pixels = values_filter.sum(dim=(-1, -2)) # bs, n_labels
         filtered_loss = total_loss * values_filter # bs, n_labels, h, w
         filtered_loss = filtered_loss.sum(dim=(-1,-2)) # bs, n_labels
         filtered_loss = divide_tensors(filtered_loss, n_pixels) # bs, n_labels
