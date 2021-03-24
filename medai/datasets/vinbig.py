@@ -4,12 +4,16 @@ import logging
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
+from torchvision.transforms.functional import to_tensor
 import pandas as pd
+from ignite.utils import to_onehot
 from PIL import Image
 
+from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
 from medai.datasets.common import (
     BatchItem,
     VINBIG_DISEASES,
+    JSRT_ORGANS,
 )
 from medai.utils.images import get_default_image_transform
 
@@ -21,11 +25,19 @@ _DATASET_MEAN = 0.5489
 _DATASET_STD = 0.2498
 
 class VinBigDataset(Dataset):
+    """Dataset for the kaggle challenge.
+
+    NOTE:
+        - masks implementation differs from other datasets (cxr14, iu-x-ray, others).
+            Here, a mask is given for the disease, and are not organ-masks
+            (though see `fallback_organs` option and `load_organ_masks` method).
+    """
     dataset_dir = DATASET_DIR
+    organs = list(JSRT_ORGANS)
 
     def __init__(self, dataset_type='train', max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
-                 masks=False, bboxes=False, **unused_kwargs):
+                 masks=False, bboxes=False, fallback_organs=True, **unused_kwargs):
         super().__init__()
 
         if DATASET_DIR is None:
@@ -82,8 +94,10 @@ class VinBigDataset(Dataset):
         self.label_index.reset_index(drop=True, inplace=True)
 
         self.enable_bboxes = bboxes
+        self.fallback_organs = fallback_organs
+        self.masks_dir = os.path.join(DATASET_DIR, 'organ-masks', 'v1')
         self.enable_masks = masks
-        if self.enable_masks:
+        if self.enable_masks and self.fallback_organs:
             self.transform_mask = transforms.Resize(image_size)
 
         # Used for evaluation with mAP-coco
@@ -133,11 +147,15 @@ class VinBigDataset(Dataset):
         )
 
     def load_mask(self, image_id, original_size):
-        bboxes = self.bboxes_by_image.get(image_id, [])
         diseases_with_bb = set()
-        mask = torch.ones(len(self.labels), *original_size)
 
-        for bbox in bboxes:
+        if self.fallback_organs:
+            mask = self.load_organ_masks(image_id)
+        else:
+            mask = torch.ones(len(self.labels), *self.image_size)
+        # mask shape: n_diseases, height, width
+
+        for bbox in self._iter_scaled_bboxes(image_id, original_size):
             disease_id = bbox[0]
             x_min, y_min, x_max, y_max = bbox[1:]
 
@@ -147,12 +165,34 @@ class VinBigDataset(Dataset):
 
             mask[disease_id, y_min:y_max, x_min:x_max] = 1
 
+        return mask
+
+    def load_organ_masks(self, image_id):
+        filepath = os.path.join(self.masks_dir, f'{image_id}.png')
+
+        mask = Image.open(filepath).convert('L')
+        mask = to_tensor(mask)
+        # shape: 1, height, width
+
+        mask = (mask * 255).long()
+        # shape: 1, height, width
+
+        mask = to_onehot(mask, len(self.organs))
+        # shape: 1, n_organs, height, width
+
         mask = self.transform_mask(mask)
-        # shape: n_diseases, height, width
+        # shape: 1, n_organs, target-height, target-width
+
+        mask = mask.squeeze(0)
+        # shape: n_organs, target-height, target-width
+
+        mask = reduce_masks_for_diseases(self.labels, mask, organs=self.organs)
+        # shape: n_diseases, target-height, target-width
 
         return mask
 
-    def load_scaled_bboxes(self, image_id, original_size):
+
+    def _iter_scaled_bboxes(self, image_id, original_size):
         bboxes = self.bboxes_by_image.get(image_id, [])
 
         original_height, original_width = original_size
@@ -161,20 +201,20 @@ class VinBigDataset(Dataset):
         horizontal_scale = height / original_height
         vertical_scale = width / original_width
 
-        scaled_bboxes = []
         for bbox in bboxes:
             disease_id = bbox[0]
             x_min, y_min, x_max, y_max = bbox[1:]
-
 
             x_min = int(x_min * horizontal_scale)
             x_max = int(x_max * horizontal_scale)
             y_min = int(y_min * vertical_scale)
             y_max = int(y_max * vertical_scale)
 
-            scaled_bboxes.append((disease_id, x_min, y_min, x_max, y_max))
+            yield (disease_id, x_min, y_min, x_max, y_max)
 
-        return scaled_bboxes
+    def load_scaled_bboxes(self, image_id, original_size):
+        return list(self._iter_scaled_bboxes(image_id, original_size))
+
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
