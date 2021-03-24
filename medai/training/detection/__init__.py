@@ -1,7 +1,7 @@
 import logging
 import torch
+# from torchvision.transforms.functional import resize
 
-from medai.losses.out_of_target import OutOfTargetSumLoss
 from medai.training.classification.grad_cam import (
     calculate_attributions_for_labels,
     create_grad_cam,
@@ -11,12 +11,10 @@ LOGGER = logging.getLogger(__name__)
 
 _CHECK_NAN_OR_INF = False
 
-def get_step_fn_hint(model, loss_fn, optimizer=None, training=True,
-                     hint_lambda=1, device='cuda'):
+def get_step_fn_hint(model, cl_loss_fn, hint_loss_fn, optimizer=None, training=True,
+                     hint_lambda=1, cl_lambda=1, device='cuda'):
     """Creates a step function for an Engine."""
     multilabel = True
-
-    hint_loss_fn = OutOfTargetSumLoss()
     grad_cam = create_grad_cam(model, device=device)
 
     def step_fn(unused_engine, data_batch):
@@ -56,7 +54,7 @@ def get_step_fn_hint(model, loss_fn, optimizer=None, training=True,
 
         # Compute classification loss
         labels = labels.float()
-        cl_loss = loss_fn(outputs, labels)
+        cl_loss = cl_loss_fn(outputs, labels)
 
         # Compute grad-cam
         n_diseases = masks.size(1)
@@ -66,16 +64,17 @@ def get_step_fn_hint(model, loss_fn, optimizer=None, training=True,
             grad_cam_attrs = calculate_attributions_for_labels(
                 grad_cam, images, range(n_diseases),
                 relu=True, create_graph=True,
+                resize=True, norm=True,
             )
-            # shape: (batch_size, n_diseases, height, width)
+            # shape: (batch_size, n_diseases, layer-height, layer-width)
 
         images.requires_grad = False
 
         # Compute hint_loss
-        hint_loss = hint_loss_fn(grad_cam_attrs, masks) # shape: 1
+        hint_loss = hint_loss_fn(grad_cam_attrs, masks.float()) # shape: 1
 
         # Compute total loss
-        total_loss = cl_loss + hint_lambda * hint_loss
+        total_loss = cl_lambda * cl_loss + hint_lambda * hint_loss
 
         if training:
             total_loss.backward()
@@ -84,6 +83,11 @@ def get_step_fn_hint(model, loss_fn, optimizer=None, training=True,
         if multilabel:
             # NOTE: multilabel metrics assume output is sigmoided
             outputs = torch.sigmoid(outputs)
+
+        # NOTE: If resize=False, resize manually,
+        # as metrics assume heatmaps are the same size as the image
+        # image_size = masks.size()[-2:]
+        # grad_cam_attrs = resize(grad_cam_attrs, image_size)
 
         if _CHECK_NAN_OR_INF:
             if total_loss.isnan().any() or total_loss.isinf().any():

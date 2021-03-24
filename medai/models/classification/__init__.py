@@ -70,6 +70,13 @@ def create_cnn(model_name=None, allow_deprecated=False, **kwargs):
     return model
 
 
+def find_cnn_name_in_run_name(run_name):
+    for model_name in AVAILABLE_CLASSIFICATION_MODELS:
+        if f'_{model_name}_' in run_name:
+            return model_name
+    return 'precnn'
+
+
 def get_last_layer(model):
     """Returns the last layer of a model, to be used for Grad-CAM."""
     if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):

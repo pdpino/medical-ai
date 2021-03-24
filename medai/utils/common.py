@@ -66,7 +66,7 @@ def tensor_to_range01(arr, eps=1e-8):
     # arr shape: *, height, width
 
     shape = arr.size()
-    flatten = arr.view(*shape[:-2], -1)
+    flatten = arr.view(*shape[:-2], -1).detach()
     # shape: *, height*width
 
     arr_min = flatten.min(-1)[0]

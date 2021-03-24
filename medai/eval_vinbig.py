@@ -6,7 +6,7 @@ import torch
 from ignite.engine import Engine
 
 from medai.datasets import prepare_data_classification
-from medai.losses import get_loss_function
+from medai.losses import get_loss_function, get_detection_hint_loss
 from medai.metrics import save_results
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import attach_mAP_coco
@@ -28,6 +28,7 @@ def evaluate_model(run_name,
                    model,
                    dataloader,
                    task='det',
+                   hint_loss_name='oot',
                    hint_lambda=1,
                    n_epochs=1,
                    debug=True,
@@ -37,8 +38,8 @@ def evaluate_model(run_name,
         return {}
 
     LOGGER.info('Evaluating model in %s...', dataloader.dataset.dataset_type)
-    loss = get_loss_function('wbce')
-    loss = loss.to(device)
+    cl_loss_fn = get_loss_function('wbce').to(device)
+    hint_loss_fn = get_detection_hint_loss(hint_loss_name).to(device)
 
     labels = dataloader.dataset.labels
     multilabel = dataloader.dataset.multilabel
@@ -46,7 +47,8 @@ def evaluate_model(run_name,
     get_step_fn = get_step_fn_hint
 
     engine = Engine(get_step_fn(model,
-                                loss,
+                                cl_loss_fn,
+                                hint_loss_fn,
                                 training=False,
                                 hint_lambda=hint_lambda,
                                 device=device,
@@ -106,6 +108,7 @@ def evaluate_run(run_name,
     other_train_kwargs = metadata['other_train_kwargs']
     eval_kwargs = {
         'hint_lambda': other_train_kwargs['hint_lambda'],
+        'hint_loss_name': other_train_kwargs['hint_loss_name'],
         'task': task,
         'device': device,
         'n_epochs': n_epochs,

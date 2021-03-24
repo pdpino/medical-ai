@@ -9,17 +9,22 @@ from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
 from medai.datasets import prepare_data_classification
-from medai.losses import get_loss_function
+from medai.losses import (
+    get_loss_function,
+    get_detection_hint_loss,
+    AVAILABLE_HINT_LOSSES,
+)
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import (
     attach_mAP_coco,
     attach_metrics_iox,
     attach_mse,
 )
-from medai.models.classification import create_cnn
+from medai.models.classification import create_cnn, find_cnn_name_in_run_name
 from medai.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
+    load_compiled_model_classification,
     save_metadata,
 )
 from medai.training.detection import get_step_fn_hint
@@ -42,8 +47,9 @@ from medai.utils.handlers import (
 LOGGER = logging.getLogger('medai.det.train')
 
 _DEFAULT_PRINT_METRICS = [
-    'cl_loss', 'hint_loss', 'roc_auc', 'mAP', 'iou',
+    'cl_loss', 'hint_loss', 'roc_auc',
     'mse-total',
+    'mAP', 'iou',
 ]
 
 
@@ -61,9 +67,11 @@ def train_model(run_name,
                 train_dataloader,
                 val_dataloader,
                 n_epochs=1,
+                hint_loss_name='oot',
                 early_stopping=True,
                 early_stopping_kwargs={},
                 hint_lambda=1,
+                cl_lambda=1,
                 lr_sch_metric='loss',
                 debug=True,
                 dryrun=False,
@@ -86,17 +94,19 @@ def train_model(run_name,
     multilabel = True
 
     # Prepare loss
-    loss = get_loss_function('wbce')
-    loss = loss.to(device)
+    cl_loss_fn = get_loss_function('wbce').to(device)
+    hint_loss_fn = get_detection_hint_loss(hint_loss_name).to(device)
 
     # Choose step_fn
     get_step_fn = get_step_fn_hint
 
     # Create validator engine
     validator = Engine(get_step_fn(model,
-                                   loss,
+                                   cl_loss_fn,
+                                   hint_loss_fn,
                                    training=False,
                                    hint_lambda=hint_lambda,
+                                   cl_lambda=cl_lambda,
                                    device=device,
                                    ))
     attach_metrics_classification(validator, labels,
@@ -109,10 +119,12 @@ def train_model(run_name,
 
     # Create trainer engine
     trainer = Engine(get_step_fn(model,
-                                 loss,
+                                 cl_loss_fn,
+                                 hint_loss_fn,
                                  optimizer=optimizer,
                                  training=True,
                                  hint_lambda=hint_lambda,
+                                 cl_lambda=cl_lambda,
                                  device=device,
                                  ))
     attach_metrics_classification(trainer, labels,
@@ -175,6 +187,7 @@ def train_model(run_name,
 def train_from_scratch(run_name,
                        shuffle=False,
                        image_format='RGB',
+                       cnn_pretrained=None,
                        cnn_name='resnet-50',
                        dropout=0,
                        imagenet=True,
@@ -184,6 +197,7 @@ def train_from_scratch(run_name,
                        max_samples=None,
                        image_size=512,
                        print_metrics=None,
+                       hint_loss_name='oot',
                        lr=1e-4,
                        weight_decay=0,
                        labels=None,
@@ -191,6 +205,7 @@ def train_from_scratch(run_name,
                        norm_by_sample=False,
                        n_epochs=10,
                        hint_lambda=1,
+                       cl_lambda=1,
                        early_stopping=True,
                        early_stopping_kwargs={},
                        lr_sch_metric='loss',
@@ -222,20 +237,27 @@ def train_from_scratch(run_name,
     # Create run name
     run_name = f'{run_name}_{dataset_name}'
 
-    run_name += f'_{cnn_name}'
+    if cnn_pretrained:
+        run_name += f'_precnn_{find_cnn_name_in_run_name(cnn_pretrained)}'
+    else:
+        run_name += f'_{cnn_name}'
 
-    run_name += f'_hint-{hint_lambda}'
+    run_name += f'_hint-lmb{hint_lambda}'
+    if cl_lambda != 1:
+        run_name += f'-{cl_lambda}'
+    run_name += f'-{hint_loss_name}'
 
-    if not imagenet:
-        run_name += '_noig'
-    if cnn_pooling not in ('avg', 'mean'):
-        run_name += f'_g{cnn_pooling}'
-    if dropout != 0:
-        run_name += f'_drop{dropout}'
-    if freeze:
-        run_name += '_frz'
-    if fc_layers and len(fc_layers) > 0:
-        run_name += '_fc' + '-'.join(str(l) for l in fc_layers)
+    if not cnn_pretrained:
+        if not imagenet:
+            run_name += '_noig'
+        if cnn_pooling not in ('avg', 'mean'):
+            run_name += f'_g{cnn_pooling}'
+        if dropout != 0:
+            run_name += f'_drop{dropout}'
+        if freeze:
+            run_name += '_frz'
+        if fc_layers and len(fc_layers) > 0:
+            run_name += '_fc' + '-'.join(str(l) for l in fc_layers)
     if oversample:
         run_name += '_os'
         if oversample_ratio is not None:
@@ -309,17 +331,29 @@ def train_from_scratch(run_name,
                                                    )
     val_dataloader = prepare_data_classification(dataset_type='val', **dataset_kwargs)
 
-    # Create model
-    model_kwargs = {
-        'model_name': cnn_name,
-        'labels': train_dataloader.dataset.labels,
-        'imagenet': imagenet,
-        'freeze': freeze,
-        'gpool': cnn_pooling,
-        'fc_layers': fc_layers,
-        'dropout': dropout,
-    }
-    model = create_cnn(**model_kwargs).to(device)
+    # Create CNN
+    if cnn_pretrained:
+        # Load pretrained
+        # TODO: pass (debug, task, etc) parameters
+        compiled_cnn = load_compiled_model_classification(cnn_pretrained,
+                                                          debug=False,
+                                                          device=device,
+                                                          task='cls',
+                                                          multiple_gpu=multiple_gpu,
+                                                          )
+        model = compiled_cnn.model
+        cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
+    else:
+        cnn_kwargs = {
+            'model_name': cnn_name,
+            'labels': train_dataloader.dataset.labels,
+            'imagenet': imagenet,
+            'freeze': freeze,
+            'gpool': cnn_pooling,
+            'fc_layers': fc_layers,
+            'dropout': dropout,
+        }
+        model = create_cnn(**cnn_kwargs).to(device)
 
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
@@ -344,16 +378,19 @@ def train_from_scratch(run_name,
         'early_stopping': early_stopping,
         'early_stopping_kwargs': early_stopping_kwargs,
         'lr_sch_metric': lr_sch_metric,
+        'cl_lambda': cl_lambda,
         'hint_lambda': hint_lambda,
+        'hint_loss_name': hint_loss_name,
     }
 
 
     # Save model metadata
     metadata = {
-        'model_kwargs': model_kwargs,
+        'model_kwargs': cnn_kwargs,
         'opt_kwargs': opt_kwargs,
         'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
         'hparams': {
+            'pretrained_cnn': cnn_pretrained,
             'batch_size': batch_size,
         },
         'other_train_kwargs': other_train_kwargs,
@@ -407,10 +444,18 @@ def parse_args():
     #                     help='Use HINT training')
     parser.add_argument('--hint-lambda', type=float, default=1,
                         help='Factor to multiply hint-loss')
+    parser.add_argument('--cl-lambda', type=float, default=1,
+                        help='Factor to multiply CL-loss')
     parser.add_argument('--seed', type=int, default=1234,
                         help='Set a seed (initial run only)')
     parser.add_argument('-wd', '--weight-decay', type=float, default=0,
                         help='Weight decay passed to the optimizer')
+    parser.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
+                        help='Run name of a pretrained CNN')
+
+    loss_group = parser.add_argument_group('Loss params')
+    loss_group.add_argument('--hint-loss-name', type=str, default='oot',
+                            choices=AVAILABLE_HINT_LOSSES, help='Loss to use with HINT')
 
 
     parsers.add_args_cnn(parser)
@@ -456,6 +501,7 @@ if __name__ == '__main__':
         shuffle=ARGS.shuffle,
         image_format=ARGS.image_format,
         cnn_name=ARGS.model,
+        cnn_pretrained=ARGS.cnn_pretrained,
         dropout=ARGS.dropout,
         imagenet=not ARGS.no_imagenet,
         freeze=ARGS.freeze,
@@ -464,12 +510,14 @@ if __name__ == '__main__':
         max_samples=ARGS.max_samples,
         image_size=ARGS.image_size,
         print_metrics=ARGS.print_metrics,
+        hint_loss_name=ARGS.hint_loss_name,
         lr=ARGS.learning_rate,
         weight_decay=ARGS.weight_decay,
         batch_size=ARGS.batch_size,
         norm_by_sample=ARGS.norm_by_sample,
         n_epochs=ARGS.epochs,
         hint_lambda=ARGS.hint_lambda,
+        cl_lambda=ARGS.cl_lambda,
         early_stopping=ARGS.early_stopping,
         early_stopping_kwargs=ARGS.early_stopping_kwargs,
         lr_sch_metric=ARGS.lr_metric,

@@ -10,12 +10,25 @@ from medai.utils import duration_to_str
 LOGGER = logging.getLogger(__name__)
 
 
+_shorter_names = {
+    'roc_auc': 'roc',
+    'cl_loss': 'cl',
+    'hint_loss': 'hint',
+    'mse-total': 'mse-t',
+    'mse-pos': 'mse-p',
+    'mse-neg': 'mse-n',
+}
+
+def _shorten(metric_name):
+    return _shorter_names.get(metric_name, metric_name)
+
+
 def _prettify(value):
     """Prettify a metric value."""
     if value is None:
         return -1
     if isinstance(value, numbers.Number):
-        return str(round(value, 4))
+        return str(round(value, 3))
     return value
 
 
@@ -55,14 +68,14 @@ def attach_log_metrics(trainer,
 
         # Log to stdout
         metrics_str = ', '.join(
-            f'{metric} {_prettify(train_metrics.get(metric))} {_prettify(val_metrics.get(metric))}'
-            for metric in print_metrics
+            f'{_shorten(m)} {_prettify(train_metrics.get(m))} {_prettify(val_metrics.get(m))}'
+            for m in print_metrics
         )
 
         duration = duration_to_str(timer._elapsed()) # pylint: disable=protected-access
 
         logger.info(
-            'Finished epoch %d/%d, %s, %s',
+            'Epoch %d/%d, %s, %s',
             epoch, max_epochs, metrics_str, duration,
         )
 

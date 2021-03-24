@@ -44,7 +44,9 @@ def create_grad_cam(model, device='cuda', multiple_gpu=False):
 
 
 def calculate_attributions(grad_cam, images, label_index,
-                           relu=True, create_graph=False):
+                           relu=True, create_graph=False,
+                           resize=True, norm=True,
+                           ):
     """Calculate grad-cam attributions for a batch of images.
 
     Args:
@@ -54,33 +56,32 @@ def calculate_attributions(grad_cam, images, label_index,
     Returns:
         attributions, tensor of shape (bs, height, width)
     """
-    image_size = images.size()[-2:]
-
     attributions = grad_cam.attribute(
         images, label_index,
         relu_attributions=relu, create_graph=create_graph,
     )
     # shape: batch_size, 1, layer_h, layer_w
 
-    attributions = interpolate(attributions, image_size)
-    # shape: batch_size, 1, h, w
+    if resize:
+        image_size = images.size()[-2:]
+        attributions = interpolate(attributions, image_size)
+        # shape: batch_size, 1, h, w
 
-    attributions = tensor_to_range01(attributions)
-    # shape: batch_size, 1, h, w
-
-    attributions = attributions.squeeze(1)
-    # shape: batch_size, h, w
+    if norm:
+        attributions = tensor_to_range01(attributions)
+        # shape: batch_size, 1, h, w
 
     return attributions
 
 
 def calculate_attributions_for_labels(grad_cam, images, labels, **kwargs):
     """Calls calculate_attributions() for multiple labels,
-    and stack the results."""
+    and stack/cat the results."""
     if isinstance(labels, int):
         labels = range(labels)
 
-    return torch.stack([
+    # shape: bs, n_labels, height, width
+    return torch.cat([
         calculate_attributions(grad_cam, images, index, **kwargs) # (bs, h, w)
         for index, _ in enumerate(labels)
     ], dim=1)
