@@ -574,8 +574,6 @@ def parse_args():
     loss_group.add_argument('-l', '--loss-name', type=str, default=None,
                             choices=AVAILABLE_LOSSES,
                             help='Loss to use')
-    loss_group.add_argument('-wd', '--weight-decay', type=float, default=0,
-                            help='Weight decay passed to the optimizer')
     loss_group.add_argument('--focal-alpha', type=float, default=0.75, help='Focal alpha param')
     loss_group.add_argument('--focal-gamma', type=float, default=2, help='Focal gamma param')
     loss_group.add_argument('--bce-pos-weight', action='store_true', help='Use pos weights in BCE')

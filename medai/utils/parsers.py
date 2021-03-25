@@ -89,6 +89,8 @@ def add_args_lr_sch(parser, lr=0.0001, patience=5, factor=0.5, metric='loss'):
                           help='Patience value for LR-scheduler')
     lr_group.add_argument('--lr-factor', type=float, default=factor,
                           help='Factor to multiply the LR on each update')
+    lr_group.add_argument('-wd', '--weight-decay', type=float, default=0,
+                          help='Weight decay passed to the optimizer')
 
 
 def build_args_lr_sch_(args):

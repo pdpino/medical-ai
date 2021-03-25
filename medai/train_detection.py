@@ -369,7 +369,6 @@ def train_from_scratch(run_name,
         # TODO: use DistributedDataParallel instead
         model = nn.DataParallel(model)
 
-
     # Create optimizer
     opt_kwargs = {
         'lr': lr,
@@ -460,8 +459,6 @@ def parse_args():
                         help='Factor to multiply CL-loss')
     parser.add_argument('--seed', type=int, default=1234,
                         help='Set a seed (initial run only)')
-    parser.add_argument('-wd', '--weight-decay', type=float, default=0,
-                        help='Weight decay passed to the optimizer')
     parser.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                         help='Run name of a pretrained CNN')
 

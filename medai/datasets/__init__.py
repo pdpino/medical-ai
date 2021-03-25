@@ -89,6 +89,9 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         LOGGER.warning('Split is not available: %s/%s', dataset_name, dataset_type)
         return None
 
+    if batch_size is None:
+        LOGGER.warning('Loading data with batch_size=None')
+
     assert image_size is None or isinstance(image_size, (tuple, list)), (
         f'Image size must be a tuple, list, or None, got {image_size}'
     )

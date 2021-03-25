@@ -14,6 +14,7 @@ _shorter_names = {
     'roc_auc': 'roc',
     'cl_loss': 'cl',
     'hint_loss': 'hint',
+    'seg_loss': 'seg',
     'mse-total': 'mse-t',
     'mse-pos': 'mse-p',
     'mse-neg': 'mse-n',

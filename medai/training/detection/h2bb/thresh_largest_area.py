@@ -1,8 +1,4 @@
-from collections import defaultdict
-import logging
-import torch
 import numpy as np
-import mahotas.polygon
 import rasterio.features
 from shapely.geometry import Polygon
 
