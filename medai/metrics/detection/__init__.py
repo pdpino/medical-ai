@@ -15,10 +15,9 @@ from medai.utils.metrics import attach_metric_for_labels
 
 def _extract_for_mAP(output):
     image_names = output['image_fnames']
-    labels_pred = output['pred_labels']
-    heatmaps = output['activations']
+    predictions = output['coco_predictions']
 
-    return image_names, labels_pred, heatmaps
+    return image_names, predictions
 
 
 def attach_mAP_coco(engine, dataloader, run_name, debug=True, task='det', device='cuda'):

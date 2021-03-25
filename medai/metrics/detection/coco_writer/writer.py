@@ -3,12 +3,21 @@ import os
 from medai.utils.files import get_results_folder
 
 
-def get_outputs_fpath(run_name, dataset_type, task='det', debug=True, prefix='temp'):
+def get_outputs_fpath(run_name, dataset_type, task='det', debug=True,
+                      prefix='temp', suffix=None):
     folder = get_results_folder(run_name,
                                 task=task,
                                 debug=debug,
                                 save_mode=True)
-    path = os.path.join(folder, f'{prefix}-outputs-{dataset_type}.csv')
+
+    filename = '-'.join(
+        s
+        for s in [prefix, f'outputs-{dataset_type}', suffix]
+        if s
+    )
+    # filename is in the form: '{prefix}-outputs-{dtype}-suffix.csv'
+
+    path = os.path.join(folder, f'{filename}.csv')
 
     return path
 

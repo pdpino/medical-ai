@@ -3,7 +3,6 @@ import pandas as pd
 from ignite.metrics import Metric
 
 from medai.metrics.detection.coco_map.coco_wrapper import VinBigDataEval
-from medai.utils.shapes import heatmap_to_bb
 
 LOGGER = logging.getLogger(__name__)
 
@@ -11,15 +10,11 @@ _ASSERT_SAME_IMAGES = False
 
 class MAPCocoMetric(Metric):
     """Mean Average-precision (COCO-like) metric."""
-    def __init__(self, gt_df, writer, donotcompute=False, cls_thresh=0.3, **kwargs):
+    def __init__(self, gt_df, writer, donotcompute=False, **kwargs):
         self.csv_writer = writer
 
         # FIXME: using this for test subset, to avoid calculation of the metric
         self.donotcompute = donotcompute
-
-        # TODO: pass this as param??
-        self.cls_thresh = cls_thresh
-        self.heat_thresh = 0.5
 
         # Create eval-object
         self.vineval = VinBigDataEval(gt_df)
@@ -31,43 +26,16 @@ class MAPCocoMetric(Metric):
 
         self.csv_writer.reset()
 
-    def _iterate_predictions(self, output):
-        for image_name, preds, heatmaps in zip(*output):
-            # preds shape: (n_diseases,)
-            # heatmaps shape: (n_diseases, height, width)
-
-            predictions = []
-            for disease_idx, (pred, heatmap) in enumerate(zip(preds, heatmaps)):
-                # pred shape: 1
-                # heatmap shape: (height, width)
-                score = pred.item()
-                if score >= self.cls_thresh:
-                    bb = heatmap_to_bb(heatmap, self.heat_thresh)
-                    if bb is not None:
-                        predictions.append((disease_idx, score, *bb))
-                    else:
-                        # TODO: what to do here?
-                        pass
-
-            if len(predictions) == 0:
-                predictions = [
-                    (14, 1, 0, 0, 1, 1), # Predicts no-finding
-                ]
-
-            yield (image_name, predictions)
-
 
     def update(self, output):
         """Updates its internal count.
 
         Args:
-            output: tuple of (image_names, pred_labels, heatmaps),
-
-            image_names: list of str, shape (batch_size,)
-            pred_labels: tensor of predictions (sigmoided), shape (batch_size, n_diseases)
-            heatmaps: tensor of shape (batch_size, n_diseases, height, width)
+            output: tuple of (image_names, coco_predictions),
         """
-        self.csv_writer.write(self._iterate_predictions(output))
+        image_names, predictions = output
+
+        self.csv_writer.write(zip(image_names, predictions))
 
 
     def compute(self):

@@ -2,6 +2,7 @@
 from medai.models.classification import AVAILABLE_CLASSIFICATION_MODELS
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.utils import parse_str_or_int
+from medai.training.detection.h2bb import AVAILABLE_H2BB_METHODS
 
 # FIXME: this module (medai.utils) imports from medai.models
 
@@ -219,3 +220,21 @@ def build_args_sampling_(args):
         args.oversample = parse_str_or_int(args.oversample)
     if args.undersample is not None:
         args.undersample = parse_str_or_int(args.undersample)
+
+
+def add_args_h2bb(parser):
+    h2bb_group = parser.add_argument_group('H2BB params')
+    h2bb_group.add_argument('--h2bb-method', type=str, default='thr-largarea',
+                            choices=AVAILABLE_H2BB_METHODS, help='Heatmap to BB method')
+    h2bb_group.add_argument('--cls-thresh', type=float, default=0.3,
+                            help='CLS threshold')
+    h2bb_group.add_argument('--heat-thresh', type=float, default=0.8,
+                            help='Heatmap threshold')
+
+def build_args_h2bb_(args):
+    args.h2bb_method_name = args.h2bb_method
+    args.h2bb_method_kwargs = {
+        'cls_thresh': args.cls_thresh,
+        'heat_thresh': args.heat_thresh,
+    }
+    args.h2bb_suffix = f'{args.h2bb_method_name}-{args.cls_thresh}-{args.heat_thresh}'

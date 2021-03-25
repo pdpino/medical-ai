@@ -28,6 +28,7 @@ from medai.models.checkpoint import (
     save_metadata,
 )
 from medai.training.detection import get_step_fn_hint
+from medai.training.detection.h2bb import get_h2bb_method
 from medai.tensorboard import TBWriter
 from medai.utils import (
     get_timestamp,
@@ -72,6 +73,8 @@ def train_model(run_name,
                 early_stopping_kwargs={},
                 hint_lambda=1,
                 cl_lambda=1,
+                h2bb_method_name=None,
+                h2bb_method_kwargs={},
                 lr_sch_metric='loss',
                 debug=True,
                 dryrun=False,
@@ -100,10 +103,14 @@ def train_model(run_name,
     # Choose step_fn
     get_step_fn = get_step_fn_hint
 
+    # Choose h2bb method
+    h2bb_method = get_h2bb_method(h2bb_method_name, h2bb_method_kwargs)
+
     # Create validator engine
     validator = Engine(get_step_fn(model,
                                    cl_loss_fn,
                                    hint_loss_fn,
+                                   h2bb_method=h2bb_method,
                                    training=False,
                                    hint_lambda=hint_lambda,
                                    cl_lambda=cl_lambda,
@@ -121,6 +128,7 @@ def train_model(run_name,
     trainer = Engine(get_step_fn(model,
                                  cl_loss_fn,
                                  hint_loss_fn,
+                                 h2bb_method=h2bb_method,
                                  optimizer=optimizer,
                                  training=True,
                                  hint_lambda=hint_lambda,
@@ -210,6 +218,8 @@ def train_from_scratch(run_name,
                        early_stopping_kwargs={},
                        lr_sch_metric='loss',
                        lr_sch_kwargs={},
+                       h2bb_method_name=None,
+                       h2bb_method_kwargs={},
                        frontal_only=False,
                        oversample=False,
                        oversample_label=None,
@@ -381,6 +391,8 @@ def train_from_scratch(run_name,
         'cl_lambda': cl_lambda,
         'hint_lambda': hint_lambda,
         'hint_loss_name': hint_loss_name,
+        'h2bb_method_name': h2bb_method_name,
+        'h2bb_method_kwargs': h2bb_method_kwargs,
     }
 
 
@@ -466,6 +478,7 @@ def parse_args():
     parsers.add_args_early_stopping(parser, metric='roc_auc')
     parsers.add_args_lr_sch(parser, lr=0.0001, metric='roc_auc', patience=3)
     # REVIEW: use mAP as metric??
+    parsers.add_args_h2bb(parser)
 
     parsers.add_args_hw(parser, num_workers=2)
 
@@ -475,6 +488,7 @@ def parse_args():
     args.debug = not args.no_debug
 
     # Build params
+    parsers.build_args_h2bb_(args)
     parsers.build_args_sampling_(args)
     parsers.build_args_early_stopping_(args)
     parsers.build_args_lr_sch_(args)
@@ -522,6 +536,8 @@ if __name__ == '__main__':
         early_stopping_kwargs=ARGS.early_stopping_kwargs,
         lr_sch_metric=ARGS.lr_metric,
         lr_sch_kwargs=ARGS.lr_sch_kwargs,
+        h2bb_method_name=ARGS.h2bb_method_name,
+        h2bb_method_kwargs=ARGS.h2bb_method_kwargs,
         frontal_only=ARGS.frontal_only,
         oversample=ARGS.oversample is not None,
         oversample_label=ARGS.oversample,

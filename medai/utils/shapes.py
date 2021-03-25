@@ -112,54 +112,6 @@ def polygons_to_array(polygons, size):
 
 
 
-def heatmap_to_bb(mask, thresh=0.5):
-    """Receives a heatmap and return a BB with the largest area.
-
-    Thresholds the mask (i.e. makes it a binary mask), and find the largest polygon
-    with value=1.
-
-    Args:
-        mask -- tensor of shape (height, width), with values between 0 and 1.
-        thresh -- float to find polygons in the heatmap
-    Returns:
-        tuple of (xmin, ymin, xmax, ymax) representing the Bounding-box.
-        None if no polygons are found
-
-    TODO: maybe do not keep the largest one, but the strongest one (i.e. larger values)
-    (new function??)
-    """
-    # Apply threshold
-    mask = mask >= thresh
-
-    # To numpy
-    mask = mask.detach().cpu().numpy().astype(np.uint8)
-
-    # Obtain shapes
-    shapes = rasterio.features.shapes(mask)
-
-    # Get boundaries of the polygons found
-    boundaries = [
-        shape['coordinates']
-        for shape, value in shapes
-        if value == 1
-    ]
-    if len(boundaries) == 0:
-        return None
-
-    # Transform to shapely.Polygons
-    polygons = [
-        Polygon(bounds[0])
-        for bounds in boundaries
-    ]
-
-    # Sort and keep the largest
-    polygons = sorted(polygons, key=lambda p: p.area, reverse=True)
-    largest_polygon = polygons[0]
-
-    # Return the BB
-    return largest_polygon.bounds
-
-
 def calc_area(bbox):
     """Calculates the area of a bounding-box.
 

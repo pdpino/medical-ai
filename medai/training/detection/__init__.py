@@ -11,11 +11,15 @@ LOGGER = logging.getLogger(__name__)
 
 _CHECK_NAN_OR_INF = False
 
-def get_step_fn_hint(model, cl_loss_fn, hint_loss_fn, optimizer=None, training=True,
+def get_step_fn_hint(model, cl_loss_fn, hint_loss_fn, h2bb_method=None,
+                     optimizer=None, training=True,
                      hint_lambda=1, cl_lambda=1, device='cuda'):
     """Creates a step function for an Engine."""
     multilabel = True
     grad_cam = create_grad_cam(model, device=device)
+
+    if h2bb_method is None:
+        LOGGER.warning('h2bb_method is not defined, output will not be complete')
 
     def step_fn(unused_engine, data_batch):
         # Move inputs to GPU
@@ -97,15 +101,24 @@ def get_step_fn_hint(model, cl_loss_fn, hint_loss_fn, optimizer=None, training=T
                 )
                 raise Exception('Total loss is nan or inf')
 
+        outputs = outputs.detach()
+        grad_cam_attrs = grad_cam_attrs.detach()
+
+        if h2bb_method is not None:
+            predictions = h2bb_method(outputs, grad_cam_attrs)
+        else:
+            predictions = []
+
         return {
             'loss': total_loss.item(),
             'cl_loss': cl_loss.item(),
             'hint_loss': hint_loss.item(),
-            'pred_labels': outputs.detach(),
+            'pred_labels': outputs,
             'gt_labels': labels,
-            'activations': grad_cam_attrs.detach(),
+            'activations': grad_cam_attrs,
             'gt_activations': masks,
             'image_fnames': data_batch.image_fname,
+            'coco_predictions': predictions,
         }
 
     return step_fn

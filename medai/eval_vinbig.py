@@ -10,9 +10,10 @@ from medai.losses import get_loss_function, get_detection_hint_loss
 from medai.metrics import save_results
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import attach_mAP_coco
-# from medai.metrics.detection.coco_writer import attach_vinbig_writer
+from medai.metrics.detection.coco_writer import attach_vinbig_writer
 from medai.models.checkpoint import load_compiled_model_classification
 from medai.training.detection import get_step_fn_hint
+from medai.training.detection.h2bb import get_h2bb_method
 from medai.utils import (
     print_hw_options,
     parsers,
@@ -28,8 +29,11 @@ def evaluate_model(run_name,
                    model,
                    dataloader,
                    task='det',
+                   h2bb_method_name=None,
+                   h2bb_method_kwargs={},
                    hint_loss_name='oot',
                    hint_lambda=1,
+                   suffix=None,
                    n_epochs=1,
                    debug=True,
                    device='cuda'):
@@ -46,16 +50,20 @@ def evaluate_model(run_name,
 
     get_step_fn = get_step_fn_hint
 
+    # Choose h2bb method
+    h2bb_method = get_h2bb_method(h2bb_method_name, h2bb_method_kwargs)
+
     engine = Engine(get_step_fn(model,
                                 cl_loss_fn,
                                 hint_loss_fn,
+                                h2bb_method=h2bb_method,
                                 training=False,
                                 hint_lambda=hint_lambda,
                                 device=device,
                                ))
     attach_metrics_classification(engine, labels, multilabel=multilabel, device=device)
     attach_mAP_coco(engine, dataloader, run_name, task=task, debug=debug, device=device)
-    # attach_vinbig_writer(engine, dataloader, run_name, debug=debug, task=task)
+    attach_vinbig_writer(engine, dataloader, run_name, debug=debug, task=task, suffix=suffix)
 
     engine.run(dataloader, n_epochs)
 
@@ -68,7 +76,10 @@ def evaluate_run(run_name,
                  n_epochs=1,
                  task='det',
                  batch_size=None,
+                 h2bb_method_name=None,
+                 h2bb_method_kwargs={},
                  max_samples=None,
+                 suffix=None,
                  debug=True,
                  multiple_gpu=False,
                  # override=False,
@@ -98,6 +109,8 @@ def evaluate_run(run_name,
         dataset_kwargs['max_samples'] = max_samples
     if batch_size is not None:
         dataset_kwargs['batch_size'] = batch_size
+    dataset_kwargs['fallback_organs'] = True
+    dataset_kwargs['masks'] = True
 
     dataloaders = [
         prepare_data_classification(dataset_type=dataset_type, **dataset_kwargs)
@@ -107,8 +120,11 @@ def evaluate_run(run_name,
     # Evaluate
     other_train_kwargs = metadata['other_train_kwargs']
     eval_kwargs = {
+        'h2bb_method_name': h2bb_method_name,
+        'h2bb_method_kwargs': h2bb_method_kwargs,
+        'suffix': suffix,
         'hint_lambda': other_train_kwargs['hint_lambda'],
-        'hint_loss_name': other_train_kwargs['hint_loss_name'],
+        'hint_loss_name': other_train_kwargs.get('hint_loss_name', 'oot'),
         'task': task,
         'device': device,
         'n_epochs': n_epochs,
@@ -125,7 +141,7 @@ def evaluate_run(run_name,
             run_name, compiled_model.model, dataloader, **eval_kwargs,
         )
 
-    save_results(metrics, run_name, task=task, debug=debug)
+    save_results(metrics, run_name, task=task, debug=debug, suffix=suffix)
 
     if not quiet:
         pprint(metrics)
@@ -156,8 +172,11 @@ def parse_args():
                         help='Do not print results to stdout')
 
     parsers.add_args_hw(parser)
+    parsers.add_args_h2bb(parser)
 
     args = parser.parse_args()
+
+    parsers.build_args_h2bb_(args)
 
     return args
 
@@ -178,6 +197,9 @@ if __name__ == '__main__':
                  max_samples=ARGS.max_samples,
                  n_epochs=ARGS.epochs,
                  debug=not ARGS.no_debug,
+                 h2bb_method_name=ARGS.h2bb_method_name,
+                 h2bb_method_kwargs=ARGS.h2bb_method_kwargs,
+                 suffix=ARGS.h2bb_suffix,
                  # override=ARGS.override,
                  quiet=ARGS.quiet,
                  multiple_gpu=ARGS.multiple_gpu,
