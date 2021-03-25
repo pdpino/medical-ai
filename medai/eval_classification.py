@@ -7,7 +7,7 @@ from ignite.engine import Engine
 
 from medai.datasets import prepare_data_classification
 from medai.losses import get_loss_function
-from medai.metrics import save_results, are_results_saved
+from medai.metrics import save_results, are_results_saved, attach_losses
 from medai.metrics.classification import (
     attach_metrics_classification,
     attach_metric_cm,
@@ -54,6 +54,7 @@ def evaluate_model(run_name,
                                 multilabel=multilabel,
                                 device=device,
                                ))
+    attach_losses(engine, device=device)
     attach_metrics_classification(engine, labels, multilabel=multilabel, device=device)
     attach_metric_cm(engine, labels, multilabel=multilabel, device=device)
     attach_prediction_writer(

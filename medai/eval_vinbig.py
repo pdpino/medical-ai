@@ -7,7 +7,7 @@ from ignite.engine import Engine
 
 from medai.datasets import prepare_data_classification
 from medai.losses import get_loss_function, get_detection_hint_loss
-from medai.metrics import save_results
+from medai.metrics import save_results, attach_losses
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import attach_mAP_coco
 from medai.metrics.detection.coco_writer import attach_vinbig_writer
@@ -61,6 +61,7 @@ def evaluate_model(run_name,
                                 hint_lambda=hint_lambda,
                                 device=device,
                                ))
+    attach_losses(engine, device=device)
     attach_metrics_classification(engine, labels, multilabel=multilabel, device=device)
     attach_mAP_coco(engine, dataloader, run_name, task=task, debug=debug, device=device)
     attach_vinbig_writer(engine, dataloader, run_name, debug=debug, task=task, suffix=suffix)

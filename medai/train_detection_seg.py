@@ -1,6 +1,7 @@
 from torch import nn
 from ignite.engine import Engine
 
+from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import (
     attach_mAP_coco,
@@ -119,11 +120,11 @@ class TrainingDetectionSeg(TrainingProcess):
             seg_lambda=self.args.seg_lambda,
             device=self.device,
         ))
+        attach_losses(engine, ['cl_loss', 'seg_loss'], device=self.device)
         attach_metrics_classification(
             engine,
             labels,
             multilabel=multilabel,
-            seg=True,
             device=self.device,
         )
 

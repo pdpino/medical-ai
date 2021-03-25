@@ -14,6 +14,7 @@ from medai.losses import (
     get_detection_hint_loss,
     AVAILABLE_HINT_LOSSES,
 )
+from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import (
     attach_mAP_coco,
@@ -116,8 +117,10 @@ def train_model(run_name,
                                    cl_lambda=cl_lambda,
                                    device=device,
                                    ))
+    losses = ['cl_loss', 'hint_loss']
+    attach_losses(validator, losses=losses, device=device)
     attach_metrics_classification(validator, labels,
-                                  multilabel=multilabel, hint=True,
+                                  multilabel=multilabel,
                                   device=device)
     attach_mAP_coco(validator, val_dataloader, run_name, debug=debug, device=device)
     attach_metrics_iox(validator, labels, multilabel=multilabel, device=device)
@@ -135,8 +138,9 @@ def train_model(run_name,
                                  cl_lambda=cl_lambda,
                                  device=device,
                                  ))
+    attach_losses(trainer, losses=losses, device=device)
     attach_metrics_classification(trainer, labels,
-                                  multilabel=multilabel, hint=True,
+                                  multilabel=multilabel,
                                   device=device)
     attach_mAP_coco(trainer, train_dataloader, run_name, debug=debug, device=device)
     attach_metrics_iox(trainer, labels, multilabel=multilabel, device=device)

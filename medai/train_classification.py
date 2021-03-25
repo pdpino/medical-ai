@@ -14,6 +14,7 @@ from medai.datasets import (
     UP_TO_DATE_MASKS_VERSION,
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
+from medai.metrics import attach_losses
 from medai.metrics.classification import (
     attach_metrics_classification,
     attach_hint_saliency,
@@ -114,8 +115,10 @@ def train_model(run_name,
                                    diseases=labels,
                                    device=device,
                                    ))
+    losses = ['cl_loss', 'hint_loss'] if hint else []
+    attach_losses(validator, losses, device=device)
     attach_metrics_classification(validator, labels,
-                                  multilabel=multilabel, hint=hint,
+                                  multilabel=multilabel,
                                   device=device)
 
     # Create trainer engine
@@ -129,8 +132,9 @@ def train_model(run_name,
                                  diseases=labels,
                                  device=device,
                                  ))
+    attach_losses(trainer, losses, device=device)
     attach_metrics_classification(trainer, labels,
-                                  multilabel=multilabel, hint=hint,
+                                  multilabel=multilabel,
                                   device=device)
 
     if hint:

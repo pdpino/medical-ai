@@ -1,8 +1,10 @@
 import json
 import os
+import operator
 import logging
 import torch
 import pandas as pd
+from ignite.metrics import RunningAverage
 
 from medai.utils.files import get_results_folder
 
@@ -77,3 +79,18 @@ def load_rg_outputs(run_name, debug=True, free=False):
         outputs_path,
         keep_default_na=False, # Do not treat the empty-string as NaN value
     )
+
+
+def attach_losses(engine, losses=[], device='cuda'):
+    """Attaches losses to an engine.
+
+    Includes 'loss' by default.
+    """
+    losses = ['loss'] + losses
+
+    for loss_name in losses:
+        loss_metric = RunningAverage(
+            output_transform=operator.itemgetter(loss_name), alpha=1,
+            device=device,
+        )
+        loss_metric.attach(engine, loss_name)
