@@ -12,7 +12,7 @@ from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import attach_mAP_coco
 from medai.metrics.detection.coco_writer import attach_vinbig_writer
 from medai.models.checkpoint import load_compiled_model_classification
-from medai.training.detection import get_step_fn_hint
+from medai.training.detection.hint import get_step_fn_hint
 from medai.training.detection.h2bb import get_h2bb_method
 from medai.utils import (
     print_hw_options,

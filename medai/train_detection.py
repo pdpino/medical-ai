@@ -27,7 +27,7 @@ from medai.models.checkpoint import (
     load_compiled_model_classification,
     save_metadata,
 )
-from medai.training.detection import get_step_fn_hint
+from medai.training.detection.hint import get_step_fn_hint
 from medai.training.detection.h2bb import get_h2bb_method
 from medai.tensorboard import TBWriter
 from medai.utils import (
