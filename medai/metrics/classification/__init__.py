@@ -154,15 +154,19 @@ def _transform_remove_loss_and_round(output):
     return torch.round(y_pred), y_true
 
 
-def attach_metrics_classification(engine, labels, multilabel=True, hint=False, device='cuda'):
+def attach_metrics_classification(engine, labels, multilabel=True,
+                                  seg=False, hint=False, device='cuda'):
     """Attach classification metrics to an engine, to use during training.
 
     Note: most multilabel metrics are treated as binary,
         i.e. the metrics are computed separately for each label.
     """
+    # TODO: decouple loss-attachment (i.e. move to a different function)
     losses = ['loss']
     if hint:
         losses.extend(['cl_loss', 'hint_loss'])
+    elif seg:
+        losses.extend(['cl_loss', 'seg_loss'])
     for loss_name in losses:
         loss_metric = RunningAverage(
             output_transform=operator.itemgetter(loss_name), alpha=1,
