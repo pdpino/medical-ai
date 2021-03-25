@@ -34,6 +34,7 @@ class VinBigDataset(Dataset):
     """
     dataset_dir = DATASET_DIR
     organs = list(JSRT_ORGANS)
+    multilabel = True
 
     def __init__(self, dataset_type='train', max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
@@ -82,7 +83,7 @@ class VinBigDataset(Dataset):
 
         # Choose diseases names
         self.labels = list(VINBIG_DISEASES[:-1])
-        self.multilabel = True
+        self.seg_labels = self.labels
 
         # Keep only max_samples images
         available_images = split_images

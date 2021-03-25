@@ -9,7 +9,7 @@ from ignite.handlers import Timer
 
 from medai.datasets import (
     prepare_data_segmentation,
-    # AVAILABLE_SEGMENTATION_DATASETS,
+    AVAILABLE_SEGMENTATION_DATASETS,
 )
 from medai.metrics.segmentation import attach_metrics_segmentation
 from medai.models.segmentation import (
@@ -73,29 +73,32 @@ def train_model(run_name,
     model, optimizer, lr_scheduler = compiled_model.get_elements()
 
     labels = train_dataloader.dataset.seg_labels
+    multilabel = train_dataloader.dataset.multilabel
 
 
     validator = Engine(get_step_fn(model,
                                    training=False,
+                                   multilabel=multilabel,
                                    loss_weights=loss_weights,
                                    device=device,
                                    ))
-    attach_metrics_segmentation(validator, labels, multilabel=False)
+    attach_metrics_segmentation(validator, labels, multilabel=multilabel)
 
 
     trainer = Engine(get_step_fn(model,
                                  optimizer,
                                  training=True,
+                                 multilabel=multilabel,
                                  loss_weights=loss_weights,
                                  device=device,
                                  ))
-    attach_metrics_segmentation(trainer, labels, multilabel=False)
+    attach_metrics_segmentation(trainer, labels, multilabel=multilabel)
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, step=Events.EPOCH_COMPLETED)
 
-    base_metrics = ['loss', 'iou', 'dice']
+    base_metrics = ['loss', 'iou', 'dice', 'iobb']
     if print_metrics:
         print_metrics = base_metrics + print_metrics
     else:
@@ -206,6 +209,7 @@ def train_from_scratch(run_name,
                        lr_sch_metric='loss',
                        lr_sch_kwargs={},
                        batch_size=10,
+                       max_samples=None,
                        norm_by_sample=False,
                        n_epochs=10,
                        augment=False,
@@ -247,6 +251,9 @@ def train_from_scratch(run_name,
         'image_size': (image_size, image_size),
         'num_workers': num_workers,
         'norm_by_sample': norm_by_sample,
+        'image_format': 'L', # SCAN model needs 1-channel
+        'max_samples': max_samples,
+        'masks': True,
     }
     dataset_train_kwargs = {
         'shuffle': shuffle,
@@ -325,9 +332,9 @@ def parse_args():
 
     parser.add_argument('--resume', type=str, default=None,
                         help='If present, resume a previous run')
-    # parser.add_argument('-d', '--dataset', type=str, default=None,
-    #                     choices=AVAILABLE_SEGMENTATION_DATASETS,
-    #                     help='Choose dataset to train on')
+    parser.add_argument('-d', '--dataset', type=str, default=None,
+                        choices=AVAILABLE_SEGMENTATION_DATASETS,
+                        help='Choose dataset to train on')
     parser.add_argument('-wce', '--weight-ce', action='store_true',
                         help='If present add weights to the cross-entropy')
     parser.add_argument('-bs', '--batch-size', type=int, default=10,
@@ -342,6 +349,8 @@ def parse_args():
                         help='If is a non-debugging run')
     parser.add_argument('--seed', type=int, default=1234,
                         help='Set a seed (initial run only)')
+    parser.add_argument('--max-samples', type=int, default=None,
+                        help='Max samples to load (debugging)')
 
     # fcn_group = parser.add_argument_group('FCN params')
     # fcn_group.add_argument('-m', '--model', type=str, default=None,
@@ -370,7 +379,7 @@ def parse_args():
     # Shortcuts
     args.debug = not args.no_debug
 
-    if args.weight_ce:
+    if args.weight_ce and args.dataset == 'jsrt':
         # args.weight_ce = [0.1, 0.3, 0.3, 0.3]
         # args.weight_ce = [0.1, 0.4, 0.3, 0.3]
         args.weight_ce = [0.1, 0.6, 0.3, 0.3]
@@ -408,7 +417,9 @@ if __name__ == '__main__':
                     device=DEVICE,
                     )
     else:
-        train_from_scratch(get_timestamp(),
+        train_from_scratch(
+            get_timestamp(),
+            dataset_name=ARGS.dataset,
             shuffle=ARGS.shuffle,
             image_size=ARGS.image_size,
             print_metrics=ARGS.print_metrics,
@@ -419,6 +430,7 @@ if __name__ == '__main__':
             lr_sch_metric=ARGS.lr_metric,
             lr_sch_kwargs=ARGS.lr_sch_kwargs,
             batch_size=ARGS.batch_size,
+            max_samples=ARGS.max_samples,
             norm_by_sample=ARGS.norm_by_sample,
             n_epochs=ARGS.epochs,
             augment=ARGS.augment,

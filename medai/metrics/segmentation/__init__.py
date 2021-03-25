@@ -43,5 +43,8 @@ def attach_metrics_segmentation(engine, labels, multilabel=False, device='cuda')
     iou = IoU(reduce_sum=False, output_transform=transform, device=device)
     attach_metric_for_labels(engine, labels, iou, 'iou')
 
+    iobb = IoBB(reduce_sum=False, output_transform=transform, device=device)
+    attach_metric_for_labels(engine, labels, iobb, 'iobb')
+
     dice = Dice(output_transform=transform, device=device)
     attach_metric_for_labels(engine, labels, dice, 'dice')

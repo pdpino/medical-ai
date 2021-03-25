@@ -39,6 +39,7 @@ _RG_DATASETS = {
 
 _SEG_DATASETS = {
     'jsrt': JSRTDataset,
+    'vinbig': VinBigDataset,
 }
 
 AVAILABLE_CLASSIFICATION_DATASETS = list(_CL_DATASETS)
