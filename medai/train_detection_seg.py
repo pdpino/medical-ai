@@ -19,7 +19,7 @@ class TrainingDetectionSeg(TrainingProcess):
     base_print_metrics = ['cl_loss', 'seg_loss', 'roc_auc', 'iou', 'iobb', 'mAP']
     task = 'det'
 
-    allow_augmenting = False
+    allow_augmenting = True
     allow_sampling = False
 
     default_dataset = 'vinbig'
@@ -144,7 +144,7 @@ class TrainingDetectionSeg(TrainingProcess):
                            labels,
                            multilabel=multilabel,
                            device=self.device,
-                           only_tp=False,
+                           only='T',
                            heat_thresh=None,
                            )
 

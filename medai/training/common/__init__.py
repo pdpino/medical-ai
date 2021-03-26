@@ -1,6 +1,7 @@
 import abc
-import logging
 import argparse
+import logging
+import time
 
 import torch
 from torch import nn
@@ -22,7 +23,6 @@ from medai.utils import (
     print_hw_options,
     parsers,
     config_logging,
-    timeit_main,
     set_seed,
 )
 from medai.utils.handlers import (
@@ -162,8 +162,14 @@ class TrainingProcess(abc.ABC):
 
         print_hw_options(self.device, self.args)
 
+        start_time = time.time()
+
         self.train_from_scratch()
         # TODO: implement resume_training()
+
+        total_time = time.time() - start_time
+        self.logger.info('Total time: %s', duration_to_str(total_time))
+        self.logger.info('=' * 50)
 
     def _fill_run_name_sampling(self):
         if self.args.oversample:
