@@ -173,7 +173,7 @@ def add_args_cnn(parser):
                         help='If present, dont use imagenet pretrained weights')
     cnn_group.add_argument('-frz', '--freeze', action='store_true',
                         help='If present, freeze base cnn parameters (only train FC layers)')
-    cnn_group.add_argument('--cnn-pooling', type=str, default='max',
+    cnn_group.add_argument('--cnn-pooling', type=str, default='avg',
                         choices=AVAILABLE_POOLING_REDUCTIONS,
                         help='Choose reduction for global-pooling layer')
     cnn_group.add_argument('--fc-layers', nargs='+', type=int, default=(),

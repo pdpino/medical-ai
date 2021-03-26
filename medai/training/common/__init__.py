@@ -206,9 +206,15 @@ class TrainingProcess(abc.ABC):
         if self.args.image_size != 512:
             self.run_name += f'_size{self.args.image_size}'
 
+    def _fill_run_name_checkpoint(self):
+        self.run_name += f'_best-{self.checkpoint_metric}'
+
     @abc.abstractmethod
     def _fill_run_name_model(self):
         """Fill run_name with descriptive model information."""
+
+    def _fill_run_name_other(self):
+        """Fill run_name with extra info."""
 
     def _create_run_name(self):
         self.debug = self.args.debug
@@ -226,6 +232,10 @@ class TrainingProcess(abc.ABC):
 
         if self.allow_augmenting:
             self._fill_run_name_augmenting()
+
+        self._fill_run_name_checkpoint()
+
+        self._fill_run_name_other()
 
         self.run_name = self.run_name.replace(' ', '-')
 
@@ -344,7 +354,11 @@ class TrainingProcess(abc.ABC):
             self.logger.warning('Not using a LR-scheduler')
 
     def _fill_other_train_kwargs(self):
-        """Fill more key-value pairs in self.other_train_kwargs."""
+        """Fill more key-value pairs in self.other_train_kwargs.
+
+        This dict will keep any other argument used during training,
+        that will be necessary to recreate the run in the future (e.g. resuming training).
+        """
 
     def _prepare_other_train_kwargs(self):
         self.other_train_kwargs = {
@@ -379,7 +393,10 @@ class TrainingProcess(abc.ABC):
 
     def train_model(self):
         # Log initial info
-        self.logger.info('Training run: %s (debug=%s)', self.run_name, self.debug)
+        self.logger.info(
+            'Training run: %s (task=%s, debug=%s)',
+            self.run_name, self.task, self.debug,
+        )
         initial_epoch = self.compiled_model.get_current_epoch()
         if initial_epoch > 0:
             self.logger.info('Resuming from epoch: %s', initial_epoch)
@@ -439,7 +456,10 @@ class TrainingProcess(abc.ABC):
 
         self.tb_writer.close()
 
-        self.logger.info('Finished training: %s (debug=%s)', self.run_name, self.debug)
+        self.logger.info(
+            'Finished training: %s (task=%s, debug=%s)',
+            self.run_name, self.task, self.debug,
+        )
 
         return self.trainer.state.metrics, self.validator.state.metrics
 

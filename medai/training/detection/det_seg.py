@@ -4,7 +4,7 @@ import torch
 LOGGER = logging.getLogger(__name__)
 
 def get_step_fn_det_seg(model, cl_loss_fn, seg_loss_fn, h2bb_method,
-                        optimizer=None, training=True,
+                        optimizer=None, training=True, seg_only_diseases=False,
                         cl_lambda=1, seg_lambda=1,
                         device='cuda'):
     """Creates a step function for an Engine."""
@@ -39,6 +39,20 @@ def get_step_fn_det_seg(model, cl_loss_fn, seg_loss_fn, h2bb_method,
         # Compute segmentation loss
         gt_masks = gt_masks.float()
         seg_loss = seg_loss_fn(pred_masks, gt_masks)
+
+        if seg_only_diseases:
+            assert seg_loss.ndim == 4, 'Used seg_only_diseases, but reduction!=none in seg_loss'
+
+            seg_loss = seg_loss[(gt_labels == 1)]
+            # shape: n_positive_samples, height, width
+
+            if seg_loss.size(0) == 0:
+                seg_loss = seg_loss.sum()
+                # trick to keep seg_loss as 0 (if mean is used, will be nan)
+                # shape: 1
+            else:
+                seg_loss = seg_loss.mean()
+                # shape: 1
 
         # Compute total loss
         total_loss = cl_lambda * cl_loss + seg_lambda * seg_loss

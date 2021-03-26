@@ -25,17 +25,17 @@ class TrainingDetectionSeg(TrainingProcess):
     default_dataset = 'vinbig'
 
     # TODO: pick better metrics here?
-    key_metric = 'roc_auc'
+    key_metric = 'iou'
     default_es_metric = None
     default_lr_metric = None
-    checkpoint_metric = 'mAP'
+    checkpoint_metric = 'iou'
 
 
     def _add_additional_args(self, parser):
         parser.add_argument('-m', '--model', type=str, default=None, required=True,
                             choices=AVAILABLE_DETECTION_SEG_MODELS,
                             help='Choose model to use')
-        parser.add_argument('--cnn-pooling', type=str, default='max',
+        parser.add_argument('--cnn-pooling', type=str, default='avg',
                             choices=AVAILABLE_POOLING_REDUCTIONS,
                             help='Choose reduction for global-pooling layer')
 
@@ -44,6 +44,9 @@ class TrainingDetectionSeg(TrainingProcess):
         parser.add_argument('--cl-lambda', type=float, default=1,
                             help='Factor to multiply CL-loss')
 
+        parser.add_argument('--seg-only-diseases', action='store_true',
+                            help='If present, segment only diseases')
+
         parsers.add_args_h2bb(parser)
 
     def _build_additional_args(self, parser, args):
@@ -51,8 +54,7 @@ class TrainingDetectionSeg(TrainingProcess):
             parser.error('Image-format must be L')
 
         if args.dataset != 'vinbig':
-            parser.error('Only works with vinbig dataset')
-
+            parser.error('Only works with vinbig dataset (due to mAP metric)')
 
         parsers.build_args_h2bb_(args)
 
@@ -62,8 +64,11 @@ class TrainingDetectionSeg(TrainingProcess):
         if self.args.cnn_pooling not in ('avg', 'mean'):
             self.run_name += f'_g{self.args.cnn_pooling}'
 
+        if self.args.seg_only_diseases:
+            self.run_name += '_seg-only-dis'
+
     def _fill_dataset_kwargs(self):
-        self.dataset_kwargs['fallback_organs'] = True
+        self.dataset_kwargs['fallback_organs'] = not self.args.seg_only_diseases
         self.dataset_kwargs['masks'] = True
         self.dataset_kwargs['masks_version'] = 'v1'
 
@@ -85,13 +90,16 @@ class TrainingDetectionSeg(TrainingProcess):
         # d['seg_loss_name'] = self.args.seg_loss_name
         d['h2bb_method_name'] = self.args.h2bb_method_name
         d['h2bb_method_kwargs'] = self.args.h2bb_method_kwargs
+        d['seg_only_diseases'] = self.args.seg_only_diseases
 
         self.other_train_kwargs.update(d)
 
     def _build_common_for_engines(self):
         # Prepare loss
         cl_loss_fn = nn.BCEWithLogitsLoss().to(self.device)
-        seg_loss_fn = nn.BCEWithLogitsLoss().to(self.device)
+        seg_loss_fn = nn.BCEWithLogitsLoss(
+            reduction='none' if self.args.seg_only_diseases else 'mean'
+        ).to(self.device)
 
         # Choose h2bb method
         h2bb_method = get_h2bb_method(self.args.h2bb_method_name, self.args.h2bb_method_kwargs)
@@ -116,6 +124,7 @@ class TrainingDetectionSeg(TrainingProcess):
             h2bb_method,
             optimizer=self.optimizer if training else None,
             training=training,
+            seg_only_diseases=self.args.seg_only_diseases,
             cl_lambda=self.args.cl_lambda,
             seg_lambda=self.args.seg_lambda,
             device=self.device,
