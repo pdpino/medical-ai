@@ -180,7 +180,7 @@ def add_args_cnn(parser):
                         help='Choose sizes for FC layers at the end')
 
 
-def add_args_images(parser):
+def add_args_images(parser, image_format='RGB'):
     images_group = parser.add_argument_group('Images params')
     images_group.add_argument('--image-size', type=int, default=512,
                               help='Image size in pixels')
@@ -189,8 +189,8 @@ def add_args_images(parser):
     images_group.add_argument('--norm-by-sample', action='store_true',
                               help='If present, normalize each sample \
                                     (instead of using dataset stats)')
-    images_group.add_argument('--image-format', type=str, default='RGB', choices=['RGB', 'L'],
-                              help='Image format to use')
+    images_group.add_argument('--image-format', type=str, default=image_format,
+                              choices=['RGB', 'L'], help='Image format to use')
 
     return images_group
 

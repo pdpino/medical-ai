@@ -15,6 +15,7 @@ from medai.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
     save_metadata,
+    load_compiled_model_classification,
 )
 from medai.tensorboard import TBWriter
 from medai.utils import (
@@ -42,12 +43,15 @@ class TrainingProcess(abc.ABC):
     checkpoint_metric = None
     default_num_workers = 2
     prepare_data_fn = staticmethod(prepare_data_classification)
+    load_compiled_model_fn = staticmethod(load_compiled_model_classification)
 
     available_datasets = AVAILABLE_CLASSIFICATION_DATASETS
     default_dataset = 'cxr14'
 
     allow_augmenting = True
     allow_sampling = True
+
+    default_image_format = 'RGB'
 
 
     def __init__(self):
@@ -85,6 +89,8 @@ class TrainingProcess(abc.ABC):
 
         parser.add_argument('--seed', type=int, default=1234,
                             help='Set a seed (initial run only)')
+        parser.add_argument('--resume', type=str, default=None,
+                            help='If present, resume a previous run')
         parser.add_argument('-d', '--dataset', type=str, default=self.default_dataset,
                             choices=self.available_datasets,
                             help='Choose dataset to train on')
@@ -105,7 +111,7 @@ class TrainingProcess(abc.ABC):
         parser.add_argument('--shuffle', action='store_true', default=None,
                             help='Whether to shuffle or not the samples when training')
 
-        parsers.add_args_images(parser)
+        parsers.add_args_images(parser, image_format=self.default_image_format)
         parsers.add_args_lr_sch(
             parser,
             lr=0.0001,
@@ -164,8 +170,10 @@ class TrainingProcess(abc.ABC):
 
         start_time = time.time()
 
-        self.train_from_scratch()
-        # TODO: implement resume_training()
+        if self.args.resume:
+            self.resume_training()
+        else:
+            self.train_from_scratch()
 
         total_time = time.time() - start_time
         self.logger.info('Total time: %s', duration_to_str(total_time))
@@ -251,10 +259,10 @@ class TrainingProcess(abc.ABC):
 
         set_seed(self.args.seed)
 
+        self._prepare_dataset_kwargs()
         self._create_dataloaders()
 
         self._create_model()
-
         self._move_model_to_device()
 
         self._create_optimizer()
@@ -272,7 +280,45 @@ class TrainingProcess(abc.ABC):
             self.metadata,
         )
 
-        return self.train_model()
+        return self.train_model(**self.other_train_kwargs)
+
+    def _load_resumed_model(self):
+        self.compiled_model = self.load_compiled_model_fn(
+            self.run_name,
+            debug=self.debug,
+            device=self.device,
+            multiple_gpu=self.args.multiple_gpu,
+        )
+
+        self.metadata = self.compiled_model.metadata
+        self.model, self.optimizer, self.lr_scheduler = self.compiled_model.get_elements()
+
+    def resume_training(self):
+        # Create run_name attributes
+        self.debug = self.args.debug
+        self.run_name = self.args.resume
+
+        self._load_resumed_model()
+
+        # Set seed from metadata
+        seed = self.metadata.get('seed', None)
+        if seed is not None:
+            set_seed(seed)
+        else:
+            self.logger.warning('Seed not found in metadata')
+
+        # Retrieve dataset kwargs
+        self.dataset_kwargs = self.metadata.get('dataset_kwargs', {})
+        self.dataset_train_kwargs = self.metadata.get('dataset_train_kwargs', {})
+
+        # Override dataset_kwargs, if present
+        self._create_dataloaders()
+
+        # Retrieve other_train_kwargs
+        self.other_train_kwargs = self.metadata.get('other_train_kwargs', {})
+
+        # Train model
+        self.train_model(**self.other_train_kwargs)
 
     def _prepare_dataset_kwargs(self):
         """Create dataset_kwargs and dataset_train_kwargs."""
@@ -320,8 +366,6 @@ class TrainingProcess(abc.ABC):
         """Fill more key-value pairs in dataset_kwargs."""
 
     def _create_dataloaders(self):
-        self._prepare_dataset_kwargs()
-
         self.train_dataloader = self.prepare_data_fn(
             dataset_type='train',
             **self.dataset_kwargs,
@@ -397,7 +441,10 @@ class TrainingProcess(abc.ABC):
 
         save_metadata(self.metadata, self.run_name, task=self.task, debug=self.debug)
 
-    def train_model(self):
+    def train_model(self, early_stopping=True,
+                    early_stopping_kwargs={},
+                    lr_metric='loss',
+                    **other_train_kwargs):
         # Log initial info
         self.logger.info(
             'Training run: %s (task=%s, debug=%s)',
@@ -409,7 +456,7 @@ class TrainingProcess(abc.ABC):
 
         self._create_tb()
 
-        self._create_engines()
+        self._create_engines(**other_train_kwargs)
 
         # Create Timer to measure wall time between epochs
         timer = Timer(average=True)
@@ -439,15 +486,15 @@ class TrainingProcess(abc.ABC):
             dryrun=self.args.dryrun,
         )
 
-        if self.args.early_stopping:
-            attach_early_stopping(self.trainer, self.validator, **self.args.early_stopping_kwargs)
+        if early_stopping:
+            attach_early_stopping(self.trainer, self.validator, **early_stopping_kwargs)
 
         if self.lr_scheduler is not None:
             attach_lr_scheduler_handler(
                 self.lr_scheduler,
                 self.trainer,
                 self.validator,
-                self.args.lr_metric,
+                lr_metric,
             )
 
         # Train!
@@ -493,13 +540,13 @@ class TrainingProcess(abc.ABC):
         return []
 
     @abc.abstractmethod
-    def _create_engine(self, training, *args):
+    def _create_engine(self, training, *args, **other_train_kwargs):
         """Create an ignite Engine and attach metric handlers."""
 
-    def _create_engines(self):
+    def _create_engines(self, **other_train_kwargs):
         """Create self.trainer and self.validator."""
 
-        extra_args = self._build_common_for_engines()
+        extra_args = self._build_common_for_engines(**other_train_kwargs)
 
-        self.trainer = self._create_engine(True, *extra_args)
-        self.validator = self._create_engine(False, *extra_args)
+        self.trainer = self._create_engine(True, *extra_args, **other_train_kwargs)
+        self.validator = self._create_engine(False, *extra_args, **other_train_kwargs)

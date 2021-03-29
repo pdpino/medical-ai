@@ -49,6 +49,10 @@ def _get_latest_filepath(folder):
     if latest_epoch == -1:
         raise Exception('Model filepath not found: ', files)
 
+    LOGGER.debug(
+        'Loading from latest epoch: %d, out of epochs: %s',
+        latest_epoch, [f[0] for f in files],
+    )
     return os.path.join(folder, latest_fname)
 
 

@@ -7,11 +7,12 @@ from medai.metrics.detection import (
     attach_mAP_coco,
     attach_metrics_iox,
 )
+from medai.models.checkpoint import load_compiled_model_detection_seg
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
+from medai.models.detection import create_detection_seg_model, AVAILABLE_DETECTION_SEG_MODELS
 from medai.training.common import TrainingProcess
 from medai.training.detection.h2bb import get_h2bb_method
 from medai.training.detection.det_seg import get_step_fn_det_seg
-from medai.models.detection import create_detection_seg_model, AVAILABLE_DETECTION_SEG_MODELS
 from medai.utils import parsers
 
 class TrainingDetectionSeg(TrainingProcess):
@@ -19,10 +20,13 @@ class TrainingDetectionSeg(TrainingProcess):
     base_print_metrics = ['cl_loss', 'seg_loss', 'roc_auc', 'iou', 'iobb', 'mAP']
     task = 'det'
 
+    load_compiled_model_fn = staticmethod(load_compiled_model_detection_seg)
+
     allow_augmenting = True
     allow_sampling = False
 
     default_dataset = 'vinbig'
+    default_image_format = 'L'
 
     # TODO: pick better metrics here?
     key_metric = 'iou'
@@ -32,7 +36,7 @@ class TrainingDetectionSeg(TrainingProcess):
 
 
     def _add_additional_args(self, parser):
-        parser.add_argument('-m', '--model', type=str, default=None, required=True,
+        parser.add_argument('-m', '--model', type=str, default=None,
                             choices=AVAILABLE_DETECTION_SEG_MODELS,
                             help='Choose model to use')
         parser.add_argument('--cnn-pooling', type=str, default='avg',
@@ -56,7 +60,11 @@ class TrainingDetectionSeg(TrainingProcess):
         if args.dataset != 'vinbig':
             parser.error('Only works with vinbig dataset (due to mAP metric)')
 
+        if not args.resume and not args.model:
+            parser.error('Model is required')
+
         parsers.build_args_h2bb_(args)
+
 
     def _fill_run_name_model(self):
         self.run_name += f'_{self.args.model}'
@@ -90,7 +98,7 @@ class TrainingDetectionSeg(TrainingProcess):
         }
         self.model = create_detection_seg_model(**self.model_kwargs).to(self.device)
 
-    def _get_additional_other_train_kwargs(self):
+    def _fill_other_train_kwargs(self):
         d = dict()
         d['cl_lambda'] = self.args.cl_lambda
         d['seg_lambda'] = self.args.seg_lambda
@@ -101,19 +109,36 @@ class TrainingDetectionSeg(TrainingProcess):
 
         self.other_train_kwargs.update(d)
 
-    def _build_common_for_engines(self):
+    # pylint: disable=arguments-differ
+    def _build_common_for_engines(self,
+                                  seg_only_diseases=True,
+                                  h2bb_method_name=None,
+                                  h2bb_method_kwargs=None,
+                                  **unused_kwargs,
+                                  ):
+        self.logger.info(
+            'Using seg-only-dis=%s',
+            seg_only_diseases,
+        )
+
         # Prepare loss
         cl_loss_fn = nn.BCEWithLogitsLoss().to(self.device)
         seg_loss_fn = nn.BCEWithLogitsLoss(
-            reduction='none' if self.args.seg_only_diseases else 'mean'
+            reduction='none' if seg_only_diseases else 'mean'
         ).to(self.device)
 
         # Choose h2bb method
-        h2bb_method = get_h2bb_method(self.args.h2bb_method_name, self.args.h2bb_method_kwargs)
+        h2bb_method = get_h2bb_method(h2bb_method_name, h2bb_method_kwargs)
 
         return cl_loss_fn, seg_loss_fn, h2bb_method
 
-    def _create_engine(self, training, *args):
+    # pylint: disable=arguments-differ
+    def _create_engine(self, training, *args,
+                       seg_only_diseases=True,
+                       cl_lambda=1,
+                       seg_lambda=1,
+                       **unused_kwargs,
+                       ):
         labels = self.train_dataloader.dataset.labels
         multilabel = True
         assert self.train_dataloader.dataset.multilabel == multilabel, 'Dataset is not multilabel'
@@ -131,9 +156,9 @@ class TrainingDetectionSeg(TrainingProcess):
             h2bb_method,
             optimizer=self.optimizer if training else None,
             training=training,
-            seg_only_diseases=self.args.seg_only_diseases,
-            cl_lambda=self.args.cl_lambda,
-            seg_lambda=self.args.seg_lambda,
+            seg_only_diseases=seg_only_diseases,
+            cl_lambda=cl_lambda,
+            seg_lambda=seg_lambda,
             device=self.device,
         ))
         attach_losses(engine, ['cl_loss', 'seg_loss'], device=self.device)
