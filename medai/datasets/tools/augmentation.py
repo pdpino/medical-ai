@@ -1,6 +1,7 @@
 import logging
 import random
 import types
+import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 import matplotlib.pyplot as plt
@@ -170,6 +171,7 @@ class Augmentator(Dataset):
             'times': times,
             'new-total': len(self.indices),
             'original': len(self.dataset),
+            'enable-masks': self.augment_masks,
         }
         stats_str = ' '.join(f'{k}={v}' for k, v in stats.items())
         LOGGER.info('\tAugmenting %s: %s', _samples_info, stats_str)
@@ -197,7 +199,20 @@ class Augmentator(Dataset):
 
         apply_to_seg_mask = self.augment_masks and aug_method in _SPATIAL_TRANSFORMS
         if apply_to_seg_mask:
-            fields['masks'] = pre_transform_masks(item.masks)
+            if item.masks.ndim == 2:
+                n_masks = 1
+                fields['masks'] = pre_transform_masks(item.masks)
+            elif item.masks.ndim == 3:
+                # HACK: for datasets like VinBig, that return more than one mask,
+                # this special case is explictly written
+                # FIXME: could the performance be improved? 14 additional transformations
+                # are made (all in CPU).
+                n_masks = len(item.masks)
+                for i, mask in enumerate(item.masks):
+                    fields[f'masks-{i}'] = pre_transform_masks(mask)
+            else:
+                n_masks = -1
+                LOGGER.warning('Masks have ndim==%d', item.masks.ndim)
 
         # Apply transformation
         if aug_method is not None:
@@ -208,7 +223,19 @@ class Augmentator(Dataset):
         fields['image'] = post_transform(fields['image'])
 
         if apply_to_seg_mask:
-            fields['masks'] = post_transform_masks(fields['masks'])
+            if n_masks == 1:
+                fields['masks'] = post_transform_masks(fields['masks'])
+            elif n_masks > 1:
+                finished_masks = []
+                for i in range(n_masks):
+                    key = f'masks-{i}'
+                    finished_masks.append(post_transform_masks(fields[key]))
+                    del fields[key]
+
+                fields['masks'] = torch.stack(
+                    finished_masks,
+                    dim=0,
+                ).type(item.masks.type())
 
         return item._replace(**fields)
 
@@ -267,25 +294,32 @@ class Augmentator(Dataset):
 
         return labels_presence_aug_idxs
 
-    def plot_augmented_samples(self, sample_idx, masks=True):
+    def plot_augmented_samples(self, sample_idx, n_masks=1):
         """Utility function to plot augmented samples.
 
         The instance must have been created with dont_shuffle=True,
         so the samples are ordered!!
+
+        NOTE: For datasets like VinBig, that item.masks returned has an additional dimension,
+        (i.e. the disease dimension first: n_diseases, height, width), n_masks must be
+        explictly provided to account for this and plot all the masks. In the future, this
+        could be inferred from the dataset.
+        (At the moment, it can be infered from the item.masks.ndim, but the amount of masks
+        must be determined before accessing an item, to set n_rows properly).
         """
         assert not self._did_shuffle, 'The augmented dataset was shuffled!'
 
-        plot_masks = self.augment_masks and masks
+        should_plot_masks = self.augment_masks and n_masks >= 1
 
         # Amounts
         n_aug_methods = len(self._aug_fns)
         n_cols = n_aug_methods + 1
-        n_rows = 2 if plot_masks else 1
+        n_rows = 1 + n_masks if should_plot_masks else 1
 
         # Augmented sample idx
         idx = sample_idx * n_cols
 
-        plt.figure(figsize=(15, 5))
+        plt.figure(figsize=(n_cols*5, n_rows*5))
 
         item = self[idx]
         plt.subplot(n_rows, n_cols, 1)
@@ -293,10 +327,20 @@ class Augmentator(Dataset):
         plt.imshow(item.image[0], cmap='gray')
         plt.axis('off')
 
-        if plot_masks:
-            plt.subplot(n_rows, n_cols, n_cols + 1)
-            plt.imshow(item.masks)
+        def _plot_mask(mask, plot_index):
+            plt.subplot(n_rows, n_cols, plot_index)
+            plt.imshow(mask)
             plt.axis('off')
+
+        def _plot_item_masks(item, base_plot_index):
+            if item.masks.ndim == 2:
+                _plot_mask(item.masks, base_plot_index)
+            elif item.masks.ndim == 3:
+                for i, mask in enumerate(item.masks):
+                    _plot_mask(mask, base_plot_index + i*n_cols)
+
+        if should_plot_masks:
+            _plot_item_masks(item, n_cols + 1)
 
         for i, method in enumerate(list(self._aug_fns)):
             item = self[idx + 1 + i]
@@ -305,7 +349,5 @@ class Augmentator(Dataset):
             plt.imshow(item.image[0], cmap='gray')
             plt.axis('off')
 
-            if plot_masks:
-                plt.subplot(n_rows, n_cols, n_cols + i + 2)
-                plt.imshow(item.masks)
-                plt.axis('off')
+            if should_plot_masks:
+                _plot_item_masks(item, n_cols + i + 2)

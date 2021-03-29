@@ -3,6 +3,7 @@ import os
 import re
 import json
 import logging
+from functools import partial
 
 import torch
 from torch import nn
@@ -14,6 +15,7 @@ from ignite.handlers import Checkpoint, DiskSaver
 from medai.models.classification import create_cnn
 from medai.models.report_generation import create_decoder
 from medai.models.segmentation import create_fcn
+from medai.models.detection import create_detection_seg_model
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.checkpoint.compiled_model import CompiledModel
 from medai.utils.files import get_checkpoint_folder
@@ -89,14 +91,15 @@ def save_metadata(data, run_name, task, debug=True):
     return
 
 
-def load_compiled_model_classification(run_name,
-                                       debug=True,
-                                       device='cuda',
-                                       multiple_gpu=False,
-                                       task='cls',
-                                       ):
-    """Load a compiled classification model."""
-    assert task in ('cls', 'det'), 'Task not available'
+def load_compiled_model_base(run_name,
+                             debug=True,
+                             device='cuda',
+                             multiple_gpu=False,
+                             task='cls',
+                             constructor=None,
+                             ):
+    """Load a compiled model."""
+    assert constructor is not None
 
     # Folder contains all pertaining files
     folder = get_checkpoint_folder(run_name,
@@ -110,7 +113,7 @@ def load_compiled_model_classification(run_name,
     metadata = _load_meta(folder, run_name)
 
     # Create empty model and optimizer
-    model = create_cnn(allow_deprecated=True, **metadata['model_kwargs']).to(device)
+    model = constructor(allow_deprecated=True, **metadata['model_kwargs']).to(device)
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
         model = nn.DataParallel(model)
@@ -136,50 +139,23 @@ def load_compiled_model_classification(run_name,
     return compiled_model
 
 
-def load_compiled_model_segmentation(run_name,
-                                     debug=True,
-                                     device='cuda',
-                                     multiple_gpu=False,
-                                     ):
-    """Load a compiled segmentation model.
+load_compiled_model_classification = partial(
+    load_compiled_model_base,
+    constructor=create_cnn,
+)
 
-    NOTE: function copied from classification models
-    """
-    # Folder contains all pertaining files
-    folder = get_checkpoint_folder(run_name,
-                                   task='seg',
-                                   debug=debug,
-                                   save_mode=False,
-                                   assert_exists=True,
-                                   )
+load_compiled_model_segmentation = partial(
+    load_compiled_model_base,
+    task='seg',
+    constructor=create_fcn,
+)
 
-    # Load metadata
-    metadata = _load_meta(folder, run_name)
+load_compiled_model_detection_seg = partial(
+    load_compiled_model_base,
+    task='det',
+    constructor=create_detection_seg_model,
+)
 
-    # Create empty model and optimizer
-    model = create_fcn(**metadata['model_kwargs']).to(device)
-    if multiple_gpu:
-        # TODO: use DistributedDataParallel instead
-        model = nn.DataParallel(model)
-    optimizer = optim.Adam(model.parameters(), **metadata['opt_kwargs'])
-
-    # Create LR Scheduler
-    lr_scheduler_kwargs = metadata.get('lr_scheduler_kwargs', None)
-    if lr_scheduler_kwargs is not None:
-        lr_scheduler = ReduceLROnPlateau(optimizer, **lr_scheduler_kwargs)
-    else:
-        lr_scheduler = None
-
-    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
-
-    # Filepath for the latest checkpoint
-    filepath = _get_latest_filepath(folder)
-
-    # Actually load data
-    checkpoint = torch.load(filepath, map_location=device)
-    Checkpoint.load_objects(compiled_model.to_save_checkpoint(), checkpoint)
-
-    return compiled_model
 
 
 def load_compiled_model_report_generation(run_name,

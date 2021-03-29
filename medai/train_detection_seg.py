@@ -72,6 +72,13 @@ class TrainingDetectionSeg(TrainingProcess):
         self.dataset_kwargs['masks'] = True
         self.dataset_kwargs['masks_version'] = 'v1'
 
+        if self.args.augment:
+            if 'augment_kwargs' not in self.dataset_train_kwargs:
+                self.dataset_train_kwargs['augment_kwargs'] = {}
+            self.dataset_train_kwargs['augment_kwargs'].update({
+                'seg_mask': True,
+            })
+
     def _create_model(self):
         """Create self.model and self.model_kwargs."""
         labels = self.train_dataloader.dataset.labels
