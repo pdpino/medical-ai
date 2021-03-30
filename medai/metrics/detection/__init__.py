@@ -1,5 +1,6 @@
 import os
 from functools import partial
+import logging
 
 from ignite.metrics import MetricsLambda
 
@@ -12,30 +13,47 @@ from medai.utils.files import get_results_folder
 from medai.utils.heatmaps import threshold_attributions
 from medai.utils.metrics import attach_metric_for_labels
 
+LOGGER = logging.getLogger(__name__)
 
-def _extract_for_mAP(output):
+def _extract_for_mAP(output, key='coco_predictions'):
     image_names = output['image_fnames']
-    predictions = output['coco_predictions']
+    predictions = output[key]
 
     return image_names, predictions
 
 
-def attach_mAP_coco(engine, dataloader, run_name, debug=True, task='det', device='cuda'):
+def attach_mAP_coco(engine, dataloader, run_name, debug=True,
+                    task='det', suffix=None, device='cuda'):
+    if not hasattr(dataloader.dataset, 'coco_gt_df'):
+        class_name = dataloader.dataset.__class__.__name__
+        LOGGER.warning(
+            'Dataset %s does not have a COCO GT dataframe, could not attach mAP metric',
+            class_name,
+        )
+        return
     gt_df = dataloader.dataset.coco_gt_df
     dataset_type = dataloader.dataset.dataset_type
 
-    temp_fpath = get_outputs_fpath(run_name, dataset_type, task=task, debug=debug)
+    temp_fpath = get_outputs_fpath(run_name, dataset_type, task=task, suffix=suffix, debug=debug)
     writer = CocoResultsWriter(temp_fpath)
 
-    metric = MAPCocoMetric(gt_df, writer, donotcompute=(dataset_type == 'test'),
-                           output_transform=_extract_for_mAP, device=device)
-    metric.attach(engine, 'mAP')
+    coco_key = 'coco_predictions'
+    metric_name = 'mAP'
+    if suffix:
+        coco_key += f'_{suffix}'
+        metric_name += f'-{suffix}'
+
+    metric = MAPCocoMetric(gt_df, writer,
+                           donotcompute=(dataset_type == 'test'),
+                           output_transform=partial(_extract_for_mAP, key=coco_key),
+                           device=device)
+    metric.attach(engine, metric_name)
 
 
 def _threshold_activations_and_keep_valid(output,
                                           cls_thresh=0.3,
                                           heat_thresh=0.5,
-                                          only_tp=True,
+                                          only='TP',
                                           ):
     """Extracts values for IoX metrics.
 
@@ -48,9 +66,12 @@ def _threshold_activations_and_keep_valid(output,
 
     gt_map = output['gt_activations']
 
-    if only_tp:
-        # Only use TP samples to calculate metrics
+    if only == 'TP':
+        # Use only TP samples to calculate metrics
         gt_valid = output['gt_labels'].bool() & (output['pred_labels'] > cls_thresh)
+    elif only == 'T':
+        # Use only true samples to calculate metric
+        gt_valid = output['gt_labels'].bool()
     else:
         gt_valid = None
 

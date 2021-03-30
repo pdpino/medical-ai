@@ -6,12 +6,17 @@ from shapely.geometry import Polygon
 
 _MAX_BBS = 3
 
+def _get_score(mask, bb):
+    x_min, y_min, x_max, y_max = map(int, bb)
 
-def _h2bb_thresh_largest_area(mask, heat_thresh=0.5):
-    """Receives a heatmap, threshold it, and return the BB with the largest area.
+    box = mask[y_min:y_max, x_min:x_max]
+    max_value = box.max().item()
 
-    Thresholds the mask (i.e. makes it a binary mask), and find the largest polygon
-    with value=1.
+    return max_value
+
+
+def _h2bb_thresh_multiple(mask, heat_thresh=0.5):
+    """Receives a heatmap, threshold it, and return all BBs found, sorting by max values.
 
     Args:
         mask -- tensor of shape (height, width), with values between 0 and 1.
@@ -21,13 +26,13 @@ def _h2bb_thresh_largest_area(mask, heat_thresh=0.5):
         None if no polygons are found
     """
     # Apply threshold
-    mask = mask >= heat_thresh
+    thresholded_mask = mask >= heat_thresh
 
     # To numpy
-    mask = mask.detach().cpu().numpy().astype(np.uint8)
+    thresholded_mask = thresholded_mask.detach().cpu().numpy().astype(np.uint8)
 
     # Obtain shapes
-    shapes = rasterio.features.shapes(mask)
+    shapes = rasterio.features.shapes(thresholded_mask)
 
     # Get boundaries of the polygons found
     boundaries = [
@@ -35,8 +40,9 @@ def _h2bb_thresh_largest_area(mask, heat_thresh=0.5):
         for shape, value in islice(shapes, 0, _MAX_BBS)
         if value == 1
     ]
+
     if len(boundaries) == 0:
-        return None
+        return []
 
     # Transform to shapely.Polygons
     polygons = [
@@ -44,9 +50,12 @@ def _h2bb_thresh_largest_area(mask, heat_thresh=0.5):
         for bounds in boundaries
     ]
 
-    # Sort and keep the largest
-    polygons = sorted(polygons, key=lambda p: p.area, reverse=True)
-    largest_polygon = polygons[0]
+    bbs_with_score = [
+        (_get_score(mask, poly.bounds), poly.bounds)
+        for poly in polygons
+    ]
 
-    # Return the BB
-    return largest_polygon.bounds
+    # Sort by score
+    bbs_with_score = sorted(bbs_with_score, key=lambda p: p[0], reverse=True)
+
+    return bbs_with_score

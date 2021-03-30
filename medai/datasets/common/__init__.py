@@ -11,6 +11,7 @@ BatchItem = namedtuple('BatchItem', [
     'bboxes',
     'bboxes_valid',
     'masks',
+    'original_size',
 ])
 
 # NOTE: in practice, BatchItems is only used in RG (not other tasks)

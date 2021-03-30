@@ -145,6 +145,8 @@ class VinBigDataset(Dataset):
             masks=masks,
             image_fname=image_id,
             bboxes=bboxes,
+            # pylint: disable=not-callable
+            original_size=torch.tensor(original_size),
         )
 
     def load_mask(self, image_id, original_size):
@@ -199,8 +201,8 @@ class VinBigDataset(Dataset):
         original_height, original_width = original_size
         height, width = self.image_size
 
-        horizontal_scale = height / original_height
-        vertical_scale = width / original_width
+        horizontal_scale = width / original_width
+        vertical_scale = height / original_height
 
         for bbox in bboxes:
             disease_id = bbox[0]
