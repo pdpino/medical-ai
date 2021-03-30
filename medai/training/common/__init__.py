@@ -535,7 +535,7 @@ class TrainingProcess(abc.ABC):
 
         return print_metrics
 
-    def _build_common_for_engines(self):
+    def _build_common_for_engines(self, **unused_kwargs):
         """Build common vars to create the engines later."""
         return []
 

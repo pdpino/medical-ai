@@ -17,6 +17,7 @@ from medai.models.report_generation import create_decoder
 from medai.models.segmentation import create_fcn
 from medai.models.detection import create_detection_seg_model
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
+from medai.models.cls_seg import create_cls_seg_model
 from medai.models.checkpoint.compiled_model import CompiledModel
 from medai.utils.files import get_checkpoint_folder
 
@@ -158,6 +159,12 @@ load_compiled_model_detection_seg = partial(
     load_compiled_model_base,
     task='det',
     constructor=create_detection_seg_model,
+)
+
+load_compiled_model_cls_seg = partial(
+    load_compiled_model_base,
+    task='cls-seg',
+    constructor=create_cls_seg_model,
 )
 
 

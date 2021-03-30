@@ -2,6 +2,8 @@ import os
 from functools import partial
 import logging
 
+import torch
+from ignite.utils import to_onehot
 from ignite.metrics import MetricsLambda
 
 from medai.metrics.detection.coco_writer.writer import get_outputs_fpath, CocoResultsWriter
@@ -58,7 +60,7 @@ def _threshold_activations_and_keep_valid(output,
     """Extracts values for IoX metrics.
 
     Applies a threshold to activations, and creates a gt_valid array to use only
-    TP values for the metric calculation.
+    TP/T values for the metric calculation.
     """
     activations = output['activations']
     if heat_thresh is not None:
@@ -78,21 +80,47 @@ def _threshold_activations_and_keep_valid(output,
     return activations, gt_map, gt_valid
 
 
+def _transform_max_onehot(output):
+    """Extracts values for IoX metrics.
+
+    Transforms with onehot encoding (i.e. useful for multilabel=False cases)
+    """
+    activations = output['activations'] # shape: bs, n_labels, height, width
+    gt_map = output['gt_activations'] # shape: bs, height, width
+
+    n_labels = activations.size(1)
+
+    # One-hot activations
+    _, activations = torch.max(activations, dim=1) # shape: bs, height, width
+    activations = to_onehot(activations, n_labels) # shape: bs, n_labels, height, width
+
+    # One-hot ground-truth
+    gt_map = to_onehot(gt_map, n_labels) # shape: bs, n_labels, height, width
+
+    gt_valid = None
+
+    return activations, gt_map, gt_valid
+
+
 def attach_metrics_iox(engine, labels, multilabel=False, device='cuda', **kwargs):
     """Attaches IoU, IoBB metrics.
 
     Expects not-thresholded values.
     """
-    if not multilabel:
-        raise NotImplementedError()
+    if multilabel:
+        transform_fn = partial(_threshold_activations_and_keep_valid, **kwargs)
+    else:
+        transform_fn = _transform_max_onehot
+        if len(kwargs) > 0:
+            LOGGER.warning('Passed kwargs not used: %s', kwargs)
 
     iou = IoU(reduce_sum=False,
-              output_transform=partial(_threshold_activations_and_keep_valid, **kwargs),
+              output_transform=transform_fn,
               device=device)
     attach_metric_for_labels(engine, labels, iou, 'iou')
 
     iobb = IoBB(reduce_sum=False,
-                output_transform=partial(_threshold_activations_and_keep_valid, **kwargs),
+                output_transform=transform_fn,
                 device=device)
     attach_metric_for_labels(engine, labels, iobb, 'iobb')
 

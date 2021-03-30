@@ -1,3 +1,7 @@
+"""Script to train detection + segmentation models, used in the VinBig challenge.
+
+For a more generalized version, use train_cls_seg.py
+"""
 from torch import nn
 from ignite.engine import Engine
 
@@ -58,7 +62,8 @@ class TrainingDetectionSeg(TrainingProcess):
             parser.error('Image-format must be L')
 
         if args.dataset != 'vinbig':
-            parser.error('Only works with vinbig dataset (due to mAP metric)')
+            # mAP metrics, h2bb stuff, etc
+            parser.error('Only works with vinbig dataset')
 
         if not args.resume and not args.model:
             parser.error('Model is required')

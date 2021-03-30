@@ -60,7 +60,7 @@ class CXR14Dataset(Dataset):
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
                  masks=False, images_version=None, masks_version=None,
-                 xrv_norm=False,
+                 xrv_norm=False, seg_multilabel=True,
                  **unused_kwargs):
         super().__init__()
 
@@ -123,7 +123,8 @@ class CXR14Dataset(Dataset):
                 LOGGER.warning('Diseases not found: %s (ignoring)', not_found_diseases)
 
         self.n_diseases = len(self.labels)
-        self.multilabel = True
+        self.multilabel = True # CL_multilabel
+        self.seg_multilabel = seg_multilabel
 
         assert self.n_diseases > 0, 'No diseases selected!'
 
@@ -250,11 +251,13 @@ class CXR14Dataset(Dataset):
         mask = (mask * 255).long()
         # shape: 1, height, width
 
-        mask = to_onehot(mask, len(self.organs))
-        # shape: 1, n_organs, height, width
+        if self.seg_multilabel:
+            mask = to_onehot(mask, len(self.organs))
+            # shape: 1, n_organs, height, width
 
         mask = mask.squeeze(0)
-        # shape: n_organs, height, width
+        # shape(seg_multilabel=True): n_organs, height, width
+        # shape(seg_multilabel=False): height, width
 
         return mask
 
