@@ -50,6 +50,7 @@ def simple_step_fn(unused_engine, data_batch, model=None, device='cuda'):
         'activations': pred_masks,
         'gt_activations': gt_masks,
         'image_fnames': data_batch.image_fname,
+        'original_sizes': data_batch.original_size,
     }
 
 
@@ -59,9 +60,10 @@ def h2bb_middleware(original_step_fn, h2bb_names, h2bb_methods):
 
         batch_heatmaps = output['activations']
         batch_preds = output['pred_labels']
+        original_sizes = output['original_sizes']
 
         for h2bb_name, h2bb_method in zip(h2bb_names, h2bb_methods):
-            coco_predictions = h2bb_method(batch_preds, batch_heatmaps)
+            coco_predictions = h2bb_method(batch_preds, batch_heatmaps, original_sizes)
 
             output[f'coco_predictions_{h2bb_name}'] = coco_predictions
 
@@ -173,9 +175,6 @@ def evaluate_run(args, device='cuda'):
     h2bb_methods = []
     h2bb_names = []
     for method_name in AVAILABLE_H2BB_METHODS:
-        if 'largarea' in method_name:
-            continue
-
         for cls_thresh in args.cls_threshs:
             for heat_thresh in args.heat_threshs:
                 h2bb_names.append(f'{method_name}-{cls_thresh}-{heat_thresh}')

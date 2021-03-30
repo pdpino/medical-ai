@@ -104,7 +104,6 @@ class VinBigDataset(Dataset):
         # Used for evaluation with mAP-coco
         self.coco_gt_df = self._load_gt_df_for_coco(self.label_index['image_id'])
 
-
     def __len__(self):
         return len(self.label_index)
 

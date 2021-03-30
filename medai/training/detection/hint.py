@@ -104,7 +104,7 @@ def get_step_fn_hint(model, cl_loss_fn, hint_loss_fn, h2bb_method=None,
         grad_cam_attrs = grad_cam_attrs.detach()
 
         if h2bb_method is not None:
-            predictions = h2bb_method(outputs, grad_cam_attrs)
+            predictions = h2bb_method(outputs, grad_cam_attrs, data_batch.original_size)
         else:
             predictions = []
 

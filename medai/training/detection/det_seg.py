@@ -68,7 +68,7 @@ def get_step_fn_det_seg(model, cl_loss_fn, seg_loss_fn, h2bb_method,
         pred_labels = torch.sigmoid(pred_labels)
         pred_masks = torch.sigmoid(pred_masks)
 
-        coco_predictions = h2bb_method(pred_labels, pred_masks)
+        coco_predictions = h2bb_method(pred_labels, pred_masks, data_batch.original_size)
 
         return {
             'loss': total_loss.item(),
