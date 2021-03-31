@@ -31,26 +31,33 @@ _LOADERS = {
     'mobilenet': (models.mobilenet_v2, _extract_mobilenet_features),
 }
 
+def load_imagenet_model(model_name, imagenet=True, dropout=0):
+    # Config by model
+    model_constructor, extractor = _LOADERS[model_name]
+
+    # Load base CNN
+    kwargs = {'pretrained': imagenet}
+    if dropout != 0 and model_name == 'densenet-121':
+        kwargs['drop_rate'] = dropout
+    base_cnn = model_constructor(**kwargs)
+
+    # Extract feature layers only
+    features, features_size = extractor(base_cnn)
+
+    return features, features_size
+
 class ImageNetModel(nn.Module):
     """Loads a torchvision model."""
     def __init__(self, labels=[], model_name='densenet-121',
-                 imagenet=True, freeze=False,
-                 pretrained_cnn=None, gpool='max', fc_layers=(), dropout=0,
+                 imagenet=True, freeze=False, gpool='max', fc_layers=(), dropout=0,
                  **unused_kwargs):
         super().__init__()
-        # Config by model
-        model_constructor, extractor = _LOADERS[model_name]
-
-        # Load base CNN
-        kwargs = {'pretrained': imagenet}
-        if dropout != 0 and model_name == 'densenet-121':
-            kwargs['drop_rate'] = dropout
-        base_cnn = model_constructor(**kwargs)
-        if pretrained_cnn is not None:
-            base_cnn.load_state_dict(pretrained_cnn.state_dict())
-
         # Extract feature layers only
-        self.features, self.features_size = extractor(base_cnn)
+        self.features, self.features_size = load_imagenet_model(
+            model_name,
+            imagenet=imagenet,
+            dropout=dropout,
+        )
 
         if freeze:
             for param in self.features.parameters():

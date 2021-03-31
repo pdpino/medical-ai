@@ -26,10 +26,10 @@ class TrainingClsSeg(TrainingProcess):
     default_image_format = 'L'
 
     # TODO: use better metric? that captures both cls and seg
-    key_metric = 'iou'
+    key_metric = 'roc_auc'
     default_es_metric = None
     default_lr_metric = None
-    checkpoint_metric = 'iou'
+    checkpoint_metric = 'roc_auc'
 
 
     def _add_additional_args(self, parser):
@@ -48,8 +48,11 @@ class TrainingClsSeg(TrainingProcess):
         parsers.add_args_h2bb(parser)
 
     def _build_additional_args(self, parser, args):
-        if args.image_format != 'L':
-            parser.error('Image-format must be L')
+        if not args.resume:
+            if 'scan' in args.model and args.image_format != 'L':
+                parser.error('For scan model, image-format must be L')
+            elif args.image_format != 'RGB':
+                parser.error('Image-format must be RGB')
 
         if not args.resume and not args.model:
             parser.error('Model is required')

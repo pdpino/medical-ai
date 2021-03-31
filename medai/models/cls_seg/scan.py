@@ -31,8 +31,9 @@ class ScanClsSeg(nn.Module):
         self.features_size = 64
 
         self.segmentator = nn.Sequential(
-            nn.Conv2d(self.features_size, 4, 1, 1), # output: 4 x 25 x 25
-            nn.ConvTranspose2d(4, len(seg_labels), 32, 16, padding=8), # output: 4 x 400 x 400
+            nn.Conv2d(self.features_size, 4, 1, 1),# output: 4 x 25 x 25
+            nn.ConvTranspose2d(4, len(seg_labels), 32, 16, padding=8),
+            # output: n_seg_labels x 400 x 400
         )
 
         self.classifier = nn.Sequential(
