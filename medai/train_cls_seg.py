@@ -39,6 +39,8 @@ class TrainingClsSeg(TrainingProcess):
         parser.add_argument('--cnn-pooling', type=str, default='avg',
                             choices=AVAILABLE_POOLING_REDUCTIONS,
                             help='Choose reduction for global-pooling layer')
+        parser.add_argument('-drop', '--dropout', type=float, default=0,
+                            help='dropout-rate to use (only available for some models)')
 
         parser.add_argument('--seg-lambda', type=float, default=1,
                             help='Factor to multiply seg-loss')
@@ -61,6 +63,9 @@ class TrainingClsSeg(TrainingProcess):
 
     def _fill_run_name_model(self):
         self.run_name += f'_{self.args.model}'
+
+        if self.args.dropout != 0:
+            self.run_name += f'_drop{self.args.dropout}'
 
         if self.args.cnn_pooling not in ('avg', 'mean'):
             self.run_name += f'_g{self.args.cnn_pooling}'
@@ -91,6 +96,7 @@ class TrainingClsSeg(TrainingProcess):
             'cl_labels': labels,
             'seg_labels': organs,
             'gpool': self.args.cnn_pooling,
+            'dropout': self.args.dropout,
         }
         self.model = create_cls_seg_model(**self.model_kwargs).to(self.device)
 
