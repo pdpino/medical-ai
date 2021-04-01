@@ -18,9 +18,8 @@ DATASET_DIR = os.environ.get('DATASET_DIR_MIMIC_CXR')
 
 _REPORTS_FNAME = 'reports.clean.v1.json'
 
-# TODO: calculate these
-_DATASET_MEAN = 0
-_DATASET_STD = 1
+_DATASET_MEAN = 0.4719
+_DATASET_STD = 0.3017
 
 _FRONTAL_POSITIONS = ['PA', 'AP', 'AP AXIAL', 'LAO', 'LPO', 'RAO']
 
@@ -64,9 +63,9 @@ class MIMICCXRDataset(Dataset):
 
         # Filter by train, val, test
         if dataset_type != 'all':
+            available_splits = list(self.master_df['split'].unique()) + ['all']
             self.master_df = self.master_df.loc[self.master_df['split'] == dataset_type]
             if len(self.master_df) == 0:
-                available_splits = list(self.master_df['split'].unique()) + ['all']
                 raise Exception(f'{dataset_type} split not available, only {available_splits}')
 
         # Keep only max images
@@ -74,7 +73,7 @@ class MIMICCXRDataset(Dataset):
             self.master_df = self.master_df.head(max_samples)
 
         if sort_samples:
-            self.master_df = self.master_df.sort_values('report_lenght', ascending=True)
+            self.master_df = self.master_df.sort_values('report_length', ascending=True)
             self.master_df.reset_index(drop=True, inplace=True)
 
         # Prepare reports for getter calls

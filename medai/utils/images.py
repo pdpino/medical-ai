@@ -35,7 +35,7 @@ class ImageFolderIterator:
             yield image
 
 
-def compute_mean_std(image_iterator, n_channels=3, show=False):
+def compute_mean_std(image_iterator, n_channels=3, show=False, threads=1):
     """Computes mean and std of a dataset.
 
     Args:
@@ -45,6 +45,8 @@ def compute_mean_std(image_iterator, n_channels=3, show=False):
     Returns:
       Channel wise mean, std (i.e. tensors of shape n_channels)
     """
+    torch.set_num_threads(threads)
+
     mean = torch.zeros(n_channels)
     std = torch.zeros(n_channels)
 
