@@ -2,13 +2,21 @@ import logging
 import torch
 from torch import nn
 
+from medai.losses import get_loss_function
+
 LOGGER = logging.getLogger(__name__)
 
 def get_step_fn_cls_seg(model, optimizer=None, training=True,
                         cl_lambda=1, seg_lambda=1,
+                        cl_loss_name='bce', seg_weights=None,
                         device='cuda'):
-    cl_loss_fn = nn.BCEWithLogitsLoss()
-    seg_loss_fn = nn.CrossEntropyLoss()
+    cl_loss_fn = get_loss_function(cl_loss_name)
+
+    if isinstance(seg_weights, (list, tuple)):
+        seg_weights = torch.tensor(seg_weights, device=device) # pylint: disable=not-callable
+    elif isinstance(seg_weights, torch.Tensor):
+        seg_weights = seg_weights.to(device)
+    seg_loss_fn = nn.CrossEntropyLoss(weight=seg_weights)
 
     def step_fn(unused_engine, data_batch):
         # Move inputs to GPU

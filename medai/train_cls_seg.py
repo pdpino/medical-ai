@@ -1,5 +1,6 @@
 from ignite.engine import Engine
 
+from medai.losses import AVAILABLE_LOSSES
 from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import (
@@ -46,6 +47,10 @@ class TrainingClsSeg(TrainingProcess):
                             help='Factor to multiply seg-loss')
         parser.add_argument('--cl-lambda', type=float, default=1,
                             help='Factor to multiply CL-loss')
+        parser.add_argument('--cl-loss-name', type=str, choices=AVAILABLE_LOSSES,
+                            default='bce', help='CL Loss to use')
+        parser.add_argument('--weight-organs', action='store_true',
+                            help='Add weight to organs')
 
         parsers.add_args_h2bb(parser)
 
@@ -58,6 +63,11 @@ class TrainingClsSeg(TrainingProcess):
 
         if not args.resume and not args.model:
             parser.error('Model is required')
+
+        if args.weight_organs:
+            args.weight_organs = [0.1, 0.6, 0.3, 0.3]
+        else:
+            args.weight_organs = None
 
         parsers.build_args_h2bb_(args)
 
@@ -86,6 +96,13 @@ class TrainingClsSeg(TrainingProcess):
                 'seg_mask': True,
             })
 
+    def _fill_run_name_other(self):
+        if self.args.cl_loss_name != 'bce':
+            self.run_name += f'_cl-{self.args.cl_loss_name}'
+
+        if self.args.weight_organs:
+            self.run_name += '_seg-w'
+
     def _create_model(self):
         """Create self.model and self.model_kwargs."""
         labels = self.train_dataloader.dataset.labels
@@ -104,6 +121,15 @@ class TrainingClsSeg(TrainingProcess):
         d = dict()
         d['cl_lambda'] = self.args.cl_lambda
         d['seg_lambda'] = self.args.seg_lambda
+        d['cl_loss_name'] = self.args.cl_loss_name
+        if self.args.weight_organs:
+            d['weight_organs'] = self.args.weight_organs
+
+        info_str = ' '.join(
+            f"{k}={v}"
+            for k, v in d.items()
+        )
+        self.logger.info('Using params: %s', info_str)
 
         self.other_train_kwargs.update(d)
 
@@ -111,6 +137,8 @@ class TrainingClsSeg(TrainingProcess):
     def _create_engine(self, training,
                        cl_lambda=1,
                        seg_lambda=1,
+                       weight_organs=None,
+                       cl_loss_name='bce',
                        **unused_kwargs,
                        ):
         cl_labels = self.train_dataloader.dataset.labels
@@ -127,6 +155,8 @@ class TrainingClsSeg(TrainingProcess):
             training=training,
             cl_lambda=cl_lambda,
             seg_lambda=seg_lambda,
+            seg_weights=weight_organs,
+            cl_loss_name=cl_loss_name,
             device=self.device,
         ))
         attach_losses(engine, ['cl_loss', 'seg_loss'], device=self.device)
@@ -135,6 +165,7 @@ class TrainingClsSeg(TrainingProcess):
             cl_labels,
             multilabel=cl_multilabel,
             device=self.device,
+            extra_bce=cl_loss_name != 'bce',
         )
 
         attach_metrics_iox(

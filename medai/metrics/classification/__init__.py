@@ -153,7 +153,9 @@ def _transform_remove_loss_and_round(output):
     return torch.round(y_pred), y_true
 
 
-def attach_metrics_classification(engine, labels, multilabel=True, device='cuda'):
+def attach_metrics_classification(engine, labels, multilabel=True,
+                                  extra_bce=True,
+                                  device='cuda'):
     """Attach classification metrics to an engine, to use during training.
 
     Note: most multilabel metrics are treated as binary,
@@ -166,10 +168,11 @@ def attach_metrics_classification(engine, labels, multilabel=True, device='cuda'
         ham = Hamming(output_transform=_transform_remove_loss_and_round, device=device)
         ham.attach(engine, 'hamming')
 
-        bce_loss = Loss(binary_cross_entropy,
-                        output_transform=_transform_remove_loss_and_round,
-                        device=device)
-        bce_loss.attach(engine, 'bce')
+        if extra_bce:
+            bce_loss = Loss(binary_cross_entropy,
+                            output_transform=_transform_remove_loss_and_round,
+                            device=device)
+            bce_loss.attach(engine, 'bce')
 
         # _attach_binary_metrics(engine, labels, 'acc', Accuracy, True,
         #                        include_macro=False, device=device)
