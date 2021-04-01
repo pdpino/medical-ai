@@ -100,7 +100,7 @@ class VinBigDataset(Dataset):
         self.masks_dir = os.path.join(DATASET_DIR, 'organ-masks', 'v1')
         self.enable_masks = masks
         if self.enable_masks and self.fallback_organs:
-            self.transform_mask = transforms.Resize(image_size)
+            self.transform_mask = transforms.Resize(image_size, 0) # Nearest mode
 
         # Used for evaluation with mAP-coco
         self.coco_gt_df = self._load_gt_df_for_coco(self.label_index['image_id'])

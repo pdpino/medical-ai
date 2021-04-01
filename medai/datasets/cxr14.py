@@ -155,7 +155,7 @@ class CXR14Dataset(Dataset):
         self.enable_masks = masks
         if self.enable_masks:
             self.transform_mask = transforms.Compose([
-                transforms.Resize(image_size),
+                transforms.Resize(image_size, 0), # Nearest mode
                 transforms.ToTensor(),
             ])
 
