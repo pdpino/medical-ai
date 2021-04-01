@@ -1,6 +1,19 @@
 import json
 import os
 
+from medai.utils.nlp import (
+    PAD_TOKEN,
+    PAD_IDX,
+    START_TOKEN,
+    START_IDX,
+    END_TOKEN,
+    END_IDX,
+    UNKNOWN_TOKEN,
+    UNKNOWN_IDX,
+    END_OF_SENTENCE_TOKEN,
+    END_OF_SENTENCE_IDX,
+)
+
 def _get_this_folder():
     return os.path.dirname(os.path.realpath(__file__))
 
@@ -34,6 +47,24 @@ def save_vocab(name, vocab):
         json.dump(vocab, f, indent=2)
 
 
+def compute_vocab(reports):
+    """Computes a vocabulary given an iteration of reports."""
+    word_to_idx = {
+        PAD_TOKEN: PAD_IDX,
+        START_TOKEN: START_IDX,
+        END_TOKEN: END_IDX,
+        UNKNOWN_TOKEN: UNKNOWN_IDX,
+        END_OF_SENTENCE_TOKEN: END_OF_SENTENCE_IDX,
+    }
+
+    for report in reports:
+        for token in report:
+            if token not in word_to_idx:
+                word_to_idx[token] = len(word_to_idx)
+
+    return word_to_idx
+
+
 def save_synonyms(name, synonyms):
     filepath = _get_syn_fname(name)
 
@@ -46,4 +77,3 @@ def load_synonyms(name):
 
     with open(filepath, 'r') as f:
         return json.load(f)
-

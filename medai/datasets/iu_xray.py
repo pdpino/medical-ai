@@ -9,11 +9,10 @@ from torchvision import transforms
 from ignite.utils import to_onehot
 
 from medai.datasets.common import BatchItem, CHEXPERT_LABELS, JSRT_ORGANS
-from medai.datasets.vocab import load_vocab
+from medai.datasets.vocab import load_vocab, compute_vocab
 from medai.utils.images import get_default_image_transform
 from medai.utils.nlp import (
     UNKNOWN_IDX,
-    compute_vocab,
     SentenceToOrgans,
 )
 
@@ -23,10 +22,6 @@ DATASET_DIR = os.environ.get('DATASET_DIR_IU_XRAY')
 _REPORTS_FNAME = 'reports.clean.v2.json'
 
 _AVAILABLE_SPLITS = ['train', 'val', 'test', 'all']
-
-def _reports_iterator(reports):
-    for report in reports:
-        yield report['clean_text'].split()
 
 _DATASET_MEAN = 0.4821
 _DATASET_STD = 0.2374
@@ -71,7 +66,7 @@ class IUXRayDataset(Dataset):
 
         self.enable_masks = masks
         self.transform_mask = transforms.Compose([
-            transforms.Resize(image_size),
+            transforms.Resize(image_size, 0), # Nearest mode
             transforms.ToTensor(),
         ])
 
@@ -212,7 +207,10 @@ class IUXRayDataset(Dataset):
     def _preprocess_reports(self, reports, sort_samples=True, vocab=None,
                             recompute_vocab=False, frontal_only=False):
         if recompute_vocab:
-            self.word_to_idx = compute_vocab(_reports_iterator(reports))
+            self.word_to_idx = compute_vocab(
+                report['clean_text'].split()
+                for report in reports
+            )
         elif vocab is not None:
             self.word_to_idx = vocab
         else:
@@ -290,13 +288,10 @@ class IUXRayDataset(Dataset):
         if isinstance(target_label, int):
             target_label = self.labels[target_label]
 
-        filename_to_label = {
-            filename: label
-            for filename, label in zip(
-                self.labels_df['filename'],
-                self.labels_df[target_label].astype(int),
-            )
-        }
+        filename_to_label = dict(zip(
+            self.labels_df['filename'],
+            self.labels_df[target_label].astype(int),
+        ))
 
         return [
             (index, filename_to_label[report['filename']])
