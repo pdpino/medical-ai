@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
-from medai.datasets import prepare_data_report_generation
+from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATASETS
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_attention_vs_masks,
@@ -261,6 +261,7 @@ def resume_training(run_name,
 
 @timeit_main(LOGGER)
 def train_from_scratch(run_name,
+                       dataset_name='iu-x-ray',
                        decoder_name='lstm',
                        supervise_attention=False,
                        batch_size=15,
@@ -298,7 +299,7 @@ def train_from_scratch(run_name,
                        ):
     """Train a model from scratch."""
     # Create run name
-    run_name = f'{run_name}_{decoder_name}_lr{lr}'
+    run_name = f'{run_name}_{dataset_name}_{decoder_name}_lr{lr}'
     if supervise_attention:
         run_name += '_satt'
     if cnn_run_name:
@@ -307,10 +308,11 @@ def train_from_scratch(run_name,
         run_name += f'_{cnn_model_name}'
     if image_size != 512:
         run_name += f'_size{image_size}'
-    if not sort_samples:
-        run_name += '_nosort'
-    if shuffle:
-        run_name += '_shf'
+    if not shuffle:
+        if sort_samples:
+            run_name += '_sorted'
+        else:
+            run_name += '_notshuffle'
     if augment:
         run_name += '_aug'
         if augment_label is not None:
@@ -347,7 +349,7 @@ def train_from_scratch(run_name,
     # Load data
     image_size = (image_size, image_size)
     dataset_kwargs = {
-        'dataset_name': 'iu-x-ray',
+        'dataset_name': dataset_name,
         'max_samples': max_samples,
         'image_size': image_size,
         'batch_size': batch_size,
@@ -482,6 +484,8 @@ def train_from_scratch(run_name,
 def parse_args():
     parser = argparse.ArgumentParser(usage='%(prog)s [options]')
 
+    parser.add_argument('-d', '--dataset', type=str, default='iu-x-ray',
+                        help='Batch size', choices=AVAILABLE_REPORT_DATASETS)
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from a previous run')
     parser.add_argument('-dec', '--decoder', type=str,
@@ -549,7 +553,8 @@ def parse_args():
     parsers.build_args_tb_(args)
     parsers.build_args_med_(args)
 
-    if not args.no_med and args.early_stopping and args.es_patience <= args.med_after:
+    if not args.no_med and args.early_stopping and \
+        (args.med_after is not None and args.es_patience <= args.med_after):
         LOGGER.warning(
             'ES-patience (%d) is less than med-after (%d), run may get preempted',
             args.es_patience, args.med_after,
@@ -581,6 +586,7 @@ if __name__ == '__main__':
                         )
     else:
         train_from_scratch(get_timestamp(),
+                           dataset_name=ARGS.dataset,
                            decoder_name=ARGS.decoder,
                            supervise_attention=ARGS.superv_att,
                            batch_size=ARGS.batch_size,

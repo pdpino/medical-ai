@@ -5,6 +5,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.nn.functional import pad
 
 from medai.datasets.common import BatchItems
+from medai.datasets.common.sentences2organs import SentenceToOrgans
 from medai.utils.nlp import (
     PAD_IDX,
     split_sentences_and_pad,
@@ -17,8 +18,8 @@ def create_hierarchical_dataloader(dataset, include_masks=False, **kwargs):
 
     Outputted reports have shape (batch_size, n_sentences, n_words)
     """
-    if include_masks and not hasattr(dataset, 'get_mask_for_sentence'):
-        raise Exception('dataset with masks must have a get_mask_for_sentence method')
+    if include_masks:
+        sentence_to_organs = SentenceToOrgans(dataset.get_vocab())
 
     def _collate_fn(batch_tuples):
         images = []
@@ -48,7 +49,7 @@ def create_hierarchical_dataloader(dataset, include_masks=False, **kwargs):
                 # Get masks for each sentence of the report
                 image_masks = tup.masks # shape: n_organs, height, width
                 sample_mask = torch.stack([
-                    dataset.get_mask_for_sentence(sentence, image_masks) # shape: height, width
+                    sentence_to_organs.get_mask_for_sentence(sentence, image_masks) # height, width
                     for sentence in report
                 ])
                 # shape: n_sentences, height, width

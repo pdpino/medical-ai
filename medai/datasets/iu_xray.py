@@ -13,7 +13,6 @@ from medai.datasets.vocab import load_vocab, compute_vocab
 from medai.utils.images import get_default_image_transform
 from medai.utils.nlp import (
     UNKNOWN_IDX,
-    SentenceToOrgans,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -28,7 +27,6 @@ _DATASET_STD = 0.2374
 
 
 class IUXRayDataset(Dataset):
-    _sentence_to_organ = None
     organs = list(JSRT_ORGANS)
     dataset_dir = DATASET_DIR
 
@@ -95,8 +93,6 @@ class IUXRayDataset(Dataset):
                                  frontal_only=frontal_only)
 
         if self.enable_masks:
-            self._init_sentence_to_organ()
-
             masks_version = masks_version or 'v0' # backward compatibility
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
             if not os.path.isdir(self.masks_dir):
@@ -162,47 +158,8 @@ class IUXRayDataset(Dataset):
 
         return mask
 
-    def get_mask_for_sentence(self, sentence, image_masks):
-        """Returns the presence-mask for a given sentence.
-
-        Args:
-            sentence -- tensor of word indices, shape n_words
-            image_masks -- tensor of shape n_organs, height, width
-        Returns:
-            mask -- tensor of shape height, width (binary)
-        """
-        organs = self._sentence_to_organ.get_organs(sentence)
-        # shape: n_organs (one-hot encoded)
-
-        # pylint: disable=not-callable
-        organ_indeces = torch.tensor([
-            organ_idx
-            for organ_idx, organ_presence in enumerate(organs)
-            if organ_presence
-        ])
-        # shape: n_selected_organs
-
-        sentence_mask = image_masks.index_select(dim=0, index=organ_indeces)
-        # shape: n_selected_organs, height, width
-
-        sentence_mask = sentence_mask.sum(dim=0) # NOTE: assumes organs do not overlap
-        # shape: height, width
-
-        return sentence_mask
-
     def get_vocab(self):
         return self.word_to_idx
-
-    def _init_sentence_to_organ(self):
-        # Only create once (for any train-val-test split)
-        if IUXRayDataset._sentence_to_organ is None:
-            fpath = os.path.join(self.reports_dir, 'sentences_with_organs.csv')
-
-            IUXRayDataset._sentence_to_organ = SentenceToOrgans(
-                fpath,
-                self.organs,
-                self.get_vocab()
-            )
 
     def _preprocess_reports(self, reports, sort_samples=True, vocab=None,
                             recompute_vocab=False, frontal_only=False):

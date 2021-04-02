@@ -11,6 +11,7 @@ from medai.datasets.covid_actual import CovidActualDataset
 from medai.datasets.covid_fig1 import CovidFig1Dataset
 from medai.datasets.covid_uc import CovidUCDataset
 from medai.datasets.iu_xray import IUXRayDataset
+from medai.datasets.mimic_cxr import MIMICCXRDataset
 from medai.datasets.jsrt import JSRTDataset
 from medai.datasets.vinbig import VinBigDataset
 
@@ -35,6 +36,7 @@ _CL_DATASETS = {
 
 _RG_DATASETS = {
     'iu-x-ray': IUXRayDataset,
+    'mimic-cxr': MIMICCXRDataset,
 }
 
 _SEG_DATASETS = {
@@ -43,6 +45,7 @@ _SEG_DATASETS = {
 }
 
 AVAILABLE_CLASSIFICATION_DATASETS = list(_CL_DATASETS)
+AVAILABLE_REPORT_DATASETS = list(_RG_DATASETS)
 AVAILABLE_SEGMENTATION_DATASETS = list(_SEG_DATASETS)
 
 LOGGER = logging.getLogger(__name__)
@@ -141,7 +144,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         LOGGER.error('\tEmpty dataset')
         return None
 
-    LOGGER.info('\tDataset size: %d', len(dataset))
+    LOGGER.info('\tDataset size: %s', f'{len(dataset):,}')
 
     if augment:
         dataset = Augmentator(dataset,
@@ -223,7 +226,13 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    masks=False,
                                    **kwargs,
                                    ):
-    LOGGER.info('Loading %s/%s rg-dataset, bs=%d...', dataset_name, dataset_type, batch_size)
+
+    _info = {
+        'bs': batch_size,
+        'imgsize': image_size,
+    }
+    _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
+    LOGGER.info('Loading %s/%s rg-dataset, %s', dataset_name, dataset_type, _info_str)
 
     assert dataset_name in _RG_DATASETS, f'Dataset not found: {dataset_name}'
     DatasetClass = _RG_DATASETS[dataset_name]
@@ -241,7 +250,7 @@ def prepare_data_report_generation(create_dataloader_fn,
         LOGGER.error('\tEmpty dataset')
         return None
 
-    LOGGER.info('\tDataset size: %d', len(dataset))
+    LOGGER.info('\tDataset size: %s', f'{len(dataset):,}')
 
     if augment:
         dataset = Augmentator(dataset,
@@ -285,7 +294,7 @@ def prepare_data_segmentation(dataset_name=None,
         LOGGER.error('\tEmpty dataset')
         return None
 
-    LOGGER.info('\tDataset size: %d', len(dataset))
+    LOGGER.info('\tDataset size: %s', f'{len(dataset):,}')
 
     if augment:
         dataset = Augmentator(dataset,

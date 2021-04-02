@@ -95,7 +95,7 @@ def clean_reports(reports_df):
     return cleaned_reports, token_appearances, errors
 
 
-def add_report_len_to_master_df(reports_dict):
+def add_report_len_to_master_df(reports_dict, errors):
     fpath = os.path.join(DATASET_DIR, 'master_metadata.csv')
     master_df = pd.read_csv(fpath)
 
@@ -104,10 +104,15 @@ def add_report_len_to_master_df(reports_dict):
         for study_id, report in reports_dict.items()
     }
 
-    report_lens = [
-        report_lens_by_id[study_id]
-        for study_id in master_df['study_id']
-    ]
+    report_lens = []
+    for study_id in master_df['study_id']:
+        n_words = report_lens_by_id.get(study_id, 0)
+
+        if n_words == 0:
+            errors['words-0'].append(study_id)
+
+        report_lens.append(n_words)
+
 
     master_df['report_length'] = report_lens
 
@@ -124,7 +129,7 @@ def preprocess_mimic_cxr():
     vocab = compute_vocab(r['clean_text'].split() for r in reports_dict.values())
     save_vocab('mimic_cxr', vocab)
 
-    add_report_len_to_master_df(reports_dict)
+    add_report_len_to_master_df(reports_dict, errors)
 
     return reports_dict, token_appearances, errors
 

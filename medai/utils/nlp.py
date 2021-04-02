@@ -1,8 +1,9 @@
 import logging
+from collections import Counter
+
 import torch
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
-import pandas as pd
 
 # Common tokens
 PAD_TOKEN = 'PAD'
@@ -135,53 +136,6 @@ class ReportReader:
         ]
 
 
-class SentenceToOrgans:
-    def __init__(self, organs_by_sentence_fpath, organs_names, vocab):
-        report_reader = ReportReader(vocab)
-
-        self._sentence_to_organ_mapping = dict()
-
-        organs_df = pd.read_csv(organs_by_sentence_fpath)
-
-        # Save these to notify sentences that are not found
-        self.report_reader = report_reader
-        self.n_organs = len(organs_names)
-
-        for _, sample in organs_df.iterrows():
-            sentence_str = sample['sentences']
-            organs = sample[organs_names].tolist()
-
-            sentence_idxs = report_reader.text_to_idx(sentence_str)
-            sentence_hash = self._sentence_to_hash(sentence_idxs)
-
-            self._sentence_to_organ_mapping[sentence_hash] = organs
-
-    def _sentence_to_hash(self, sentence):
-        sentence = trim_rubbish(sentence)
-        return ','.join(str(word_idx) for word_idx in sentence)
-
-    def get_organs(self, sentence):
-        """Returns a one-hot list of organs for a sentence.
-
-        Args:
-            sentence -- tensor of word indices, shape n_words
-        """
-        sentence = sentence.tolist()
-
-        sentence_hash = self._sentence_to_hash(sentence)
-
-        if sentence_hash not in self._sentence_to_organ_mapping:
-            self._sentence_to_organ_mapping[sentence_hash] = [1] * self.n_organs
-            sentence_str = self.report_reader.idx_to_text(sentence)
-            LOGGER.warning(
-                'Organs not found for sentence: %s, (%s)',
-                sentence_str, sentence_hash,
-            )
-
-        return self._sentence_to_organ_mapping[sentence_hash]
-
-
-
 def trim_rubbish(report):
     """Trims padding and END token of a report.
 
@@ -253,3 +207,43 @@ def sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
     if len(sentence_so_far) > 0:
         sentence_so_far.append(end_idx)
         yield sentence_so_far
+
+
+def split_sentences_text(report, end_token=END_OF_SENTENCE_TOKEN):
+    """Split a str report into sentences.
+
+    Note this function receives tokens, not idxs
+    (is used mainly to debug, not in training processes).
+
+    Args:
+        report -- str with space-separated tokens, or list of tokens (str)
+    Returns:
+        list of sentences as str
+    """
+    if isinstance(report, str):
+        report = report.split()
+
+    assert isinstance(report, list), 'Report must be a list or str'
+
+    if report[-1] != end_token:
+        report.append(end_token)
+
+    sentences = []
+    sentence = []
+    for word in report:
+        sentence.append(word)
+        if word == end_token:
+            sentences.append(sentence)
+            sentence = []
+
+    return [' '.join(s) for s in sentences]
+
+def get_sentences_appearances(reports):
+    """Receives an iterator of reports, and returns all sentences."""
+
+    sentences_counter = Counter()
+    for report in reports:
+        for sentence in split_sentences_text(report):
+            sentences_counter[sentence] += 1
+
+    return sentences_counter
