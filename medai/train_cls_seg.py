@@ -40,6 +40,8 @@ class TrainingClsSeg(TrainingProcess):
         parser.add_argument('--cnn-pooling', type=str, default='avg',
                             choices=AVAILABLE_POOLING_REDUCTIONS,
                             help='Choose reduction for global-pooling layer')
+        parser.add_argument('-noig', '--no-imagenet', action='store_true',
+                            help='If present, dont use imagenet pretrained weights')
         parser.add_argument('-drop', '--dropout', type=float, default=0,
                             help='dropout-rate to use (only available for some models)')
 
@@ -80,6 +82,9 @@ class TrainingClsSeg(TrainingProcess):
         if self.args.cnn_pooling not in ('avg', 'mean'):
             self.run_name += f'_g{self.args.cnn_pooling}'
 
+        if self.args.no_imagenet:
+            self.run_name += '_noig'
+
         cl_lambda = self.args.cl_lambda
         seg_lambda = self.args.seg_lambda
         if cl_lambda != 1 or seg_lambda != 1:
@@ -114,6 +119,7 @@ class TrainingClsSeg(TrainingProcess):
             'seg_labels': organs,
             'gpool': self.args.cnn_pooling,
             'dropout': self.args.dropout,
+            'imagenet': not self.args.no_imagenet,
         }
         self.model = create_cls_seg_model(**self.model_kwargs).to(self.device)
 
