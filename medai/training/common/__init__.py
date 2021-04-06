@@ -212,6 +212,10 @@ class TrainingProcess(abc.ABC):
             patience = self.args.lr_sch_kwargs['patience']
             self.run_name += f'_sch-{self.args.lr_metric}-p{patience}-f{factor}'
 
+            cooldown = self.args.lr_sch_kwargs.get('cooldown', 0)
+            if cooldown != 0:
+                self.run_name += f'-c{cooldown}'
+
     def _fill_run_name_data(self):
         if self.args.norm_by_sample:
             self.run_name += '_normS'

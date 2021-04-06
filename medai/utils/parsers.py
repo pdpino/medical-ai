@@ -79,7 +79,7 @@ def add_args_hw(parser, num_workers=4):
                           help='Number of threads for pytorch')
 
 
-def add_args_lr_sch(parser, lr=0.0001, patience=5, factor=0.5, metric='loss'):
+def add_args_lr_sch(parser, lr=0.0001, patience=5, factor=0.5, cooldown=0, metric='loss'):
     lr_group = parser.add_argument_group('LR scheduler params')
     lr_group.add_argument('-lr', '--learning-rate', type=float, default=lr,
                           help='Initial learning rate')
@@ -89,6 +89,8 @@ def add_args_lr_sch(parser, lr=0.0001, patience=5, factor=0.5, metric='loss'):
                           help='Patience value for LR-scheduler')
     lr_group.add_argument('--lr-factor', type=float, default=factor,
                           help='Factor to multiply the LR on each update')
+    lr_group.add_argument('--lr-cooldown', type=int, default=cooldown,
+                          help='Cooldown for lr-scheduler')
     lr_group.add_argument('-wd', '--weight-decay', type=float, default=0,
                           help='Weight decay passed to the optimizer')
 
@@ -99,6 +101,7 @@ def build_args_lr_sch_(args):
         'threshold_mode': 'abs',
         'factor': args.lr_factor,
         'patience': args.lr_patience,
+        'cooldown': args.lr_cooldown,
         'verbose': True,
     }
 
