@@ -3,9 +3,7 @@ from ignite.engine import Engine
 from medai.losses import AVAILABLE_LOSSES
 from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
-from medai.metrics.detection import (
-    attach_metrics_iox,
-)
+from medai.metrics.detection import attach_metrics_iox
 from medai.models.checkpoint import load_compiled_model_cls_seg
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.cls_seg import create_cls_seg_model, AVAILABLE_CLS_SEG_MODELS

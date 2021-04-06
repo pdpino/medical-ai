@@ -34,6 +34,7 @@ def _get_results_fpath(run_name, task, debug=True, suffix='', **kwargs):
     return filepath
 
 
+# TODO: rename as "are_metrics_saved", is more accurate
 def are_results_saved(run_name, task, debug=True, suffix=''):
     # FIXME: run_name cannot be passed as timestamp-only (throws error)
     filepath = _get_results_fpath(run_name, task, debug=debug, suffix=suffix,
