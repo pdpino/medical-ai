@@ -70,7 +70,7 @@ class MIMICCXRDataset(Dataset):
 
         # Keep only max images
         if max_samples is not None:
-            self.master_df = self.master_df.head(max_samples)
+            self.master_df = self.master_df.tail(max_samples)
 
         if sort_samples:
             self.master_df = self.master_df.sort_values('report_length', ascending=True)

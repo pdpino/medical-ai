@@ -58,7 +58,7 @@ _MISSING_SPLITS = set([
 UP_TO_DATE_MASKS_VERSION = 'v1'
 
 _DATASETS_WITH_MASKS_IMPLEMENTED = set([
-    'cxr14', 'iu-x-ray', 'vinbig',
+    'cxr14', 'iu-x-ray', 'vinbig', 'chexpert',
 ])
 _DATASETS_WITH_MASKS_VERSION_IMPLEMENTED = set([
     'cxr14', 'iu-x-ray',

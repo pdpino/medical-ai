@@ -1,4 +1,5 @@
 import os
+import numbers
 import numpy as np
 import torch
 from torch.nn.functional import interpolate
@@ -207,3 +208,24 @@ def create_sprite_atlas(dataset,
         atlas[:, row_from:row_to, col_from:col_to] = resized_image
 
     return atlas
+
+
+def squeeze_masks(masks):
+    """Squeezes organ masks to an image.
+
+    Opposite of to_onehot
+
+    Args:
+        masks -- tensor of shape ([n_organs], height, width)
+    Returns:
+        masks as tensor of shape (height, width).
+    """
+    if isinstance(masks, numbers.Number) and masks == -1:
+        return None
+
+    if masks.ndim == 2:
+        return masks
+
+    n_organs = masks.size(0)
+    multiplier = torch.arange(0, n_organs).unsqueeze(-1).unsqueeze(-1)
+    return (multiplier * masks).sum(dim=0)
