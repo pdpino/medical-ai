@@ -161,3 +161,15 @@ def timeit_main(logger):
         return wrapped
 
     return wrapper
+
+
+def pred_and_label_to_valoration(presence, gt):
+    if presence + gt == 2:
+        result = 'TP'
+    elif presence + gt == 0:
+        result = 'TN'
+    elif presence == 1:
+        result = 'FP'
+    else:
+        result = 'FN'
+    return result

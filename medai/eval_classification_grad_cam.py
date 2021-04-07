@@ -7,7 +7,7 @@ from ignite.engine import Engine
 from medai.datasets import prepare_data_classification
 from medai.metrics import save_results
 from medai.metrics.classification import attach_metrics_image_saliency
-from medai.models.checkpoint import load_compiled_model_classification
+from medai.models.checkpoint import load_compiled_model_classification, load_compiled_model_cls_seg
 from medai.training.classification.grad_cam import create_grad_cam, get_step_fn
 from medai.utils import (
     config_logging,
@@ -22,6 +22,7 @@ LOGGER = logging.getLogger('medai.cl.eval.grad-cam')
 @timeit_main(LOGGER)
 def run_evaluation(run_name,
                    debug=True,
+                   task='cls',
                    device='cuda',
                    max_samples=None,
                    batch_size=10,
@@ -31,11 +32,18 @@ def run_evaluation(run_name,
                    multiple_gpu=False,
                    ):
     # Load model
-    compiled_model = load_compiled_model_classification(run_name,
-                                                        debug=debug,
-                                                        device=device,
-                                                        multiple_gpu=False,
-                                                        )
+    if task == 'cls':
+        load_compiled_model_fn = load_compiled_model_classification
+    elif task == 'cls-seg':
+        load_compiled_model_fn = load_compiled_model_cls_seg
+    else:
+        raise Exception(f'Task not recognized: {task}')
+    compiled_model = load_compiled_model_fn(
+        run_name,
+        debug=debug,
+        device=device,
+        multiple_gpu=False,
+    )
     compiled_model.model.train(False)
 
     # Load data
@@ -48,6 +56,7 @@ def run_evaluation(run_name,
         'max_samples': max_samples,
         'batch_size': batch_size,
         'masks': True,
+        'masks_version': 'v1',
         'image_size': dataset_kwargs['image_size'],
     }
     if image_size is not None:
@@ -78,7 +87,7 @@ def run_evaluation(run_name,
         pprint(metrics)
 
     metrics = { dataset_type: metrics }
-    save_results(metrics, run_name, task='cls', debug=debug, suffix='grad-cam')
+    save_results(metrics, run_name, task=task, debug=debug, suffix='grad-cam')
 
 
 def parse_args():
@@ -86,6 +95,8 @@ def parse_args():
 
     parser.add_argument('--run-name', type=str, default=None, required=True,
                         help='Select run name to evaluate')
+    parser.add_argument('--task', type=str, default='cls', choices=('cls', 'cls-seg'),
+                        help='Task to load the model from')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
     parser.add_argument('-bs', '--batch-size', type=int, default=20,
@@ -125,6 +136,7 @@ if __name__ == '__main__':
 
     run_evaluation(ARGS.run_name,
                    debug=not ARGS.no_debug,
+                   task=ARGS.task,
                    device=DEVICE,
                    max_samples=ARGS.max_samples,
                    batch_size=ARGS.batch_size,

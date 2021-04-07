@@ -12,6 +12,7 @@ from medai.models.classification import (
     tiny_densenet,
 )
 from medai.models.classification.load_imagenet import ImageNetModel
+from medai.models.cls_seg.imagenet import ImageNetClsSegModel
 
 LOGGER = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ def get_last_layer(model):
 
     layer = None
 
-    if isinstance(model, ImageNetModel):
+    if isinstance(model, (ImageNetModel, ImageNetClsSegModel)):
         if model_name == 'mobilenet':
             layer = model.features[-1][0] # -1
         if model_name == 'densenet-121':
