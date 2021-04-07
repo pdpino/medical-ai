@@ -36,7 +36,7 @@ class IUXRayDataset(Dataset):
                  frontal_only=False, image_size=(512, 512),
                  norm_by_sample=False,
                  image_format='RGB',
-                 masks=False, masks_version=None,
+                 masks=False, masks_version=None, seg_multilabel=True,
                  vocab=None, recompute_vocab=False, **unused_kwargs):
         super().__init__()
 
@@ -68,7 +68,8 @@ class IUXRayDataset(Dataset):
             transforms.ToTensor(),
         ])
 
-        self.multilabel = True
+        self.multilabel = True # CL multilabel
+        self.seg_multilabel = seg_multilabel
         self._preprocess_labels(labels)
 
         # Load reports
@@ -150,11 +151,13 @@ class IUXRayDataset(Dataset):
         mask = (mask * 255).long()
         # shape: 1, height, width
 
-        mask = to_onehot(mask, len(self.organs))
-        # shape: 1, n_organs, height, width
+        if self.seg_multilabel:
+            mask = to_onehot(mask, len(self.organs))
+            # shape: 1, n_organs, height, width
 
         mask = mask.squeeze(0)
-        # shape: n_organs, height, width
+        # shape(seg_multilabel=True): n_organs, height, width
+        # shape(seg_multilabel=False): height, width
 
         return mask
 

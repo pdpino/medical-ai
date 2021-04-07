@@ -224,6 +224,12 @@ class TrainingProcess(abc.ABC):
         if self.args.image_size != 512:
             self.run_name += f'_size{self.args.image_size}'
 
+        if isinstance(self.args.labels, (tuple, list)):
+            if len(self.args.labels) == 1:
+                self.run_name += f'_{self.args.labels[0]}'
+            else:
+                self.run_name += f'_labels{len(self.args.labels)}'
+
     def _fill_run_name_checkpoint(self):
         self.run_name += f'_best-{self.checkpoint_metric}'
 
