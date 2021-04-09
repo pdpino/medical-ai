@@ -213,6 +213,7 @@ def train_from_scratch(run_name,
                        norm_by_sample=False,
                        n_epochs=10,
                        augment=False,
+                       augment_mode='single',
                        augment_label=None,
                        augment_class=None,
                        augment_times=1,
@@ -237,6 +238,8 @@ def train_from_scratch(run_name,
         run_name += f'_wce{ws}'
     if augment:
         run_name += f'_aug{augment_times}'
+        if augment_mode != 'single':
+            run_name += f'-{augment_mode}'
     if lr_sch_metric:
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
@@ -258,6 +261,7 @@ def train_from_scratch(run_name,
     dataset_train_kwargs = {
         'shuffle': shuffle,
         'augment': augment,
+        'augment_mode': augment_mode,
         'augment_label': augment_label,
         'augment_class': augment_class,
         'augment_times': augment_times,
@@ -434,6 +438,7 @@ if __name__ == '__main__':
             norm_by_sample=ARGS.norm_by_sample,
             n_epochs=ARGS.epochs,
             augment=ARGS.augment,
+            augment_mode=ARGS.augment_mode,
             augment_label=ARGS.augment_label,
             augment_class=ARGS.augment_class,
             augment_times=ARGS.augment_times,

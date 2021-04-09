@@ -1,4 +1,5 @@
 """Parser utilities."""
+from medai.datasets.tools.augmentation import AVAILABLE_AUG_MODES
 from medai.models.classification import AVAILABLE_CLASSIFICATION_MODELS
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.utils import parse_str_or_int
@@ -11,6 +12,8 @@ def add_args_augment(parser):
     aug_group = parser.add_argument_group('Data-augmentation params')
     aug_group.add_argument('--augment', action='store_true',
                            help='If present, augment dataset')
+    aug_group.add_argument('--augment-mode', type=str, choices=AVAILABLE_AUG_MODES,
+                           default='single', help='Method to augment the images')
     aug_group.add_argument('--augment-label', default=None,
                            help='Augment only samples with a given label present (str/int)')
     aug_group.add_argument('--augment-class', type=int, choices=[0,1], default=None,

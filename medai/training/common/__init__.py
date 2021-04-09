@@ -195,7 +195,9 @@ class TrainingProcess(abc.ABC):
 
     def _fill_run_name_augmenting(self):
         if self.args.augment:
-            self.run_name += '_aug'
+            self.run_name += f'_aug{self.args.augment_times}'
+            if self.args.augment_mode != 'single':
+                self.run_name += f'-{self.args.augment_mode}'
             if self.args.augment_label is not None:
                 self.run_name += f'-{self.args.augment_label}'
                 if self.args.augment_class is not None:
@@ -353,6 +355,7 @@ class TrainingProcess(abc.ABC):
         if self.allow_augmenting:
             self.dataset_train_kwargs.update({
                 'augment': self.args.augment,
+                'augment_mode': self.args.augment_mode,
                 'augment_label': self.args.augment_label,
                 'augment_class': self.args.augment_class,
                 'augment_times': self.args.augment_times,

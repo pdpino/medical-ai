@@ -316,6 +316,7 @@ def train_from_scratch(run_name,
                        undersample_label=None,
                        balanced_sampler=False,
                        augment=False,
+                       augment_mode='single',
                        augment_label=None,
                        augment_class=None,
                        augment_times=1,
@@ -369,7 +370,9 @@ def train_from_scratch(run_name,
     elif balanced_sampler:
         run_name += '_balance'
     if augment:
-        run_name += '_aug'
+        run_name += f'_aug{augment_times}'
+        if augment_mode != 'single':
+            run_name += f'-{augment_mode}'
         if augment_label is not None:
             run_name += f'-{augment_label}'
             if augment_class is not None:
@@ -415,6 +418,7 @@ def train_from_scratch(run_name,
     set_seed(seed)
 
     # Load data
+    enable_masks = grad_cam or hint
     dataset_kwargs = {
         'dataset_name': dataset_name,
         'labels': labels,
@@ -424,7 +428,7 @@ def train_from_scratch(run_name,
         'frontal_only': frontal_only,
         'num_workers': num_workers,
         'norm_by_sample': norm_by_sample,
-        'masks': grad_cam or hint,
+        'masks': enable_masks,
         'masks_version': UP_TO_DATE_MASKS_VERSION,
         'images_version': 'clahe' if clahe else None,
         'image_format': image_format,
@@ -437,10 +441,12 @@ def train_from_scratch(run_name,
         'oversample_ratio': oversample_ratio,
         'oversample_max_ratio': oversample_max_ratio,
         'augment': augment,
+        'augment_mode': augment_mode,
         'augment_label': augment_label,
         'augment_class': augment_class,
         'augment_times': augment_times,
         'augment_kwargs': augment_kwargs,
+        'augment_seg_mask': enable_masks,
         'undersample': undersample,
         'undersample_label': undersample_label,
         'balanced_sampler': balanced_sampler,
@@ -711,6 +717,7 @@ if __name__ == '__main__':
             oversample_ratio=ARGS.os_ratio,
             oversample_max_ratio=ARGS.os_max_ratio,
             augment=ARGS.augment,
+            augment_mode=ARGS.augment_mode,
             augment_label=ARGS.augment_label,
             augment_class=ARGS.augment_class,
             augment_times=ARGS.augment_times,

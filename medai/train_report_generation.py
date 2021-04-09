@@ -286,6 +286,7 @@ def train_from_scratch(run_name,
                        lr_sch_metric='loss',
                        lr_sch_kwargs={},
                        augment=False,
+                       augment_mode='single',
                        augment_label=None,
                        augment_class=None,
                        augment_times=1,
@@ -314,7 +315,9 @@ def train_from_scratch(run_name,
         else:
             run_name += '_notshuffle'
     if augment:
-        run_name += '_aug'
+        run_name += f'_aug{augment_times}'
+        if augment_mode != 'single':
+            run_name += f'-{augment_mode}'
         if augment_label is not None:
             run_name += f'-{augment_label}'
             if augment_class is not None:
@@ -348,23 +351,26 @@ def train_from_scratch(run_name,
 
     # Load data
     image_size = (image_size, image_size)
+    enable_masks = hierarchical
     dataset_kwargs = {
         'dataset_name': dataset_name,
         'max_samples': max_samples,
         'image_size': image_size,
         'batch_size': batch_size,
         'num_workers': num_workers,
-        'masks': hierarchical,
+        'masks': enable_masks,
         'frontal_only': frontal_only,
     }
     dataset_train_kwargs = {
         'sort_samples': sort_samples,
         'shuffle': shuffle,
         'augment': augment,
+        'augment_mode': augment_mode,
         'augment_label': augment_label,
         'augment_class': augment_class,
         'augment_times': augment_times,
         'augment_kwargs': augment_kwargs,
+        'augment_seg_mask': enable_masks,
     }
     train_dataloader = prepare_data_report_generation(
         create_dataloader,
@@ -611,6 +617,7 @@ if __name__ == '__main__':
                            lr_sch_metric=ARGS.lr_metric,
                            lr_sch_kwargs=ARGS.lr_sch_kwargs,
                            augment=ARGS.augment,
+                           augment_mode=ARGS.augment_mode,
                            augment_label=ARGS.augment_label,
                            augment_class=ARGS.augment_class,
                            augment_times=ARGS.augment_times,
