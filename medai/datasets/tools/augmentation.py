@@ -15,31 +15,18 @@ from medai.datasets.tools.transforms import (
     ColorJitterMany,
     GaussianNoiseMany,
 )
+from medai.utils.circular_shuffled_list import CircularShuffledList
 
 _SPATIAL_TRANSFORMS = set([
     'crop',
     'translate',
     'rotation',
     'shear',
-    ])
+])
+_SHOULD_APPLY_TO_TENSOR = ('noise-gaussian', )
 _TRANSFORM_METHOD_NAME = 'transform' # Transform method name in each dataset
 
-# For each augmentation method, should it be applied to PIL or tensors
-_APPLY_TO_PIL = 'apply_to_pil'
-_APPLY_TO_TENSOR_NONORM = 'apply_to_tensor_nonorm'
-_APPLY_TO_TENSOR_NORM = 'apply_to_tensor_norm'
-_PRE_POST_METHOD_BY_AUG = {
-    None: _APPLY_TO_PIL,
-    'crop': _APPLY_TO_PIL,
-    'translate': _APPLY_TO_PIL,
-    'rotation': _APPLY_TO_PIL,
-    'shear': _APPLY_TO_PIL,
-    'contrast-down': _APPLY_TO_PIL,
-    'contrast-up': _APPLY_TO_PIL,
-    'brightness-down': _APPLY_TO_PIL,
-    'brightness-up': _APPLY_TO_PIL,
-    'noise-gaussian': _APPLY_TO_TENSOR_NORM,
-}
+AVAILABLE_AUG_MODES = ('single', 'double')
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +37,7 @@ class Augmentator(Dataset):
     """
     def __init__(self, dataset, label=None, force_class=None, times=1, seg_mask=False,
                  dont_shuffle=False,
+                 mode='single',
                  crop=0.8, translate=0.1, rotation=15, contrast=0.8, brightness=0.8,
                  shear=(10, 10),
                  noise_gaussian=0.1,
@@ -78,6 +66,8 @@ class Augmentator(Dataset):
             noise_gaussian -- Amplifier value to add the gaussian noise
         """
         super().__init__()
+
+        assert mode in AVAILABLE_AUG_MODES, f'Aug-mode not recognized: {mode}'
 
         self.dataset = dataset
 
@@ -149,25 +139,24 @@ class Augmentator(Dataset):
             self._aug_fns['noise-gaussian'] = GaussianNoiseMany(amplifier=noise_gaussian)
 
         # Create new indices array
-        self.indices = []
-        for idx, should_augment in samples_idxs:
-            self.indices.append((idx, None)) # Always include the original sample
-
-            if not should_augment:
-                continue
-
-            for aug_method in self._aug_fns:
-                for _ in range(times):
-                    self.indices.append((idx, aug_method))
+        self.mode = mode
+        self.n_times = times
+        if mode == 'single':
+            self.indices = self._build_indices_single(samples_idxs, times)
+        elif mode == 'double':
+            self.indices = self._build_indices_double(samples_idxs, times)
 
         if not dont_shuffle:
             random.shuffle(self.indices)
         self._did_shuffle = not dont_shuffle
 
         self.augment_masks = seg_mask
+        if not self.augment_masks and dataset.enable_masks:
+            LOGGER.error('Passed seg_mask=False and dataset.enable_masks is set to True')
 
         # Print stats
         stats = {
+            'mode': mode,
             'times': times,
             'new-total': len(self.indices),
             'original': len(self.dataset),
@@ -184,58 +173,75 @@ class Augmentator(Dataset):
     def __len__(self):
         return len(self.indices)
 
-    def __getitem__(self, idx):
-        inner_idx, aug_method = self.indices[idx]
+    def _pre_transform_masks_(self, item, fields):
+        """Pre-transforms masks in-place in fields."""
+        if item.masks.ndim == 2:
+            fields['masks'] = pre_transform_masks(item.masks)
+        elif item.masks.ndim == 3:
+            # HACK: for datasets like VinBig, that return more than one mask,
+            # this special case is explictly written
+            # FIXME: could the performance be improved? 14 additional transformations
+            # are made (all in CPU).
+            for i, mask in enumerate(item.masks):
+                fields[f'masks-{i}'] = pre_transform_masks(mask)
+        else:
+            LOGGER.warning('Masks have ndim==%d', item.masks.ndim)
 
+    def _post_transform_masks_(self, item, fields):
+        if item.masks.ndim == 2:
+            fields['masks'] = post_transform_masks(fields['masks'])
+        elif item.masks.ndim == 3:
+            n_masks = len(item.masks)
+
+            finished_masks = []
+            for i in range(n_masks):
+                key = f'masks-{i}'
+                finished_masks.append(post_transform_masks(fields[key]))
+                del fields[key]
+
+            fields['masks'] = torch.stack(
+                finished_masks,
+                dim=0,
+            ).type(item.masks.type())
+
+    def __getitem__(self, idx):
+        inner_idx, aug_spatial, aug_color = self.indices[idx]
         item = self.dataset[inner_idx]
 
-        pre_post_method = _PRE_POST_METHOD_BY_AUG[aug_method]
-        pre_transform, post_transform = self.pre_post_transforms[pre_post_method]
+        # Grab transforms
+        pre_transform, post_transform = self.pre_post_transforms
 
-        # Prepare PIL images
+        # Pre-transform images
         fields = {
             'image': pre_transform(item.image),
         }
 
-        apply_to_seg_mask = self.augment_masks and aug_method in _SPATIAL_TRANSFORMS
+        # Pre-transform masks, if needed only
+        apply_to_seg_mask = self.augment_masks and aug_spatial in _SPATIAL_TRANSFORMS
         if apply_to_seg_mask:
-            if item.masks.ndim == 2:
-                n_masks = 1
-                fields['masks'] = pre_transform_masks(item.masks)
-            elif item.masks.ndim == 3:
-                # HACK: for datasets like VinBig, that return more than one mask,
-                # this special case is explictly written
-                # FIXME: could the performance be improved? 14 additional transformations
-                # are made (all in CPU).
-                n_masks = len(item.masks)
-                for i, mask in enumerate(item.masks):
-                    fields[f'masks-{i}'] = pre_transform_masks(mask)
-            else:
-                n_masks = -1
-                LOGGER.warning('Masks have ndim==%d', item.masks.ndim)
+            self._pre_transform_masks_(item, fields)
 
-        # Apply transformation
-        if aug_method is not None:
-            aug_instance = self._aug_fns[aug_method]
+        # Augment PIL image with color
+        if aug_color is not None and aug_color not in _SHOULD_APPLY_TO_TENSOR:
+            aug_instance = self._aug_fns[aug_color]
+            fields['image'] = aug_instance(fields['image'])
+
+        # Augment PIL image and masks with spatial transforms
+        if aug_spatial is not None:
+            aug_instance = self._aug_fns[aug_spatial]
             fields = aug_instance(fields)
 
-        # Apply post transformation
+        # Apply post transformation to image
         fields['image'] = post_transform(fields['image'])
 
+        # Apply post-transformation to masks, if needed only
         if apply_to_seg_mask:
-            if n_masks == 1:
-                fields['masks'] = post_transform_masks(fields['masks'])
-            elif n_masks > 1:
-                finished_masks = []
-                for i in range(n_masks):
-                    key = f'masks-{i}'
-                    finished_masks.append(post_transform_masks(fields[key]))
-                    del fields[key]
+            self._post_transform_masks_(item, fields)
 
-                fields['masks'] = torch.stack(
-                    finished_masks,
-                    dim=0,
-                ).type(item.masks.type())
+        # Augment Tensor image with color, if it should be applied to tensor
+        if aug_color in _SHOULD_APPLY_TO_TENSOR:
+            aug_instance = self._aug_fns[aug_color]
+            fields['image'] = aug_instance(fields['image'])
 
         return item._replace(**fields)
 
@@ -256,25 +262,68 @@ class Augmentator(Dataset):
         assert isinstance(_transforms[0], transforms.Resize), '1st transform should be Resize'
         assert isinstance(_transforms[1], transforms.ToTensor), '2d transform should be ToTensor'
 
-        # Break in two steps, before and after augmenting
-        self.pre_post_transforms = {
-            _APPLY_TO_PIL: (
-                _transforms[0], # Resize before
-                transforms.Compose(_transforms[1:]), # ToTensor after
-            ),
-            _APPLY_TO_TENSOR_NONORM: (
-                transforms.Compose(_transforms[:2]), # Resize and to-tensor before
-                transforms.Compose(_transforms[2:]), # Rest after
-            ),
-            _APPLY_TO_TENSOR_NORM: (
-                tf_instance, # Resize, to-tensor and norm before
-                lambda x: x, # Nothing after
-            )
-        }
+        pre_transform = _transforms[0] # Resize before
+        post_transform = transforms.Compose(_transforms[1:]) # ToTensor after
+        self.pre_post_transforms = pre_transform, post_transform
 
-        # Set as identity
+        # Monkey-patch with identity
         setattr(self.dataset, _TRANSFORM_METHOD_NAME, lambda x: x)
 
+
+    def _build_indices_single(self, samples_idxs, times):
+        """Creates an indices array using single-augmentation.
+
+        Single-augmentation: each sample gets augmented once with each aug_method.
+        """
+        indices = []
+        for idx, should_augment in samples_idxs:
+            indices.append((idx, None, None)) # Always include the original sample
+
+            if not should_augment:
+                continue
+
+            for aug_method in self._aug_fns:
+                is_spatial = aug_method in _SPATIAL_TRANSFORMS
+                aug_spatial = aug_method if is_spatial else None
+                aug_color = aug_method if not is_spatial else None
+
+                for _ in range(times):
+                    indices.append((idx, aug_spatial, aug_color))
+
+        return indices
+
+    def _build_indices_double(self, samples_idxs, times):
+        """Creates an indices array using double-augmentation.
+
+        Double-augmentation: each sample gets augmented with a spatial and color transform
+        at the same time.
+        """
+        spatial_transforms = CircularShuffledList(
+            aug_method
+            for aug_method in self._aug_fns
+            if aug_method in _SPATIAL_TRANSFORMS
+        )
+        color_transforms = CircularShuffledList(
+            aug_method
+            for aug_method in self._aug_fns
+            if aug_method not in _SPATIAL_TRANSFORMS
+        )
+
+        n_transforms = max(len(spatial_transforms), len(color_transforms))
+
+        indices = []
+        for idx, should_augment in samples_idxs:
+            indices.append((idx, None, None)) # Always include the original sample
+
+            if not should_augment:
+                continue
+
+            for _ in range(n_transforms * times):
+                aug_method_spatial = next(spatial_transforms)
+                aug_method_color = next(color_transforms)
+                indices.append((idx, aug_method_spatial, aug_method_color))
+
+        return indices
 
     def get_labels_presence_for(self, label):
         """Maps inner dataset indexes to Augmentator indexes.
@@ -282,10 +331,7 @@ class Augmentator(Dataset):
         This method is overriden to enable OneLabelUnbalancedSampler + Augmentator functionality.
         """
 
-        is_inner_idx_present = {
-            idx: presence
-            for idx, presence in self.dataset.get_labels_presence_for(label)
-        }
+        is_inner_idx_present = dict(self.dataset.get_labels_presence_for(label))
 
         labels_presence_aug_idxs = [
             (idx, is_inner_idx_present[inner_idx])
@@ -294,7 +340,7 @@ class Augmentator(Dataset):
 
         return labels_presence_aug_idxs
 
-    def plot_augmented_samples(self, sample_idx, n_masks=1):
+    def plot_augmented_samples(self, sample_idx, n_masks=1, title_fontsize=15):
         """Utility function to plot augmented samples.
 
         The instance must have been created with dont_shuffle=True,
@@ -309,21 +355,52 @@ class Augmentator(Dataset):
         """
         assert not self._did_shuffle, 'The augmented dataset was shuffled!'
 
+        def _prettify_method_name(methods):
+            if not isinstance(methods, (tuple, list)):
+                methods = (methods,)
+
+            _mapping = {
+                'rotation': 'rot',
+                'brightness': 'b',
+                'contrast': 'c',
+                'noise-gaussian': 'gauss',
+                'translate': 'trans',
+            }
+            pretty_methods = []
+            for method in methods:
+                if method is None:
+                    continue
+
+                for k, v in _mapping.items():
+                    method = method.replace(k, v)
+                pretty_methods.append(method)
+
+            return ','.join(pretty_methods)
+
+
         should_plot_masks = self.augment_masks and n_masks >= 1
 
         # Amounts
-        n_aug_methods = len(self._aug_fns)
+        if self.mode == 'single':
+            n_aug_methods = len(self._aug_fns)
+        else:
+            n_color_methods = len([m for m in self._aug_fns if m not in _SPATIAL_TRANSFORMS])
+            n_spatial_methods = len([m for m in self._aug_fns if m in _SPATIAL_TRANSFORMS])
+            n_aug_methods = max(n_color_methods, n_spatial_methods)
+
+        n_aug_methods *= self.n_times
+
         n_cols = n_aug_methods + 1
         n_rows = 1 + n_masks if should_plot_masks else 1
 
         # Augmented sample idx
-        idx = sample_idx * n_cols
+        base_idx = sample_idx * (n_aug_methods + 1)
 
         plt.figure(figsize=(n_cols*5, n_rows*5))
 
-        item = self[idx]
+        item = self[base_idx]
         plt.subplot(n_rows, n_cols, 1)
-        plt.title('original')
+        plt.title('original', fontsize=title_fontsize)
         plt.imshow(item.image[0], cmap='gray')
         plt.axis('off')
 
@@ -336,16 +413,25 @@ class Augmentator(Dataset):
             if item.masks.ndim == 2:
                 _plot_mask(item.masks, base_plot_index)
             elif item.masks.ndim == 3:
+                n_actual_masks = len(item.masks)
+                if n_actual_masks != n_masks:
+                    raise Exception(f'Received n_masks={n_masks}, should be {n_actual_masks}')
                 for i, mask in enumerate(item.masks):
                     _plot_mask(mask, base_plot_index + i*n_cols)
 
         if should_plot_masks:
             _plot_item_masks(item, n_cols + 1)
 
-        for i, method in enumerate(list(self._aug_fns)):
-            item = self[idx + 1 + i]
+        for i in range(n_aug_methods):
+            # Move idx to the right
+            augmented_idx = base_idx + 1 + i
+
+            # Get method(s)
+            method = self.indices[augmented_idx][1:]
+
+            item = self[augmented_idx]
             plt.subplot(n_rows, n_cols, i + 2)
-            plt.title(method)
+            plt.title(_prettify_method_name(method), fontsize=title_fontsize)
             plt.imshow(item.image[0], cmap='gray')
             plt.axis('off')
 

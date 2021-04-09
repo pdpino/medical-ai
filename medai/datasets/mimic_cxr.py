@@ -26,6 +26,7 @@ _FRONTAL_POSITIONS = ['PA', 'AP', 'AP AXIAL', 'LAO', 'LPO', 'RAO']
 class MIMICCXRDataset(Dataset):
     dataset_dir = DATASET_DIR
     multilabel = True
+    enable_masks = False
 
     def __init__(self, dataset_type='train', max_samples=None,
                  labels=None, image_size=(512, 512),

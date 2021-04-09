@@ -20,6 +20,7 @@ _DATASET_STD = 0.2733
 class JSRTDataset(Dataset):
     dataset_dir = DATASET_DIR
     multilabel = False
+    enable_masks = True
 
     def __init__(self, dataset_type='all',
                  image_size=(512, 512), norm_by_sample=False,
@@ -57,7 +58,7 @@ class JSRTDataset(Dataset):
             std=_DATASET_STD,
         )
         self.transform_mask = transforms.Compose([
-            transforms.Resize(image_size),
+            transforms.Resize(image_size, 0), # Nearest mode
             transforms.ToTensor(),
         ])
 
