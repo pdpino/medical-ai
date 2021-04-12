@@ -335,7 +335,7 @@ class Augmentator(Dataset):
 
         labels_presence_aug_idxs = [
             (idx, is_inner_idx_present[inner_idx])
-            for idx, (inner_idx, _) in enumerate(self.indices)
+            for idx, (inner_idx, _, _) in enumerate(self.indices)
         ]
 
         return labels_presence_aug_idxs

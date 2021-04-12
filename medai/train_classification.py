@@ -405,6 +405,9 @@ def train_from_scratch(run_name,
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+        cooldown = lr_sch_kwargs.get('cooldown', 0)
+        if cooldown != 0:
+            run_name += f'-c{cooldown}'
     # if not early_stopping:
     #     run_name += '_noes'
     # else:

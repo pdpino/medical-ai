@@ -24,7 +24,7 @@ class JSRTDataset(Dataset):
 
     def __init__(self, dataset_type='all',
                  image_size=(512, 512), norm_by_sample=False,
-                 image_format='L', **unused_kwargs):
+                 image_format='L', max_samples=None, **unused_kwargs):
         super().__init__()
 
         assert DATASET_DIR is not None, 'DATASET_DIR is None'
@@ -48,6 +48,9 @@ class JSRTDataset(Dataset):
                 for name in self.images_names
                 if name in selected_images
             ]
+
+        if max_samples is not None:
+            self.images_names = self.images_names[:max_samples]
 
         self.image_format = image_format
         self.image_size = image_size

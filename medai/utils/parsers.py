@@ -117,7 +117,7 @@ def add_args_early_stopping(parser, metric='loss'):
                           help='Patience value for early-stopping')
     es_group.add_argument('--es-metric', type=str, default=metric,
                           help='Metric to monitor for early-stopping')
-    es_group.add_argument('--es-min-delta', type=float, default=0,
+    es_group.add_argument('--es-min-delta', type=float, default=0.001,
                           help='Min delta to use for early-stopping')
 
 
