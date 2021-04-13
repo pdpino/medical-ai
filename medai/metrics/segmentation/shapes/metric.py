@@ -1,6 +1,5 @@
 from collections import defaultdict, Counter
 import logging
-# import torch
 import numpy as np
 from ignite.metrics import Metric
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
@@ -19,7 +18,7 @@ def _divide_dict_by(items, divide_by):
 
 
 class OrganShapesAndHolesMetric(Metric):
-    """TODO (rename if necessary)."""
+    """Computes shapes and holes in an organ segmentation output."""
 
     def __init__(self, ignore=[], **kwargs):
         super().__init__(**kwargs)

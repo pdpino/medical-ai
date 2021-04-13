@@ -83,6 +83,9 @@ def train_model(run_name,
                                    device=device,
                                    ))
     attach_metrics_segmentation(validator, labels, multilabel=multilabel)
+    # NOTE: these metrics are not attached during training, as
+    # an untrained model produces many different shapes, and takes a lot of time to compute
+    # attach_organ_shapes_metric(validator, labels, gt=False)
 
 
     trainer = Engine(get_step_fn(model,
@@ -93,6 +96,7 @@ def train_model(run_name,
                                  device=device,
                                  ))
     attach_metrics_segmentation(trainer, labels, multilabel=multilabel)
+    # attach_organ_shapes_metric(trainer, labels, gt=False)
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)

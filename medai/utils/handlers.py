@@ -18,6 +18,8 @@ _shorter_names = {
     'mse-total': 'mse-t',
     'mse-pos': 'mse-p',
     'mse-neg': 'mse-n',
+    'n-shapes-gen': 'shapes',
+    'n-holes-gen': 'holes',
 }
 
 def _shorten(metric_name):
