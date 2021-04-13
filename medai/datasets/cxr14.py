@@ -12,6 +12,7 @@ from medai.datasets.common import (
     BatchItem,
     CXR14_DISEASES,
     JSRT_ORGANS,
+    UP_TO_DATE_MASKS_VERSION,
 )
 from medai.utils.images import get_default_image_transform
 
@@ -59,7 +60,7 @@ class CXR14Dataset(Dataset):
 
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
-                 masks=False, images_version=None, masks_version=None,
+                 masks=False, images_version=None, masks_version=UP_TO_DATE_MASKS_VERSION,
                  xrv_norm=False, seg_multilabel=True,
                  **unused_kwargs):
         super().__init__()
@@ -159,8 +160,9 @@ class CXR14Dataset(Dataset):
                 transforms.ToTensor(),
             ])
 
-            masks_version = masks_version or 'v0' # backward compatibility
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
+
+            assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
 
             if not os.path.isdir(self.masks_dir):
                 raise Exception(f'Masks do not exist! {self.masks_dir}')
@@ -210,6 +212,14 @@ class CXR14Dataset(Dataset):
             bboxes_valid=bboxes_valid,
             image_fname=image_fname,
         )
+
+    def get_item_by_image_name(self, image_name):
+        if not image_name.endswith('.png'):
+            image_name = f'{image_name}.png'
+        rows = self.label_index.loc[self.label_index['FileName'] == image_name]
+        assert len(rows) == 1, f'Found not exactly 1: {rows}'
+        idx = rows.index[0]
+        return self[idx]
 
     def get_bboxes(self, image_name):
         # REVIEW: precompute this?

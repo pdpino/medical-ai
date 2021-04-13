@@ -4,7 +4,7 @@ from pprint import pprint
 import torch
 from ignite.engine import Engine
 
-from medai.datasets import prepare_data_classification
+from medai.datasets import prepare_data_classification, UP_TO_DATE_MASKS_VERSION
 from medai.metrics import save_results
 from medai.metrics.classification import attach_metrics_image_saliency
 from medai.models.checkpoint import load_compiled_model_classification, load_compiled_model_cls_seg
@@ -56,7 +56,7 @@ def run_evaluation(run_name,
         'max_samples': max_samples,
         'batch_size': batch_size,
         'masks': True,
-        'masks_version': 'v1',
+        'masks_version': UP_TO_DATE_MASKS_VERSION,
         'image_size': dataset_kwargs['image_size'],
     }
     if image_size is not None:

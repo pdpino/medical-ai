@@ -14,6 +14,7 @@ from medai.datasets.common import (
     BatchItem,
     VINBIG_DISEASES,
     JSRT_ORGANS,
+    UP_TO_DATE_MASKS_VERSION,
 )
 from medai.utils.images import get_default_image_transform
 
@@ -39,7 +40,8 @@ class VinBigDataset(Dataset):
 
     def __init__(self, dataset_type='train', max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
-                 masks=False, bboxes=False, fallback_organs=True, **unused_kwargs):
+                 masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
+                 bboxes=False, fallback_organs=True, **unused_kwargs):
         super().__init__()
 
         if DATASET_DIR is None:
@@ -97,7 +99,8 @@ class VinBigDataset(Dataset):
 
         self.enable_bboxes = bboxes
         self.fallback_organs = fallback_organs
-        self.masks_dir = os.path.join(DATASET_DIR, 'organ-masks', 'v1')
+        self.masks_dir = os.path.join(DATASET_DIR, 'organ-masks', masks_version)
+        assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
         self.enable_masks = masks
         if self.enable_masks and self.fallback_organs:
             self.transform_mask = transforms.Resize(image_size, 0) # Nearest mode

@@ -3,6 +3,7 @@ import numpy as np
 from torch.utils.data import DataLoader, Subset
 from torch.utils.data.dataloader import default_collate
 
+from medai.datasets.common import UP_TO_DATE_MASKS_VERSION
 from medai.datasets.cxr14 import CXR14Dataset
 from medai.datasets.chexpert import ChexpertDataset
 from medai.datasets.covid_kaggle import CovidKaggleDataset
@@ -55,13 +56,8 @@ _MISSING_SPLITS = set([
     ('chexpert', 'test'),
 ])
 
-UP_TO_DATE_MASKS_VERSION = 'v1'
-
 _DATASETS_WITH_MASKS_IMPLEMENTED = set([
     'cxr14', 'iu-x-ray', 'vinbig', 'chexpert',
-])
-_DATASETS_WITH_MASKS_VERSION_IMPLEMENTED = set([
-    'cxr14', 'iu-x-ray',
 ])
 
 
@@ -108,13 +104,16 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
             err = f'Dataset {dataset_name} does not have masks yet (masks=True)'
             raise NotImplementedError(err)
 
-        if dataset_name in _DATASETS_WITH_MASKS_VERSION_IMPLEMENTED:
-            masks_version_used = kwargs.get('masks_version', None)
-            if masks_version_used != UP_TO_DATE_MASKS_VERSION:
-                LOGGER.warning(
-                    'Not using the up-to-date masks_version, found=%s vs up-to-date=%s',
-                    masks_version_used, UP_TO_DATE_MASKS_VERSION,
-                )
+        if 'masks_version' not in kwargs:
+            # backward compatibility: older runs do not have this set
+            kwargs['masks_version'] = 'v0'
+
+        masks_version_used = kwargs.get('masks_version', None)
+        if masks_version_used != UP_TO_DATE_MASKS_VERSION:
+            LOGGER.warning(
+                'Not using the up-to-date masks_version, found=%s vs up-to-date=%s',
+                masks_version_used, UP_TO_DATE_MASKS_VERSION,
+            )
 
 
     if kwargs.get('images_version') and dataset_name not in ('cxr14',):

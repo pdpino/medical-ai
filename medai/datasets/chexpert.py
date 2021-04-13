@@ -10,6 +10,7 @@ from medai.datasets.common import (
     BatchItem,
     CHEXPERT_DISEASES,
     JSRT_ORGANS,
+    UP_TO_DATE_MASKS_VERSION,
 )
 from medai.utils.images import get_default_image_transform
 
@@ -47,7 +48,7 @@ class ChexpertDataset(Dataset):
     def __init__(self, dataset_type='train', labels=None,
                  max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
-                 frontal_only=False, masks=False,
+                 frontal_only=False, masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
                  **unused_kwargs):
         super().__init__()
 
@@ -120,7 +121,9 @@ class ChexpertDataset(Dataset):
 
         self.enable_masks = masks
         if masks:
-            self.masks_dir = os.path.join(DATASET_DIR, 'masks', 'v1')
+            self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
+
+            assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
 
             self.transform_mask = transforms.Compose([
                 transforms.Resize(image_size, 0), # Nearest mode

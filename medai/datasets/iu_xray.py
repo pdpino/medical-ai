@@ -8,7 +8,12 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from ignite.utils import to_onehot
 
-from medai.datasets.common import BatchItem, CHEXPERT_LABELS, JSRT_ORGANS
+from medai.datasets.common import (
+    BatchItem,
+    CHEXPERT_LABELS,
+    JSRT_ORGANS,
+    UP_TO_DATE_MASKS_VERSION,
+)
 from medai.datasets.vocab import load_vocab, compute_vocab
 from medai.utils.images import get_default_image_transform
 from medai.utils.nlp import (
@@ -36,7 +41,8 @@ class IUXRayDataset(Dataset):
                  frontal_only=False, image_size=(512, 512),
                  norm_by_sample=False,
                  image_format='RGB',
-                 masks=False, masks_version=None, seg_multilabel=True,
+                 masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
+                 seg_multilabel=True,
                  vocab=None, recompute_vocab=False, **unused_kwargs):
         super().__init__()
 
@@ -94,10 +100,8 @@ class IUXRayDataset(Dataset):
                                  frontal_only=frontal_only)
 
         if self.enable_masks:
-            masks_version = masks_version or 'v0' # backward compatibility
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
-            if not os.path.isdir(self.masks_dir):
-                raise Exception(f'Masks do not exist! {self.masks_dir}')
+            assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
 
 
     def __len__(self):

@@ -5,6 +5,7 @@ For a more generalized version, use train_cls_seg.py
 from torch import nn
 from ignite.engine import Engine
 
+from medai.datasets import UP_TO_DATE_MASKS_VERSION
 from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import (
@@ -83,7 +84,7 @@ class TrainingDetectionSeg(TrainingProcess):
     def _fill_dataset_kwargs(self):
         self.dataset_kwargs['fallback_organs'] = not self.args.seg_only_diseases
         self.dataset_kwargs['masks'] = True
-        self.dataset_kwargs['masks_version'] = 'v1'
+        self.dataset_kwargs['masks_version'] = UP_TO_DATE_MASKS_VERSION
 
         if self.args.augment:
             if 'augment_kwargs' not in self.dataset_train_kwargs:

@@ -1,5 +1,6 @@
 from ignite.engine import Engine
 
+from medai.datasets import UP_TO_DATE_MASKS_VERSION
 from medai.losses import AVAILABLE_LOSSES
 from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
@@ -91,7 +92,7 @@ class TrainingClsSeg(TrainingProcess):
     def _fill_dataset_kwargs(self):
         # self.dataset_kwargs['fallback_organs'] = False
         self.dataset_kwargs['masks'] = True
-        self.dataset_kwargs['masks_version'] = 'v1'
+        self.dataset_kwargs['masks_version'] = UP_TO_DATE_MASKS_VERSION
         self.dataset_kwargs['seg_multilabel'] = False
 
         if self.args.augment:

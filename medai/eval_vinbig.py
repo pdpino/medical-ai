@@ -6,7 +6,7 @@ from functools import partial
 import torch
 from ignite.engine import Engine
 
-from medai.datasets import prepare_data_classification
+from medai.datasets import prepare_data_classification, UP_TO_DATE_MASKS_VERSION
 from medai.metrics import save_results
 from medai.metrics.detection import attach_mAP_coco
 from medai.metrics.detection.coco_writer import attach_vinbig_writer
@@ -155,7 +155,7 @@ def evaluate_run(args, device='cuda'):
     dataset_kwargs.update({
         'dataset_name': 'vinbig',
         'masks': True,
-        'masks_version': 'v1',
+        'masks_version': UP_TO_DATE_MASKS_VERSION,
         # 'fallback_organs': True,
         'labels': None,
         'max_samples': args.max_samples,

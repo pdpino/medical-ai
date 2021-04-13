@@ -28,3 +28,6 @@ BatchItems = namedtuple('BatchItems', [
 
 BatchItem.__new__.__defaults__ = (-1,) * len(BatchItem._fields)
 BatchItems.__new__.__defaults__ = (None,) * len(BatchItems._fields)
+
+# Organ masks
+UP_TO_DATE_MASKS_VERSION = 'v2'
