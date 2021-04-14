@@ -87,6 +87,8 @@ class TrainingProcess(abc.ABC):
     def _parse_args(self):
         parser = argparse.ArgumentParser(usage='%(prog)s [options]')
 
+        parser.add_argument('-exp', '--experiment', type=str, default='',
+                            help='Custom experiment name')
         parser.add_argument('--seed', type=int, default=1234,
                             help='Set a seed (initial run only)')
         parser.add_argument('--resume', type=str, default=None,
@@ -274,7 +276,9 @@ class TrainingProcess(abc.ABC):
 
         run_name = run_name.replace(' ', '-')
 
-        self.run_id = RunId(run_name, self.args.debug, self.task)
+        self.run_id = RunId(
+            run_name, self.args.debug, self.task, self.args.experiment,
+        )
 
 
     def train_from_scratch(self):
@@ -318,7 +322,9 @@ class TrainingProcess(abc.ABC):
 
     def resume_training(self):
         # Create run_name attributes
-        self.run_id = RunId(self.args.resume, self.args.debug, self.task)
+        self.run_id = RunId(
+            self.args.resume, self.args.debug, self.task, self.args.experiment,
+        )
 
         self._load_resumed_model()
 

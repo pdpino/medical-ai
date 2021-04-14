@@ -19,7 +19,7 @@ def _get_task_folder(task):
     return folder_by_task[task]
 
 
-def _get_parent_folder(folder, debug, task, workspace_dir=WORKSPACE_DIR):
+def _get_parent_folder(folder, debug, task, experiment='', workspace_dir=WORKSPACE_DIR):
     debug_folder = 'debug' if debug else ''
     task_folder = _get_task_folder(task)
 
@@ -28,6 +28,7 @@ def _get_parent_folder(folder, debug, task, workspace_dir=WORKSPACE_DIR):
         task_folder,
         folder,
         debug_folder,
+        experiment if experiment else '',
     )
 
     return parent_folder
@@ -53,7 +54,8 @@ def _build_dir_getter(folder):
                 exception will be raised).
         """
         parent_folder = _get_parent_folder(
-            folder, run_id.debug, run_id.task, workspace_dir=workspace_dir,
+            folder, run_id.debug, run_id.task, run_id.experiment,
+            workspace_dir=workspace_dir,
         )
 
         run_folder = os.path.join(parent_folder, run_id.name)
@@ -80,7 +82,8 @@ def _resolve_run_name(run_id, search_in='runs', workspace_dir=WORKSPACE_DIR):
 
     if _TIMESTAMP_ONLY_REGEX.match(run_id.name):
         parent_folder = _get_parent_folder(
-            search_in, run_id.debug, run_id.task, workspace_dir=workspace_dir,
+            search_in, run_id.debug, run_id.task, run_id.experiment,
+            workspace_dir=workspace_dir,
         )
 
         # Search the run with timestamp
@@ -98,11 +101,11 @@ def _resolve_run_name(run_id, search_in='runs', workspace_dir=WORKSPACE_DIR):
     return None
 
 
-class RunId(namedtuple('RunId', ['name', 'debug', 'task'])):
+class RunId(namedtuple('RunId', ['name', 'debug', 'task', 'experiment'])):
     """Class to hold run identification."""
 
     def __str__(self):
-        return f'{self.name} (task={self.task}, debug={self.debug})'
+        return f'{self.name} (task={self.task}, exp={self.experiment}, debug={self.debug})'
 
     def resolve(self):
         """Resolve the run-name."""
@@ -112,4 +115,4 @@ class RunId(namedtuple('RunId', ['name', 'debug', 'task'])):
 
         return self
 
-RunId.__new__.__defaults__ = (None, True, None)
+RunId.__new__.__defaults__ = (None, True, None, '')
