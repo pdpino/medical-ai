@@ -33,6 +33,7 @@ from medai.utils import (
     timeit_main,
     set_seed,
     set_seed_from_metadata,
+    RunId,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -44,7 +45,7 @@ from medai.utils.handlers import (
 LOGGER = logging.getLogger('medai.seg.train')
 
 
-def train_model(run_name,
+def train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
@@ -55,16 +56,11 @@ def train_model(run_name,
                 n_epochs=1,
                 print_metrics=None,
                 tb_kwargs={},
-                debug=True,
                 device='cuda',
                 ):
-    LOGGER.info('Training run: %s (debug=%s)', run_name, debug)
+    LOGGER.info('Training run: %s', run_id)
 
-    tb_writer = TBWriter(run_name,
-                         task='seg',
-                         debug=debug,
-                         **tb_kwargs,
-                         )
+    tb_writer = TBWriter(run_id, **tb_kwargs)
 
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
@@ -119,13 +115,11 @@ def train_model(run_name,
                        print_metrics=print_metrics,
                        )
 
-    attach_checkpoint_saver(run_name,
+    attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
                             validator,
-                            task='seg',
                             metric='iou',
-                            debug=debug,
                             )
 
     if early_stopping:
@@ -148,7 +142,7 @@ def train_model(run_name,
     duration_per_epoch = duration_to_str(secs_per_epoch)
     LOGGER.info('Average time per epoch: %s', duration_per_epoch)
 
-    LOGGER.info('Finished training: %s (debug=%s)', run_name, debug)
+    LOGGER.info('Finished training: %s', run_id)
 
     return trainer.state.metrics, validator.state.metrics
 
@@ -163,9 +157,10 @@ def resume_training(run_name,
                     device='cuda',
                     ):
     """Resume training from a previous run."""
+    run_id = RunId(run_name, debug, 'seg')
+
     # Load model
-    compiled_model = load_compiled_model_segmentation(run_name,
-                                                      debug=debug,
+    compiled_model = load_compiled_model_segmentation(run_id,
                                                       device=device,
                                                       multiple_gpu=multiple_gpu)
 
@@ -186,14 +181,13 @@ def resume_training(run_name,
     # Train
     other_hparams = metadata.get('hparams', {})
 
-    train_model(run_name,
+    train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
                 n_epochs=n_epochs,
                 print_metrics=print_metrics,
                 tb_kwargs=tb_kwargs,
-                debug=debug,
                 device=device,
                 **other_hparams,
                 )
@@ -248,6 +242,8 @@ def train_from_scratch(run_name,
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
         run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+
+    run_id = RunId(run_name, debug, 'seg')
 
     set_seed(seed)
 
@@ -316,20 +312,19 @@ def train_from_scratch(run_name,
         'dataset_train_kwargs': dataset_train_kwargs,
         'seed': seed,
     }
-    save_metadata(metadata, run_name, task='seg', debug=debug)
+    save_metadata(metadata, run_id)
 
     # Create compiled model
     compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Train
-    train_model(run_name,
+    train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
                 n_epochs=n_epochs,
                 print_metrics=print_metrics,
                 tb_kwargs=tb_kwargs,
-                debug=debug,
                 device=device,
                 **other_train_kwargs,
                 )

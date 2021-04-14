@@ -50,6 +50,7 @@ from medai.utils import (
     set_seed,
     set_seed_from_metadata,
     timeit_main,
+    RunId,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -61,14 +62,13 @@ from medai.utils.handlers import (
 LOGGER = logging.getLogger('medai.rg.train')
 
 
-def train_model(run_name,
+def train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
                 n_epochs=1,
                 supervise_attention=False,
                 hierarchical=False,
-                debug=True,
                 save_model=True,
                 dryrun=False,
                 tb_kwargs={},
@@ -81,8 +81,8 @@ def train_model(run_name,
                 device='cuda',
                ):
     # Prepare run stuff
-    LOGGER.info('Training run: %s (debug=%s)', run_name, debug)
-    tb_writer = TBWriter(run_name, task='rg', debug=debug, dryrun=dryrun, **tb_kwargs)
+    LOGGER.info('Training run: %s', run_id)
+    tb_writer = TBWriter(run_id, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         LOGGER.info('Resuming from epoch %s', initial_epoch)
@@ -157,13 +157,11 @@ def train_model(run_name,
 
     # Attach checkpoint
     checkpoint_metric = 'chex_f1' if medical_correctness else None
-    attach_checkpoint_saver(run_name,
+    attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
                             validator,
-                            task='rg',
                             metric=checkpoint_metric,
-                            debug=debug,
                             dryrun=dryrun or (not save_model),
                            )
 
@@ -186,7 +184,7 @@ def train_model(run_name,
     # Close stuff
     tb_writer.close()
 
-    LOGGER.info('Finished training: %s (debug=%s)', run_name, debug)
+    LOGGER.info('Finished training: %s', run_id)
 
     return trainer, validator
 
@@ -201,9 +199,10 @@ def resume_training(run_name,
                     device='cuda',
                     ):
     """Resume training."""
+    run_id = RunId(run_name, debug, 'rg').resolve()
+
     # Load model
-    compiled_model = load_compiled_model_report_generation(run_name,
-                                                           debug=debug,
+    compiled_model = load_compiled_model_report_generation(run_id,
                                                            device=device,
                                                            multiple_gpu=multiple_gpu)
 
@@ -246,7 +245,7 @@ def resume_training(run_name,
 
     # Train
     other_train_kwargs = metadata.get('other_train_kwargs', {})
-    train_model(run_name,
+    train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
@@ -254,7 +253,6 @@ def resume_training(run_name,
                 n_epochs=n_epochs,
                 tb_kwargs=tb_kwargs,
                 device=device,
-                debug=debug,
                 **other_train_kwargs,
                 )
 
@@ -333,6 +331,8 @@ def train_from_scratch(run_name,
     if decoder_name in DEPRECATED_DECODERS:
         raise Exception(f'RG model is deprecated: {decoder_name}')
 
+    run_id = RunId(run_name, debug, 'rg')
+
     set_seed(seed)
 
     # Decide hierarchical
@@ -391,14 +391,15 @@ def train_from_scratch(run_name,
     # Create CNN
     if cnn_run_name:
         # Load pretrained
-        compiled_cnn = load_compiled_model_classification(cnn_run_name,
-                                                          debug=debug,
+        cnn_run_id = RunId(cnn_run_name, debug, 'cls').resolve()
+        compiled_cnn = load_compiled_model_classification(cnn_run_id,
                                                           device=device,
                                                           multiple_gpu=False,
                                                           # gpus are handled in CNN2Seq!
                                                           )
         cnn = compiled_cnn.model
         cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
+        cnn_run_name = cnn_run_id.name # Resolved name
     else:
         # Create new
         cnn_kwargs = {
@@ -468,13 +469,13 @@ def train_from_scratch(run_name,
         'other_train_kwargs': other_train_kwargs,
         'seed': seed,
     }
-    save_metadata(metadata, run_name, task='rg', debug=debug)
+    save_metadata(metadata, run_id)
 
     # Compiled model
     compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Train
-    train_model(run_name,
+    train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
@@ -482,7 +483,6 @@ def train_from_scratch(run_name,
                 n_epochs=n_epochs,
                 tb_kwargs=tb_kwargs,
                 device=device,
-                debug=debug,
                 **other_train_kwargs,
                 )
 

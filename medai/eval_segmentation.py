@@ -15,6 +15,7 @@ from medai.utils import (
     parsers,
     config_logging,
     timeit_main,
+    RunId,
 )
 
 
@@ -57,9 +58,10 @@ def evaluate_run(run_name,
                  ignore_augment=False,
                  ):
     """Evaluates a saved run."""
+    run_id = RunId(run_name, debug, 'seg')
+
     # Load model
-    compiled_model = load_compiled_model_segmentation(run_name,
-                                                      debug=debug,
+    compiled_model = load_compiled_model_segmentation(run_id,
                                                       device=device,
                                                       multiple_gpu=multiple_gpu)
 
@@ -99,7 +101,7 @@ def evaluate_run(run_name,
 
         metrics[name] = evaluate_model(compiled_model.model, dataloader, **eval_kwargs)
 
-    save_results(metrics, run_name, task='seg', debug=debug)
+    save_results(metrics, run_id)
 
     if not quiet:
         pprint(metrics)

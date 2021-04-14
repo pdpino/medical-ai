@@ -19,6 +19,7 @@ from medai.utils import (
     parsers,
     config_logging,
     timeit_main,
+    RunId,
 )
 
 
@@ -92,19 +93,18 @@ def get_method2_forward_fn(cl_model, seg_model):
 
 def get_model(args, device='cuda'):
     # TODO: rename to: cls-seg, ensemble-simple, ensemble-multiple
+
     if args.method == 'method1':
+        run_id = RunId(args.run_name, args.debug, 'det').resolve()
         compiled_model = load_compiled_model_detection_seg(
-            args.run_name,
-            debug=args.debug,
+            run_id,
             device=device,
             multiple_gpu=False,
         )
         compiled_model.model.eval()
         dataset_kwargs = compiled_model.metadata['dataset_kwargs']
 
-        run_details = (args.run_name, args.debug, 'det')
-
-        return compiled_model.model, dataset_kwargs, run_details
+        return compiled_model.model, dataset_kwargs, run_id
 
     if args.method == 'method2':
         raise NotImplementedError()
@@ -144,8 +144,7 @@ def get_model(args, device='cuda'):
 @timeit_main(LOGGER)
 def evaluate_run(args, device='cuda'):
     """Evaluate a model."""
-    model_forward_fn, dataset_kwargs, run_details = get_model(args, device)
-    run_name, debug, task = run_details
+    model_forward_fn, dataset_kwargs, run_id = get_model(args, device)
 
     # TODO: implement override
     # if not override and are_results_saved(run_name, task=task, debug=debug):
@@ -197,18 +196,18 @@ def evaluate_run(args, device='cuda'):
 
         for name in h2bb_names:
             if dataset_type != 'test':
-                attach_mAP_coco(engine, dataloader, run_name, task=task, debug=debug,
+                attach_mAP_coco(engine, dataloader, run_id,
                                 suffix=name, device=device)
 
             attach_vinbig_writer(
-                engine, dataloader, run_name, debug=debug, task=task, suffix=name,
+                engine, dataloader, run_id, suffix=name,
             )
 
         engine.run(dataloader, args.epochs)
 
         metrics[dataset_type] = engine.state.metrics
 
-    save_results(metrics, run_name, task=task, debug=debug)
+    save_results(metrics, run_id)
 
     if not args.quiet:
         pprint(metrics)

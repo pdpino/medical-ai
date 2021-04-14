@@ -9,7 +9,7 @@ from pprint import pprint
 import pandas as pd
 import numpy as np
 
-from medai.utils import TMP_DIR, timeit_main
+from medai.utils import TMP_DIR, timeit_main, RunId
 from medai.utils.files import get_results_folder
 from medai.metrics import load_rg_outputs
 
@@ -238,8 +238,7 @@ def _calculate_metrics_dict(df):
 
 
 @timeit_main
-def evaluate_run(run_name,
-                 debug=True,
+def evaluate_run(run_id,
                  override=False,
                  max_samples=None,
                  free=False,
@@ -248,22 +247,22 @@ def evaluate_run(run_name,
                  ):
     """Evaluates a run with the MIRQI metric."""
     # Folder containing run results
-    results_folder = get_results_folder(run_name, task='rg', debug=debug)
+    results_folder = get_results_folder(run_id)
 
     # Output file at the end of this process
     suffix = 'free' if free else 'notfree'
     labeled_output_path = os.path.join(results_folder, f'outputs-mirqi-{suffix}.csv')
 
     if not override and os.path.isfile(labeled_output_path):
-        LOGGER.info('Skipping calculation, already calculated: %s', run_name)
+        LOGGER.info('Skipping calculation, already calculated: %s', run_id)
 
         df = pd.read_csv(labeled_output_path)
     else:
         # Read outputs
-        df = load_rg_outputs(run_name, debug=debug, free=free)
+        df = load_rg_outputs(run_id, free=free)
 
         if df is None:
-            LOGGER.error('Need to compute outputs for run first: %s', run_name)
+            LOGGER.error('Need to compute outputs for run first: %s', run_id)
             return
 
         _n_distinct_epochs = set(df['epoch'])
@@ -330,8 +329,7 @@ def parse_args():
 if __name__ == '__main__':
     ARGS = parse_args()
 
-    evaluate_run(ARGS.run_name,
-                 debug=ARGS.debug,
+    evaluate_run(RunId(ARGS.run_name, ARGS.debug, 'rg').resolve(),
                  override=ARGS.override,
                  max_samples=ARGS.max_samples,
                  free=ARGS.free,

@@ -10,7 +10,7 @@ from medai.datasets.common import CHEXPERT_LABELS
 from medai.metrics import load_rg_outputs
 from medai.metrics.report_generation import chexpert
 from medai.utils.files import get_results_folder
-from medai.utils import timeit_main, config_logging, get_timestamp
+from medai.utils import timeit_main, config_logging, get_timestamp, RunId
 
 
 LOGGER = logging.getLogger('medai.rg.eval.chexpert')
@@ -71,8 +71,7 @@ def _calculate_metrics_dict(df):
 
 
 @timeit_main(LOGGER)
-def evaluate_run(run_name,
-                 debug=True,
+def evaluate_run(run_id,
                  override=False,
                  max_samples=None,
                  free=False,
@@ -80,21 +79,21 @@ def evaluate_run(run_name,
                  ):
     """Evaluates a run with the Chexpert-labeler."""
     # Folder containing run results
-    results_folder = get_results_folder(run_name, task='rg', debug=debug)
+    results_folder = get_results_folder(run_id)
 
     # Output file at the end of this process
     suffix = 'free' if free else 'notfree'
     labeled_output_path = os.path.join(results_folder, f'outputs-labeled-{suffix}.csv')
 
     if not override and os.path.isfile(labeled_output_path):
-        LOGGER.info('Skipping run, already calculated: %s', run_name)
+        LOGGER.info('Skipping run, already calculated: %s', run_id)
         return
 
     # Read outputs
-    df = load_rg_outputs(run_name, debug=debug, free=free)
+    df = load_rg_outputs(run_id, free=free)
 
     if df is None:
-        LOGGER.error('Need to compute outputs for run first: %s', run_name)
+        LOGGER.error('Need to compute outputs for run first: %s', run_id)
         return
 
     n_samples = len(df)
@@ -167,8 +166,7 @@ if __name__ == '__main__':
 
     config_logging()
 
-    evaluate_run(ARGS.run_name,
-                 debug=ARGS.debug,
+    evaluate_run(RunId(ARGS.run_name, ARGS.debug, 'rg').resolve(),
                  override=ARGS.override,
                  max_samples=ARGS.max_samples,
                  free=ARGS.free,

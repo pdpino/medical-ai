@@ -22,8 +22,8 @@ class MetricsEncoder(json.JSONEncoder):
         return obj
 
 
-def _get_results_fpath(run_name, task, debug=True, suffix='', **kwargs):
-    folder = get_results_folder(run_name, task=task, debug=debug, **kwargs)
+def _get_results_fpath(run_id, suffix='', **kwargs):
+    folder = get_results_folder(run_id, **kwargs)
 
     filename = 'metrics'
     if suffix:
@@ -35,17 +35,15 @@ def _get_results_fpath(run_name, task, debug=True, suffix='', **kwargs):
 
 
 # TODO: rename as "are_metrics_saved", is more accurate
-def are_results_saved(run_name, task, debug=True, suffix=''):
-    # FIXME: run_name cannot be passed as timestamp-only (throws error)
-    filepath = _get_results_fpath(run_name, task, debug=debug, suffix=suffix,
-                                  save_mode=False)
+def are_results_saved(run_id, suffix=''):
+    filepath = _get_results_fpath(run_id, suffix=suffix, save_mode=False)
 
     return filepath is not None and os.path.isfile(filepath)
 
 
-def save_results(metrics_dict, run_name, task, debug=True,
+def save_results(metrics_dict, run_id,
                  suffix='', merge_prev=True):
-    filepath = _get_results_fpath(run_name, task, debug=debug, suffix=suffix, save_mode=True)
+    filepath = _get_results_fpath(run_id, suffix=suffix, save_mode=True)
 
     if os.path.isfile(filepath) and merge_prev:
         with open(filepath, 'r') as f:
@@ -61,13 +59,15 @@ def save_results(metrics_dict, run_name, task, debug=True,
     LOGGER.info('Saved metrics to %s', filepath)
 
 
-def load_rg_outputs(run_name, debug=True, free=False):
+def load_rg_outputs(run_id, free=False):
     """Load report-generation output dataframe.
 
     Returns a DataFrame with columns:
     filename,epoch,dataset_type,ground_truth,generated
     """
-    results_folder = get_results_folder(run_name, task='rg', debug=debug)
+    assert run_id.task == 'rg'
+
+    results_folder = get_results_folder(run_id)
     suffix = 'free' if free else 'notfree'
 
     outputs_path = os.path.join(results_folder, f'outputs-{suffix}.csv')

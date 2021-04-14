@@ -3,12 +3,8 @@ import os
 from medai.utils.files import get_results_folder
 
 
-def get_outputs_fpath(run_name, dataset_type, task='det', debug=True,
-                      prefix='temp', suffix=None):
-    folder = get_results_folder(run_name,
-                                task=task,
-                                debug=debug,
-                                save_mode=True)
+def get_outputs_fpath(run_id, dataset_type, prefix='temp', suffix=None):
+    folder = get_results_folder(run_id, save_mode=True)
 
     filename = '-'.join(
         s

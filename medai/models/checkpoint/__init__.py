@@ -57,35 +57,31 @@ def _get_latest_filepath(folder):
     return os.path.join(folder, latest_fname)
 
 
-def _load_meta(folder, run_name):
+def _load_meta(folder, run_id):
     filepath = os.path.join(folder, 'metadata.json')
 
     with open(filepath, 'r') as f:
         data = json.load(f)
 
-    if 'run_name' not in data:
-        data['run_name'] = run_name
+    if 'run_id' not in data:
+        data['run_id'] = run_id._asdict()
 
     return data
 
 
-def load_metadata(run_name, task, debug=True):
+def load_metadata(run_id):
     """Loads metadata for a run."""
-    folder = get_checkpoint_folder(run_name,
-                                   task=task,
-                                   debug=debug,
+    folder = get_checkpoint_folder(run_id,
                                    save_mode=False,
                                    assert_exists=True,
                                    )
 
-    return _load_meta(folder, run_name)
+    return _load_meta(folder, run_id)
 
 
-def save_metadata(data, run_name, task, debug=True):
+def save_metadata(data, run_id):
     """Saves run metadata to file."""
-    folder = get_checkpoint_folder(run_name,
-                                   task=task,
-                                   debug=debug,
+    folder = get_checkpoint_folder(run_id,
                                    save_mode=True)
 
     filepath = os.path.join(folder, 'metadata.json')
@@ -93,29 +89,28 @@ def save_metadata(data, run_name, task, debug=True):
     with open(filepath, 'w') as f:
         json.dump(data, f)
 
-    return
 
 
-def load_compiled_model_base(run_name,
-                             debug=True,
+def load_compiled_model_base(run_id,
                              device='cuda',
                              multiple_gpu=False,
-                             task='cls',
                              constructor=None,
+                             assert_task=None,
                              ):
     """Load a compiled model."""
     assert constructor is not None
 
+    if assert_task is not None:
+        assert run_id.task == assert_task
+
     # Folder contains all pertaining files
-    folder = get_checkpoint_folder(run_name,
-                                   task=task,
-                                   debug=debug,
+    folder = get_checkpoint_folder(run_id,
                                    save_mode=False,
                                    assert_exists=True,
                                    )
 
     # Load metadata
-    metadata = _load_meta(folder, run_name)
+    metadata = _load_meta(folder, run_id)
 
     # Create empty model and optimizer
     model = constructor(allow_deprecated=True, **metadata['model_kwargs']).to(device)
@@ -151,40 +146,39 @@ load_compiled_model_classification = partial(
 
 load_compiled_model_segmentation = partial(
     load_compiled_model_base,
-    task='seg',
+    assert_task='seg',
     constructor=create_fcn,
 )
 
 load_compiled_model_detection_seg = partial(
     load_compiled_model_base,
-    task='det',
+    assert_task='det',
     constructor=create_detection_seg_model,
 )
 
 load_compiled_model_cls_seg = partial(
     load_compiled_model_base,
-    task='cls-seg',
+    assert_task='cls-seg',
     constructor=create_cls_seg_model,
 )
 
 
 
-def load_compiled_model_report_generation(run_name,
-                                          debug=True,
+def load_compiled_model_report_generation(run_id,
                                           device='cuda',
                                           multiple_gpu=False,
                                           ):
     """Loads a report-generation CNN2Seq model."""
+    assert run_id.task == 'rg'
+
     # Folder contains all pertaining files
-    folder = get_checkpoint_folder(run_name,
-                                   task='rg',
-                                   debug=debug,
+    folder = get_checkpoint_folder(run_id,
                                    save_mode=False,
                                    assert_exists=True,
                                    )
 
     # Load metadata
-    metadata = _load_meta(folder, run_name)
+    metadata = _load_meta(folder, run_id)
 
     # Create CNN
     cnn_kwargs = metadata.get('cnn_kwargs', None)
@@ -224,13 +218,11 @@ def load_compiled_model_report_generation(run_name,
     return compiled_model
 
 
-def attach_checkpoint_saver(run_name,
+def attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
                             validator,
-                            task,
                             metric=None,
-                            debug=True,
                             dryrun=False,
                             ):
     """Attach a Checkpoint handler to a validator to persist to disk a CompiledModel."""
@@ -261,11 +253,7 @@ def attach_checkpoint_saver(run_name,
 
     initial_epoch = compiled_model.get_current_epoch()
 
-    folderpath = get_checkpoint_folder(run_name,
-                                       task=task,
-                                       debug=debug,
-                                       save_mode=True,
-                                       )
+    folderpath = get_checkpoint_folder(run_id, save_mode=True)
     checkpoint = Checkpoint(
         compiled_model.to_save_checkpoint(),
         DiskSaver(folderpath, require_empty=False, atomic=False),

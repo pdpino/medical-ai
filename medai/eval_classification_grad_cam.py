@@ -14,15 +14,14 @@ from medai.utils import (
     print_hw_options,
     parsers,
     timeit_main,
+    RunId,
 )
 
 LOGGER = logging.getLogger('medai.cl.eval.grad-cam')
 
 
 @timeit_main(LOGGER)
-def run_evaluation(run_name,
-                   debug=True,
-                   task='cls',
+def run_evaluation(run_id,
                    device='cuda',
                    max_samples=None,
                    batch_size=10,
@@ -32,15 +31,15 @@ def run_evaluation(run_name,
                    multiple_gpu=False,
                    ):
     # Load model
-    if task == 'cls':
+    if run_id.task == 'cls':
         load_compiled_model_fn = load_compiled_model_classification
-    elif task == 'cls-seg':
+    elif run_id.task == 'cls-seg':
         load_compiled_model_fn = load_compiled_model_cls_seg
     else:
-        raise Exception(f'Task not recognized: {task}')
+        raise Exception(f'Task not recognized: {run_id.task}')
+
     compiled_model = load_compiled_model_fn(
-        run_name,
-        debug=debug,
+        run_id,
         device=device,
         multiple_gpu=False,
     )
@@ -87,7 +86,7 @@ def run_evaluation(run_name,
         pprint(metrics)
 
     metrics = { dataset_type: metrics }
-    save_results(metrics, run_name, task=task, debug=debug, suffix='grad-cam')
+    save_results(metrics, run_id, suffix='grad-cam')
 
 
 def parse_args():
@@ -134,9 +133,7 @@ if __name__ == '__main__':
     if ARGS.multiple_gpu:
         LOGGER.warning('--multiple-gpu option is not working with Grad-CAM')
 
-    run_evaluation(ARGS.run_name,
-                   debug=not ARGS.no_debug,
-                   task=ARGS.task,
+    run_evaluation(RunId(ARGS.run_name, not ARGS.no_debug, ARGS.task).resolve(),
                    device=DEVICE,
                    max_samples=ARGS.max_samples,
                    batch_size=ARGS.batch_size,

@@ -72,22 +72,24 @@ class TrainingClsSeg(TrainingProcess):
 
         parsers.build_args_h2bb_(args)
 
-    def _fill_run_name_model(self):
-        self.run_name += f'_{self.args.model}'
+    def _fill_run_name_model(self, run_name):
+        run_name += f'_{self.args.model}'
 
         if self.args.dropout != 0:
-            self.run_name += f'_drop{self.args.dropout}'
+            run_name += f'_drop{self.args.dropout}'
 
         if self.args.cnn_pooling not in ('avg', 'mean'):
-            self.run_name += f'_g{self.args.cnn_pooling}'
+            run_name += f'_g{self.args.cnn_pooling}'
 
         if self.args.no_imagenet:
-            self.run_name += '_noig'
+            run_name += '_noig'
 
         cl_lambda = self.args.cl_lambda
         seg_lambda = self.args.seg_lambda
         if cl_lambda != 1 or seg_lambda != 1:
-            self.run_name += f'_lmb-{cl_lambda}-{seg_lambda}'
+            run_name += f'_lmb-{cl_lambda}-{seg_lambda}'
+
+        return run_name
 
     def _fill_dataset_kwargs(self):
         # self.dataset_kwargs['fallback_organs'] = False
@@ -100,12 +102,14 @@ class TrainingClsSeg(TrainingProcess):
                 'seg_mask': True,
             })
 
-    def _fill_run_name_other(self):
+    def _fill_run_name_other(self, run_name):
         if self.args.cl_loss_name != 'bce':
-            self.run_name += f'_cl-{self.args.cl_loss_name}'
+            run_name += f'_cl-{self.args.cl_loss_name}'
 
         if self.args.weight_organs:
-            self.run_name += '_seg-w'
+            run_name += '_seg-w'
+
+        return run_name
 
     def _create_model(self):
         """Create self.model and self.model_kwargs."""

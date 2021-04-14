@@ -19,6 +19,7 @@ from medai.utils import (
     timeit_main,
     parsers,
     print_hw_options,
+    RunId,
 )
 
 
@@ -62,7 +63,9 @@ def evaluate_dummy_model(model_name,
     if frontal_only:
         run_name += '_front'
 
-    LOGGER.info('Evaluating %s', run_name)
+    run_id = RunId(run_name, debug, 'rg')
+
+    LOGGER.info('Evaluating %s', run_id)
 
     # Load datasets
     dataset_kwargs = {
@@ -103,8 +106,8 @@ def evaluate_dummy_model(model_name,
 
     elif model_name == 'most-similar-image':
         if similar_run_name:
-            compiled_model = load_compiled_model_classification(
-                similar_run_name, debug=debug, device=device)
+            cnn_run_id = RunId(similar_run_name, debug, 'cls').resolve()
+            compiled_model = load_compiled_model_classification(cnn_run_id, device=device)
             cnn = compiled_model.model.to(device)
             compiled_model.optimizer = None # Not needed
         else:
@@ -128,17 +131,16 @@ def evaluate_dummy_model(model_name,
 
     # Evaluate
     evaluate_model_and_save(
-        run_name,
+        run_id,
         model,
         dataloaders,
         hierarchical=is_hierarchical,
         free_values=free_values,
         medical_correctness=medical_correctness,
-        debug=debug,
         device=device,
         )
 
-    LOGGER.info('Evaluated %s', run_name)
+    LOGGER.info('Evaluated %s', run_id)
 
 
 def parse_args():

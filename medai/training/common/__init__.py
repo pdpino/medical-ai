@@ -25,6 +25,7 @@ from medai.utils import (
     parsers,
     config_logging,
     set_seed,
+    RunId,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -58,9 +59,8 @@ class TrainingProcess(abc.ABC):
         self.logger = logging.getLogger(self.LOGGER_NAME)
 
         # Attributes that will be filled later (and can be accessed)
+        self.run_id = None
         self.device = None
-        self.run_name = None
-        self.debug = None
         self.args = None
         self.dataset_kwargs = None
         self.dataset_train_kwargs = None
@@ -179,91 +179,103 @@ class TrainingProcess(abc.ABC):
         self.logger.info('Total time: %s', duration_to_str(total_time))
         self.logger.info('=' * 50)
 
-    def _fill_run_name_sampling(self):
+    def _fill_run_name_sampling(self, run_name):
         if self.args.oversample:
-            self.run_name += '_os'
+            run_name += '_os'
             if self.args.oversample_ratio is not None:
-                self.run_name += f'-r{self.args.oversample_ratio}'
+                run_name += f'-r{self.args.oversample_ratio}'
             elif self.args.oversample_max_ratio is not None:
-                self.run_name += f'-max{self.args.oversample_max_ratio}'
+                run_name += f'-max{self.args.oversample_max_ratio}'
             if self.args.oversample_class is not None:
-                self.run_name += f'-cl{self.args.oversample_class}'
+                run_name += f'-cl{self.args.oversample_class}'
         elif self.args.undersample:
-            self.run_name += '_us'
+            run_name += '_us'
         elif self.args.balanced_sampler:
-            self.run_name += '_balance'
+            run_name += '_balance'
 
-    def _fill_run_name_augmenting(self):
+        return run_name
+
+    def _fill_run_name_augmenting(self, run_name):
         if self.args.augment:
-            self.run_name += f'_aug{self.args.augment_times}'
+            run_name += f'_aug{self.args.augment_times}'
             if self.args.augment_mode != 'single':
-                self.run_name += f'-{self.args.augment_mode}'
+                run_name += f'-{self.args.augment_mode}'
             if self.args.augment_label is not None:
-                self.run_name += f'-{self.args.augment_label}'
+                run_name += f'-{self.args.augment_label}'
                 if self.args.augment_class is not None:
-                    self.run_name += f'-cls{self.args.augment_class}'
+                    run_name += f'-cls{self.args.augment_class}'
 
-    def _fill_run_name_lr(self):
-        self.run_name += f'_lr{self.args.learning_rate}'
+        return run_name
+
+    def _fill_run_name_lr(self, run_name):
+        run_name += f'_lr{self.args.learning_rate}'
         if self.args.shuffle:
-            self.run_name += '_shuffle'
+            run_name += '_shuffle'
         if self.args.weight_decay != 0:
-            self.run_name += f'_wd{self.args.weight_decay}'
+            run_name += f'_wd{self.args.weight_decay}'
         if self.args.lr_metric:
             factor = self.args.lr_sch_kwargs['factor']
             patience = self.args.lr_sch_kwargs['patience']
-            self.run_name += f'_sch-{self.args.lr_metric}-p{patience}-f{factor}'
+            run_name += f'_sch-{self.args.lr_metric}-p{patience}-f{factor}'
 
             cooldown = self.args.lr_sch_kwargs.get('cooldown', 0)
             if cooldown != 0:
-                self.run_name += f'-c{cooldown}'
+                run_name += f'-c{cooldown}'
 
-    def _fill_run_name_data(self):
+        return run_name
+
+    def _fill_run_name_data(self, run_name):
         if self.args.norm_by_sample:
-            self.run_name += '_normS'
+            run_name += '_normS'
         else:
-            self.run_name += '_normD'
+            run_name += '_normD'
         if self.args.image_size != 512:
-            self.run_name += f'_size{self.args.image_size}'
+            run_name += f'_size{self.args.image_size}'
 
         if isinstance(self.args.labels, (tuple, list)):
             if len(self.args.labels) == 1:
-                self.run_name += f'_{self.args.labels[0]}'
+                run_name += f'_{self.args.labels[0]}'
             else:
-                self.run_name += f'_labels{len(self.args.labels)}'
+                run_name += f'_labels{len(self.args.labels)}'
 
-    def _fill_run_name_checkpoint(self):
-        self.run_name += f'_best-{self.checkpoint_metric}'
+        return run_name
+
+    def _fill_run_name_checkpoint(self, run_name):
+        run_name += f'_best-{self.checkpoint_metric}'
+
+        return run_name
 
     @abc.abstractmethod
-    def _fill_run_name_model(self):
+    def _fill_run_name_model(self, run_name):
         """Fill run_name with descriptive model information."""
 
-    def _fill_run_name_other(self):
+    def _fill_run_name_other(self, run_name):
         """Fill run_name with extra info."""
+        return run_name
 
     def _create_run_name(self):
-        self.debug = self.args.debug
+        run_name = f'{get_timestamp()}_{self.args.dataset}'
 
-        self.run_name = f'{get_timestamp()}_{self.args.dataset}'
+        run_name = self._fill_run_name_model(run_name)
 
-        self._fill_run_name_model()
+        run_name = self._fill_run_name_data(run_name)
 
-        self._fill_run_name_data()
-
-        self._fill_run_name_lr()
+        run_name = self._fill_run_name_lr(run_name)
 
         if self.allow_sampling:
-            self._fill_run_name_sampling()
+            run_name = self._fill_run_name_sampling(run_name)
 
         if self.allow_augmenting:
-            self._fill_run_name_augmenting()
+            run_name = self._fill_run_name_augmenting(run_name)
 
-        self._fill_run_name_checkpoint()
+        run_name = self._fill_run_name_checkpoint(run_name)
 
-        self._fill_run_name_other()
+        run_name = self._fill_run_name_other(run_name)
 
-        self.run_name = self.run_name.replace(' ', '-')
+        run_name = run_name.replace(' ', '-')
+
+        self.run_id = RunId(run_name, self.args.debug, self.task)
+
 
     def train_from_scratch(self):
         """Trains a model from scratch."""
@@ -296,8 +308,7 @@ class TrainingProcess(abc.ABC):
 
     def _load_resumed_model(self):
         self.compiled_model = self.load_compiled_model_fn(
-            self.run_name,
-            debug=self.debug,
+            self.run_id,
             device=self.device,
             multiple_gpu=self.args.multiple_gpu,
         )
@@ -307,8 +318,7 @@ class TrainingProcess(abc.ABC):
 
     def resume_training(self):
         # Create run_name attributes
-        self.debug = self.args.debug
-        self.run_name = self.args.resume
+        self.run_id = RunId(self.args.resume, self.args.debug, self.task)
 
         self._load_resumed_model()
 
@@ -452,17 +462,14 @@ class TrainingProcess(abc.ABC):
 
         self._fill_metadata()
 
-        save_metadata(self.metadata, self.run_name, task=self.task, debug=self.debug)
+        save_metadata(self.metadata, self.run_id)
 
     def train_model(self, early_stopping=True,
                     early_stopping_kwargs={},
                     lr_metric='loss',
                     **other_train_kwargs):
         # Log initial info
-        self.logger.info(
-            'Training run: %s (task=%s, debug=%s)',
-            self.run_name, self.task, self.debug,
-        )
+        self.logger.info('Training run: %s', self.run_id)
         initial_epoch = self.compiled_model.get_current_epoch()
         if initial_epoch > 0:
             self.logger.info('Resuming from epoch: %s', initial_epoch)
@@ -489,13 +496,11 @@ class TrainingProcess(abc.ABC):
 
         # Attach checkpoint
         attach_checkpoint_saver(
-            self.run_name,
+            self.run_id,
             self.compiled_model,
             self.trainer,
             self.validator,
-            task=self.task,
             metric=self.checkpoint_metric,
-            debug=self.debug,
             dryrun=self.args.dryrun,
         )
 
@@ -522,18 +527,13 @@ class TrainingProcess(abc.ABC):
 
         self.tb_writer.close()
 
-        self.logger.info(
-            'Finished training: %s (task=%s, debug=%s)',
-            self.run_name, self.task, self.debug,
-        )
+        self.logger.info('Finished training: %s', self.run_id)
 
         return self.trainer.state.metrics, self.validator.state.metrics
 
     def _create_tb(self):
         self.tb_writer = TBWriter(
-            self.run_name,
-            task=self.task,
-            debug=self.debug,
+            self.run_id,
             dryrun=self.args.dryrun,
             **self.args.tb_kwargs,
         )

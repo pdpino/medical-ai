@@ -10,11 +10,8 @@ from medai.utils.files import get_results_folder
 LOGGER = logging.getLogger(__name__)
 
 
-def _get_outputs_fpath(run_name, debug=True, task='cls', save_mode=False):
-    folder = get_results_folder(run_name,
-                                task=task,
-                                debug=debug,
-                                save_mode=save_mode)
+def _get_outputs_fpath(run_id, save_mode=False):
+    folder = get_results_folder(run_id, save_mode=save_mode)
     path = os.path.join(folder, 'outputs.csv')
 
     return path
@@ -27,13 +24,12 @@ def add_suffix_to_diseases(diseases, suffix):
     ]
 
 
-def attach_prediction_writer(engine, run_name, diseases, assert_n_samples=None,
-                             debug=True, task='cls'):
+def attach_prediction_writer(engine, run_id, diseases, assert_n_samples=None):
     """Attach a prediction-writer to an engine.
 
     For each example in the dataset writes to a CSV the ground truth and generated prediction.
     """
-    fpath = _get_outputs_fpath(run_name, debug=debug, task=task, save_mode=True)
+    fpath = _get_outputs_fpath(run_id, save_mode=True)
     writer = CSVWriter(fpath, columns=[
         'filename',
         'epoch',
@@ -106,8 +102,8 @@ def attach_prediction_writer(engine, run_name, diseases, assert_n_samples=None,
                 )
 
 
-def delete_previous_outputs(run_name, debug=True, task='cls'):
-    fpath = _get_outputs_fpath(run_name, debug=debug, task=task, save_mode=False)
+def delete_previous_outputs(run_id):
+    fpath = _get_outputs_fpath(run_id, save_mode=False)
 
     if os.path.isfile(fpath):
         os.remove(fpath)

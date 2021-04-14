@@ -23,19 +23,19 @@ from medai.utils import (
     parsers,
     config_logging,
     timeit_main,
+    RunId,
 )
 
 
 LOGGER = logging.getLogger('medai.cl.eval')
 
 
-def evaluate_model(run_name,
+def evaluate_model(run_id,
                    model,
                    dataloader,
                    loss_name='wbce',
                    loss_kwargs={},
                    n_epochs=1,
-                   debug=True,
                    device='cuda'):
     """Evaluate a classification model on a dataloader."""
     if dataloader is None:
@@ -58,7 +58,7 @@ def evaluate_model(run_name,
     attach_metrics_classification(engine, labels, multilabel=multilabel, device=device)
     attach_metric_cm(engine, labels, multilabel=multilabel, device=device)
     attach_prediction_writer(
-        engine, run_name, labels, assert_n_samples=len(dataloader.dataset), debug=debug,
+        engine, run_id, labels, assert_n_samples=len(dataloader.dataset),
     )
 
     engine.run(dataloader, n_epochs)
@@ -67,28 +67,26 @@ def evaluate_model(run_name,
 
 
 @timeit_main(LOGGER)
-def evaluate_run(run_name,
+def evaluate_run(run_id,
                  dataset_types=['train', 'val', 'test'],
                  n_epochs=1,
                  batch_size=None,
                  max_samples=None,
-                 debug=True,
                  multiple_gpu=False,
                  override=False,
                  quiet=False,
                  device='cuda',
                  ):
     """Evaluate a model."""
-    if not override and are_results_saved(run_name, task='cls', debug=debug):
+    if not override and are_results_saved(run_id):
         LOGGER.warning('Skipping run, already calculated')
         return {}
 
     # Delete previous CSV outputs
-    delete_previous_outputs(run_name, debug=debug)
+    delete_previous_outputs(run_id)
 
     # Load model
-    compiled_model = load_compiled_model_classification(run_name,
-                                                        debug=debug,
+    compiled_model = load_compiled_model_classification(run_id,
                                                         device=device,
                                                         multiple_gpu=multiple_gpu)
     compiled_model.model.eval()
@@ -120,7 +118,6 @@ def evaluate_run(run_name,
         'loss_kwargs': loss_kwargs,
         'device': device,
         'n_epochs': n_epochs,
-        'debug': debug,
     }
 
     metrics = {}
@@ -130,10 +127,10 @@ def evaluate_run(run_name,
             continue
         dataset_type = dataloader.dataset.dataset_type
         metrics[dataset_type] = evaluate_model(
-            run_name, compiled_model.model, dataloader, **eval_kwargs,
+            run_id, compiled_model.model, dataloader, **eval_kwargs,
         )
 
-    save_results(metrics, run_name, task='cls', debug=debug)
+    save_results(metrics, run_id)
 
     if not quiet:
         pprint(metrics)
@@ -177,12 +174,11 @@ if __name__ == '__main__':
 
     print_hw_options(DEVICE, ARGS)
 
-    evaluate_run(ARGS.run_name,
+    evaluate_run(RunId(ARGS.run_name, not ARGS.no_debug, 'cls').resolve(),
                  dataset_types=ARGS.eval_in,
                  max_samples=ARGS.max_samples,
                  batch_size=ARGS.batch_size,
                  n_epochs=ARGS.epochs,
-                 debug=not ARGS.no_debug,
                  override=ARGS.override,
                  quiet=ARGS.quiet,
                  multiple_gpu=ARGS.multiple_gpu,

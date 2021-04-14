@@ -30,13 +30,14 @@ from medai.utils import (
     parsers,
     config_logging,
     timeit_main,
+    RunId,
 )
 
 LOGGER = logging.getLogger('medai.rg.eval')
 
 
 def _evaluate_model_in_dataloader(
-        run_name,
+        run_id,
         model,
         dataloader,
         n_epochs=1,
@@ -45,7 +46,6 @@ def _evaluate_model_in_dataloader(
         medical_correctness=True,
         att_vs_masks=False,
         free=False,
-        debug=True,
         device='cuda'):
     """Evaluate a report-generation model on a dataloader."""
     dataset = dataloader.dataset
@@ -71,9 +71,9 @@ def _evaluate_model_in_dataloader(
                                      supervise_attention=supervise_attention,
                                      device=device,
                                      )
-    attach_report_writer(engine, run_name,
+    attach_report_writer(engine, run_id,
                          vocab, assert_n_samples=len(dataset),
-                         free=free, debug=debug)
+                         free=free)
 
     if medical_correctness:
         attach_medical_correctness(engine, None, vocab, device=device)
@@ -89,10 +89,9 @@ def _evaluate_model_in_dataloader(
 
 
 def evaluate_model_and_save(
-        run_name,
+        run_id,
         model,
         dataloaders,
-        debug=True,
         hierarchical=False,
         device='cuda',
         medical_correctness=True,
@@ -105,7 +104,6 @@ def evaluate_model_and_save(
     evaluate_kwargs = {
         'hierarchical': hierarchical,
         'device': device,
-        'debug': debug,
         'medical_correctness': medical_correctness,
         'att_vs_masks': att_vs_masks,
         'supervise_attention': supervise_attention,
@@ -113,7 +111,7 @@ def evaluate_model_and_save(
     }
 
     for free_value in free_values:
-        delete_previous_outputs(run_name, debug=debug, free=free_value)
+        delete_previous_outputs(run_id, free=free_value)
 
         metrics = {}
 
@@ -124,7 +122,7 @@ def evaluate_model_and_save(
                 continue
             dataset_type = dataloader.dataset.dataset_type
             metrics[dataset_type] = _evaluate_model_in_dataloader(
-                run_name,
+                run_id,
                 model,
                 dataloader,
                 **evaluate_kwargs,
@@ -133,12 +131,7 @@ def evaluate_model_and_save(
         # Add a suffix
         suffix = 'free' if free_value else 'notfree'
 
-        save_results(metrics,
-                     run_name,
-                     task='rg',
-                     debug=debug,
-                     suffix=suffix,
-                     )
+        save_results(metrics, run_id, suffix=suffix)
 
 
 @timeit_main(LOGGER)
@@ -155,13 +148,15 @@ def evaluate_run(run_name,
                  override=False,
                  ):
     """Evaluates a saved run."""
+    run_id = RunId(run_name, debug, 'rg')
+
     # Check if overriding
     if not override:
         filtered_free_values = []
         for free_value in free_values:
             suffix = 'free' if free_value else 'notfree'
 
-            if are_results_saved(run_name, task='rg', debug=debug, suffix=suffix):
+            if are_results_saved(run_id, suffix=suffix):
                 LOGGER.info('Already calculated for %s, skipping', suffix)
             else:
                 filtered_free_values.append(free_value)
@@ -173,8 +168,7 @@ def evaluate_run(run_name,
 
 
     # Load model
-    compiled_model = load_compiled_model_report_generation(run_name,
-                                                           debug=debug,
+    compiled_model = load_compiled_model_report_generation(run_id,
                                                            device=device,
                                                            multiple_gpu=multiple_gpu)
 
@@ -223,10 +217,9 @@ def evaluate_run(run_name,
 
 
     evaluate_model_and_save(
-        run_name,
+        run_id,
         compiled_model.model,
         dataloaders,
-        debug=debug,
         hierarchical=hierarchical,
         device=device,
         medical_correctness=medical_correctness,
@@ -234,7 +227,7 @@ def evaluate_run(run_name,
         att_vs_masks=att_vs_masks,
         n_epochs=n_epochs,
         free_values=free_values,
-        )
+    )
 
 
 def parse_args():

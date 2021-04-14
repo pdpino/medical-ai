@@ -72,14 +72,16 @@ class TrainingDetectionSeg(TrainingProcess):
         parsers.build_args_h2bb_(args)
 
 
-    def _fill_run_name_model(self):
-        self.run_name += f'_{self.args.model}'
+    def _fill_run_name_model(self, run_name):
+        run_name += f'_{self.args.model}'
 
         if self.args.cnn_pooling not in ('avg', 'mean'):
-            self.run_name += f'_g{self.args.cnn_pooling}'
+            run_name += f'_g{self.args.cnn_pooling}'
 
         if self.args.seg_only_diseases:
-            self.run_name += '_seg-only-dis'
+            run_name += '_seg-only-dis'
+
+        return run_name
 
     def _fill_dataset_kwargs(self):
         self.dataset_kwargs['fallback_organs'] = not self.args.seg_only_diseases
@@ -177,7 +179,7 @@ class TrainingDetectionSeg(TrainingProcess):
 
         dataloader = self.train_dataloader if training else self.val_dataloader
 
-        attach_mAP_coco(engine, dataloader, self.run_name, debug=self.debug, device=self.device)
+        attach_mAP_coco(engine, dataloader, self.run_id, device=self.device)
         attach_metrics_iox(engine,
                            labels,
                            multilabel=multilabel,

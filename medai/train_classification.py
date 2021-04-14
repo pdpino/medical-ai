@@ -40,6 +40,7 @@ from medai.utils import (
     timeit_main,
     set_seed,
     set_seed_from_metadata,
+    RunId,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -64,7 +65,7 @@ def _choose_print_metrics(dataset_name, additional=None):
     return print_metrics
 
 
-def train_model(run_name,
+def train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
@@ -78,15 +79,14 @@ def train_model(run_name,
                 hint=False,
                 hint_lambda=1,
                 lr_sch_metric='loss',
-                debug=True,
                 dryrun=False,
                 tb_kwargs={},
                 print_metrics=['loss'],
                 device='cuda',
                 ):
     # Prepare run
-    LOGGER.info('Training run: %s (debug=%s)', run_name, debug)
-    tb_writer = TBWriter(run_name, task='cls', debug=debug, dryrun=dryrun, **tb_kwargs)
+    LOGGER.info('Training run: %s', run_id)
+    tb_writer = TBWriter(run_id, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         LOGGER.info('Resuming from epoch: %s', initial_epoch)
@@ -168,13 +168,11 @@ def train_model(run_name,
                        )
 
     # Attach checkpoint
-    attach_checkpoint_saver(run_name,
+    attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
                             validator,
-                            task='cls',
                             metric='roc_auc',
-                            debug=debug,
                             dryrun=dryrun,
                             )
 
@@ -196,7 +194,7 @@ def train_model(run_name,
 
     tb_writer.close()
 
-    LOGGER.info('Finished training: %s (debug=%s)', run_name, debug)
+    LOGGER.info('Finished training: %s', run_id)
 
     return trainer.state.metrics, validator.state.metrics
 
@@ -214,9 +212,10 @@ def resume_training(run_name,
                     device='cuda',
                     ):
     """Resume training from a previous run."""
+    run_id = RunId(run_name, debug, 'cls')
+
     # Load model
-    compiled_model = load_compiled_model_classification(run_name,
-                                                        debug=debug,
+    compiled_model = load_compiled_model_classification(run_id,
                                                         device=device,
                                                         multiple_gpu=multiple_gpu)
 
@@ -263,13 +262,12 @@ def resume_training(run_name,
 
     # Train
     other_train_kwargs = metadata.get('other_train_kwargs', {})
-    train_model(run_name, compiled_model, train_dataloader, val_dataloader,
+    train_model(run_id, compiled_model, train_dataloader, val_dataloader,
                 n_epochs=n_epochs,
                 loss_name=loss_name,
                 loss_kwargs=loss_kwargs,
                 print_metrics=_choose_print_metrics(dataset_name, print_metrics),
                 tb_kwargs=tb_kwargs,
-                debug=debug,
                 device=device,
                 **other_train_kwargs,
                 )
@@ -418,6 +416,8 @@ def train_from_scratch(run_name,
         run_name += '_shuffle'
     run_name = run_name.replace(' ', '-')
 
+    run_id = RunId(run_name, debug, 'cls')
+
     set_seed(seed)
 
     # Load data
@@ -530,14 +530,14 @@ def train_from_scratch(run_name,
         'dataset_train_kwargs': dataset_train_kwargs,
         'seed': seed,
     }
-    save_metadata(metadata, run_name, task='cls', debug=debug)
+    save_metadata(metadata, run_id)
 
 
     # Create compiled_model
     compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Train!
-    train_model(run_name,
+    train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
@@ -546,7 +546,6 @@ def train_from_scratch(run_name,
                 loss_kwargs=loss_kwargs,
                 print_metrics=_choose_print_metrics(dataset_name, print_metrics),
                 tb_kwargs=tb_kwargs,
-                debug=debug,
                 device=device,
                 **other_train_kwargs,
                 )

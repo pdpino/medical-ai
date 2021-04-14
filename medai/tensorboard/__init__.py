@@ -14,20 +14,18 @@ IGNORE_METRICS = [
 ]
 
 class TBWriter:
-    def __init__(self, run_name, task,
+    def __init__(self, run_id,
                  ignore_metrics=IGNORE_METRICS,
                  dryrun=False,
                  histogram=False,
                  large=False,
-                 workspace_dir=utils.WORKSPACE_DIR, debug=True, **kwargs):
+                 workspace_dir=utils.WORKSPACE_DIR, **kwargs):
         if large:
             _get_tb_folder = get_tb_large_log_folder
         else:
             _get_tb_folder = get_tb_log_folder
 
-        self.log_dir = _get_tb_folder(
-            run_name, task=task, workspace_dir=workspace_dir, debug=debug,
-        )
+        self.log_dir = _get_tb_folder(run_id, workspace_dir=workspace_dir)
 
         self.writer = SummaryWriter(self.log_dir,
                                     write_to_disk=not dryrun,

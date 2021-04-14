@@ -10,25 +10,24 @@ from medai.utils.nlp import ReportReader, trim_rubbish
 LOGGER = logging.getLogger(__name__)
 
 
-def _get_outputs_fpath(run_name, debug=True, free=False):
-    folder = get_results_folder(run_name,
-                                task='rg',
-                                debug=debug,
-                                save_mode=True)
+def _get_outputs_fpath(run_id, free=False):
+    assert run_id.task == 'rg'
+
+    folder = get_results_folder(run_id, save_mode=True)
     suffix = 'free' if free else 'notfree'
     path = os.path.join(folder, f'outputs-{suffix}.csv')
 
     return path
 
 
-def attach_report_writer(engine, run_name, vocab, assert_n_samples=None, debug=True, free=False):
+def attach_report_writer(engine, run_id, vocab, assert_n_samples=None, free=False):
     """Attach a report-writer to an engine.
 
     For each example in the dataset writes to a CSV the generated report and ground truth.
     """
     report_reader = ReportReader(vocab)
 
-    fpath = _get_outputs_fpath(run_name, debug=debug, free=free)
+    fpath = _get_outputs_fpath(run_id, free=free)
     writer = CSVWriter(fpath, columns=[
         'filename',
         'epoch',
@@ -100,8 +99,8 @@ def attach_report_writer(engine, run_name, vocab, assert_n_samples=None, debug=T
                 )
 
 
-def delete_previous_outputs(run_name, debug=True, free=False):
-    fpath = _get_outputs_fpath(run_name, debug=debug, free=free)
+def delete_previous_outputs(run_id, free=False):
+    fpath = _get_outputs_fpath(run_id, free=free)
 
     if os.path.isfile(fpath):
         os.remove(fpath)

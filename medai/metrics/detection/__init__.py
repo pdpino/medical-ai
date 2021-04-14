@@ -24,8 +24,7 @@ def _extract_for_mAP(output, key='coco_predictions'):
     return image_names, predictions
 
 
-def attach_mAP_coco(engine, dataloader, run_name, debug=True,
-                    task='det', suffix=None, device='cuda'):
+def attach_mAP_coco(engine, dataloader, run_id, suffix=None, device='cuda'):
     if not hasattr(dataloader.dataset, 'coco_gt_df'):
         class_name = dataloader.dataset.__class__.__name__
         LOGGER.warning(
@@ -36,7 +35,7 @@ def attach_mAP_coco(engine, dataloader, run_name, debug=True,
     gt_df = dataloader.dataset.coco_gt_df
     dataset_type = dataloader.dataset.dataset_type
 
-    temp_fpath = get_outputs_fpath(run_name, dataset_type, task=task, suffix=suffix, debug=debug)
+    temp_fpath = get_outputs_fpath(run_id, dataset_type, suffix=suffix)
     writer = CocoResultsWriter(temp_fpath)
 
     coco_key = 'coco_predictions'

@@ -39,6 +39,7 @@ from medai.utils import (
     config_logging,
     timeit_main,
     set_seed,
+    RunId,
 )
 from medai.utils.handlers import (
     attach_log_metrics,
@@ -64,7 +65,7 @@ def _choose_print_metrics(additional=None):
     return print_metrics
 
 
-def train_model(run_name,
+def train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
@@ -77,15 +78,14 @@ def train_model(run_name,
                 h2bb_method_name=None,
                 h2bb_method_kwargs={},
                 lr_sch_metric='loss',
-                debug=True,
                 dryrun=False,
                 tb_kwargs={},
                 print_metrics=_DEFAULT_PRINT_METRICS,
                 device='cuda',
                 ):
     # Prepare run
-    LOGGER.info('Training run: %s (debug=%s)', run_name, debug)
-    tb_writer = TBWriter(run_name, task='det', debug=debug, dryrun=dryrun, **tb_kwargs)
+    LOGGER.info('Training run: %s', run_id)
+    tb_writer = TBWriter(run_id, dryrun=dryrun, **tb_kwargs)
     initial_epoch = compiled_model.get_current_epoch()
     if initial_epoch > 0:
         LOGGER.info('Resuming from epoch: %s', initial_epoch)
@@ -122,7 +122,7 @@ def train_model(run_name,
     attach_metrics_classification(validator, labels,
                                   multilabel=multilabel,
                                   device=device)
-    attach_mAP_coco(validator, val_dataloader, run_name, debug=debug, device=device)
+    attach_mAP_coco(validator, val_dataloader, run_id, device=device)
     attach_metrics_iox(validator, labels, multilabel=multilabel, device=device)
     attach_mse(validator, labels, multilabel=multilabel, device=device)
 
@@ -142,7 +142,7 @@ def train_model(run_name,
     attach_metrics_classification(trainer, labels,
                                   multilabel=multilabel,
                                   device=device)
-    attach_mAP_coco(trainer, train_dataloader, run_name, debug=debug, device=device)
+    attach_mAP_coco(trainer, train_dataloader, run_id, device=device)
     attach_metrics_iox(trainer, labels, multilabel=multilabel, device=device)
     attach_mse(trainer, labels, multilabel=multilabel, device=device)
 
@@ -162,13 +162,11 @@ def train_model(run_name,
                        )
 
     # Attach checkpoint
-    attach_checkpoint_saver(run_name,
+    attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
                             validator,
-                            task='det',
                             metric='mAP',
-                            debug=debug,
                             dryrun=dryrun,
                             )
 
@@ -190,7 +188,7 @@ def train_model(run_name,
 
     tb_writer.close()
 
-    LOGGER.info('Finished training: %s (debug=%s)', run_name, debug)
+    LOGGER.info('Finished training: %s', run_id)
 
     return trainer.state.metrics, validator.state.metrics
 
@@ -310,6 +308,8 @@ def train_from_scratch(run_name,
         run_name += '_shuffle'
     run_name = run_name.replace(' ', '-')
 
+    run_id = RunId(run_name, debug, 'det')
+
     set_seed(seed)
 
     # Load data
@@ -354,14 +354,14 @@ def train_from_scratch(run_name,
     if cnn_pretrained:
         # Load pretrained
         # TODO: pass (debug, task, etc) parameters
-        compiled_cnn = load_compiled_model_classification(cnn_pretrained,
-                                                          debug=False,
+        pretrained_run_id = RunId(cnn_pretrained, False, 'cls').resolve()
+        compiled_cnn = load_compiled_model_classification(pretrained_run_id,
                                                           device=device,
-                                                          task='cls',
                                                           multiple_gpu=multiple_gpu,
                                                           )
         model = compiled_cnn.model
         cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
+        cnn_pretrained = pretrained_run_id.name # Resolved name
     else:
         cnn_kwargs = {
             'model_name': cnn_name,
@@ -418,21 +418,20 @@ def train_from_scratch(run_name,
         'dataset_train_kwargs': dataset_train_kwargs,
         'seed': seed,
     }
-    save_metadata(metadata, run_name, task='det', debug=debug)
+    save_metadata(metadata, run_id)
 
 
     # Create compiled_model
     compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Train!
-    train_model(run_name,
+    train_model(run_id,
                 compiled_model,
                 train_dataloader,
                 val_dataloader,
                 n_epochs=n_epochs,
                 tb_kwargs=tb_kwargs,
                 print_metrics=_choose_print_metrics(print_metrics),
-                debug=debug,
                 device=device,
                 **other_train_kwargs,
                 )

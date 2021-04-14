@@ -10,7 +10,7 @@ from pycocoevalcap.rouge import rouge as rouge_lib
 
 from medai.datasets.iu_xray import DATASET_DIR
 from medai.metrics import save_results, load_rg_outputs
-from medai.utils import timeit_main
+from medai.utils import timeit_main, RunId
 
 LOGGER = logging.getLogger('medai.rg.eval.nlp')
 
@@ -47,9 +47,8 @@ def _split_reports_normal_abnormal():
 
 
 @timeit_main
-def run_evaluation(run_name,
+def run_evaluation(run_id,
                    free=False,
-                   debug=True,
                    quiet=False,
                    ):
     # Split by normal and abnormal
@@ -60,10 +59,10 @@ def run_evaluation(run_name,
     ]
 
     # Read outputted reports
-    df = load_rg_outputs(run_name, debug=debug, free=free)
+    df = load_rg_outputs(run_id, free=free)
 
     if df is None:
-        LOGGER.error('Need to compute outputs for run first: %s', run_name)
+        LOGGER.error('Need to compute outputs for run first: %s', run_id)
         return
 
     # Calculate metrics
@@ -117,8 +116,7 @@ def run_evaluation(run_name,
 
     # Save metrics to file
     suffix = 'free' if free else 'notfree'
-    save_results(metrics, run_name, task='rg',
-                 debug=debug, suffix=suffix)
+    save_results(metrics, run_id, suffix=suffix)
 
     if not quiet:
         LOGGER.info(pprint.pformat(metrics))
@@ -144,8 +142,7 @@ def parse_args():
 if __name__ == '__main__':
     ARGS = parse_args()
 
-    run_evaluation(ARGS.run_name,
+    run_evaluation(RunId(ARGS.run_name, not ARGS.no_debug, 'rg').resolve(),
                    free=ARGS.free,
-                   debug=not ARGS.no_debug,
                    quiet=ARGS.quiet,
                    )

@@ -8,12 +8,10 @@ from medai.metrics.detection.coco_writer.writer import CocoResultsWriter, get_ou
 LOGGER = logging.getLogger(__name__)
 
 
-def attach_vinbig_writer(engine, dataloader, run_name, debug=True,
-                         task='det', suffix=None, assert_samples=True):
+def attach_vinbig_writer(engine, dataloader, run_id, suffix=None, assert_samples=True):
     dataset_type = dataloader.dataset.dataset_type
 
-    fpath = get_outputs_fpath(run_name, dataset_type, debug=debug,
-                              task=task, prefix='submission', suffix=suffix)
+    fpath = get_outputs_fpath(run_id, dataset_type, prefix='submission', suffix=suffix)
 
     writer = CocoResultsWriter(fpath)
 
