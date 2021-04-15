@@ -49,23 +49,24 @@ class TrainingClsSeg(TrainingProcess):
         parser.add_argument('--cl-lambda', type=float, default=1,
                             help='Factor to multiply CL-loss')
         parser.add_argument('--cl-loss-name', type=str, choices=AVAILABLE_LOSSES,
-                            default='bce', help='CL Loss to use')
-        parser.add_argument('--weight-organs', action='store_true',
-                            help='Add weight to organs')
+                            default='wbce', help='CL Loss to use')
+        parser.add_argument('--not-weight-organs', action='store_true',
+                            help='Do not add weight to organs')
 
         parsers.add_args_h2bb(parser)
 
     def _build_additional_args(self, parser, args):
         if not args.resume:
-            if 'scan' in args.model and args.image_format != 'L':
-                parser.error('For scan model, image-format must be L')
+            if 'scan' in args.model:
+                if args.image_format != 'L':
+                    parser.error('For scan model, image-format must be L')
             elif args.image_format != 'RGB':
                 parser.error('Image-format must be RGB')
 
         if not args.resume and not args.model:
             parser.error('Model is required')
 
-        if args.weight_organs:
+        if not args.not_weight_organs:
             args.weight_organs = [0.1, 0.6, 0.3, 0.3]
         else:
             args.weight_organs = None
@@ -98,16 +99,14 @@ class TrainingClsSeg(TrainingProcess):
         self.dataset_kwargs['seg_multilabel'] = False
 
         if self.args.augment:
-            self.dataset_train_kwargs['augment_kwargs'].update({
-                'seg_mask': True,
-            })
+            self.dataset_train_kwargs['augment_seg_mask'] = True
 
     def _fill_run_name_other(self, run_name):
-        if self.args.cl_loss_name != 'bce':
+        if self.args.cl_loss_name != 'wbce':
             run_name += f'_cl-{self.args.cl_loss_name}'
 
-        if self.args.weight_organs:
-            run_name += '_seg-w'
+        if not self.args.weight_organs:
+            run_name += '_seg-unw'
 
         return run_name
 
