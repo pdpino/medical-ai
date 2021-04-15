@@ -2,9 +2,11 @@ import operator
 from ignite.engine import Events
 from ignite.metrics import MetricUsage, MetricsLambda
 
-class EveryNEpochs(MetricUsage):
-    def __init__(self, n_epochs):
-        self.n_epochs = n_epochs
+class EveryNAfterMEpochs(MetricUsage):
+    def __init__(self, n_epochs, m_after, used_engine):
+        self.n_epochs = n_epochs if n_epochs is not None else 1
+        self.m_after = m_after if m_after is not None else 0
+        self.used_engine = used_engine
 
         # pylint: disable=not-callable
         super().__init__(
@@ -13,8 +15,10 @@ class EveryNEpochs(MetricUsage):
             iteration_completed=Events.ITERATION_COMPLETED(self._every_n_epochs)
         )
 
-    def _every_n_epochs(self, engine, unused_event):
-        return engine.state.epoch % self.n_epochs == 0
+    def _every_n_epochs(self, unused_engine, unused_event):
+        epoch = self.used_engine.state.epoch
+        shifted_epoch = epoch - self.m_after
+        return shifted_epoch >= 0 and shifted_epoch % self.n_epochs == 0
 
 
 def attach_metric_for_labels(engine, labels, metric, metric_name, average=True):

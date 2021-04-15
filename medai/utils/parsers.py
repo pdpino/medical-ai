@@ -159,12 +159,15 @@ def add_args_med(parser):
                            help='Only start using med-metrics after N epochs')
     med_group.add_argument('--med-steps', type=int, default=None,
                            help='Only run med-metrics every N epochs (in training)')
+    med_group.add_argument('--med-val-steps', type=int, default=None,
+                           help='Only run med-metrics every N epochs (in training)')
 
 
 def build_args_med_(args):
     args.med_kwargs = {
         'after': args.med_after,
         'steps': args.med_steps,
+        'val_steps': args.med_val_steps,
     }
 
 

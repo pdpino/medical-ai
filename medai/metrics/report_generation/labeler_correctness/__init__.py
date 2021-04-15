@@ -10,7 +10,7 @@ from medai.metrics.report_generation.labeler_correctness.labeler_timer import La
 from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
 from medai.metrics.report_generation.transforms import get_flat_reports
 from medai.utils.lock import SyncLock
-from medai.utils.metrics import EveryNEpochs
+from medai.utils.metrics import EveryNAfterMEpochs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,8 +19,8 @@ _LOCK_FOLDER = LABELER_CACHE_DIR
 _LOCK_NAME = 'medical-correctness-cache'
 
 
-def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=True,
-                    device='cuda'):
+def _attach_labeler(engine, labeler, basename, usage=None,
+                    timer=True, device='cuda'):
     """Attaches MedicalLabelerCorrectness metrics to an engine.
 
     It will attach metrics in the form <basename>_<metric_name>_<disease>
@@ -31,17 +31,9 @@ def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=Tru
         basename -- to use when attaching metrics
         device -- passed to Metrics
     """
-    if run_every_n_steps:
-        kwargs = {
-            'usage': EveryNEpochs(run_every_n_steps),
-        }
-    else:
-        kwargs = {}
-
-
     if timer:
         timer_metric = LabelerTimerMetric(labeler=labeler, device=device)
-        timer_metric.attach(engine, f'{basename}_timer', **kwargs)
+        timer_metric.attach(engine, f'{basename}_timer')
 
     metric_obj = MedicalLabelerCorrectness(
         labeler, output_transform=get_flat_reports, device=device,
@@ -62,6 +54,13 @@ def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=Tru
     def _macro_avg_getter(result, metric_name):
         return np.mean(result[metric_name])
 
+    if usage:
+        kwargs = {
+            'usage': usage,
+        }
+    else:
+        kwargs = {}
+
     for metric_name in metric_obj.METRICS:
         # Attach diseases' macro average
         macro_avg = MetricsLambda(
@@ -81,20 +80,14 @@ def _attach_labeler(engine, labeler, basename, run_every_n_steps=None, timer=Tru
     return metric_obj
 
 
-def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None,
+def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None, val_steps=None,
                                device='cuda'):
     """Attaches medical correctness metrics to engines.
 
     It uses a SyncLock to assure not two engines use the inner Cache at the same time.
 
     Notes:
-        - allows attaching the metrics after n epochs, by delaying the attaching to
-            a later epoch. This is a HACKy way!
-            If after == 3, in the epoch=4 the metric will be started
-            for validation, and in epoch=5 the metric will be started for training
-            (the metric is attached in 4, so is too late to be run in epoch=4).
-        - allows running the metrics every_n epochs in the training set
-            (though is not working right now)
+        - allows calculating the metrics after m epochs and every n epochs
 
     Args:
         trainer -- ignite.Engine
@@ -102,54 +95,48 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
         vocab -- dataset vocabulary (dict)
         device -- passed to Metrics
     """
-    if steps:
-        # FIXME
-        LOGGER.warning('Setting med-steps is not working, ignoring')
-        steps = None
+    LOGGER.info('Attaching medical correctness metrics')
 
-    def _actually_attach():
-        LOGGER.info('Attaching medical correctness metrics')
+    lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
 
-        lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
-
-        if not lock.acquire():
-            LOGGER.warning(
-                'Cannot attach medical correctness metric, cache is locked',
-            )
-            return
-
-        for engine in (trainer, validator):
-            if engine is None:
-                continue
-
-            if engine is trainer:
-                run_every_n_steps = steps
-            else:
-                run_every_n_steps = None
-
-            labeler = ChexpertLightLabeler(vocab)
-            _attach_labeler(engine, labeler, 'chex', run_every_n_steps, device=device)
-
-            # TODO: apply for MIRQI as well
-            # _attach_labeler(engine, MirqiLightLabeler(vocab), 'mirqi')
-
-
-        def _release_locks(engine, err=None):
-            lock.release()
-
-            if err is not None:
-                LOGGER.error('Error in trainer=%s', engine is trainer)
-                raise err
-
-        trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
-        trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
-
-        if validator is not None:
-            validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
-
-    if not after or after <= trainer.state.epoch:
-        _actually_attach()
-    else:
-        trainer.add_event_handler(
-            Events.EPOCH_STARTED(once=after+1), _actually_attach, # pylint: disable=not-callable
+    if not lock.acquire():
+        LOGGER.warning(
+            'Cannot attach medical correctness metric, cache is locked',
         )
+        return
+
+    if after or steps or val_steps:
+        train_usage = EveryNAfterMEpochs(steps, after, trainer)
+        val_usage = EveryNAfterMEpochs(val_steps or steps, after, trainer)
+    else:
+        train_usage = None
+        val_usage = None
+
+    for engine in (trainer, validator):
+        if engine is None:
+            continue
+
+        if engine is trainer:
+            usage = train_usage
+        else:
+            usage = val_usage
+
+        labeler = ChexpertLightLabeler(vocab)
+        _attach_labeler(engine, labeler, 'chex', device=device, usage=usage)
+
+        # TODO: apply for MIRQI as well
+        # _attach_labeler(engine, MirqiLightLabeler(vocab), 'mirqi')
+
+
+    def _release_locks(engine, err=None):
+        lock.release()
+
+        if err is not None:
+            LOGGER.error('Error in trainer=%s', engine is trainer)
+            raise err
+
+    trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
+    trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
+
+    if validator is not None:
+        validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)

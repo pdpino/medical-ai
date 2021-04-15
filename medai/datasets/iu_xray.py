@@ -90,14 +90,14 @@ class IUXRayDataset(Dataset):
                 reports_from_split = set(l.strip() for l in f.readlines())
             reports = [rep for rep in reports if rep['filename'] in reports_from_split]
 
-        # Keep only max images
-        if max_samples is not None:
-            reports = reports[:max_samples]
-
         # Prepare reports for getter calls
         self._preprocess_reports(reports, sort_samples=sort_samples,
                                  vocab=vocab, recompute_vocab=recompute_vocab,
                                  frontal_only=frontal_only)
+
+        # Keep only max images
+        if max_samples is not None:
+            self.reports = self.reports[:max_samples]
 
         if self.enable_masks:
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
