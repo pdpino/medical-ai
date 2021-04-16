@@ -235,15 +235,14 @@ class IUXRayDataset(Dataset):
         self.labels_by_report = dict()
         for _, row in self.labels_df.iterrows():
             filename = row['filename']
-            labels = row[self.labels].to_numpy().astype(int)
+            labels = torch.ByteTensor(row[self.labels])
 
             # # If all labels are 0 --> set no-findings==1
             # # (notice no-findings and support-devices are ignored)
             # if labels[1:-1].sum() == 0 and labels[0] == 0:
             #     labels[0] = 1
 
-            # pylint: disable=not-callable
-            self.labels_by_report[filename] = torch.tensor(labels)
+            self.labels_by_report[filename] = labels
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a

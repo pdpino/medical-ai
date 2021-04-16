@@ -1,5 +1,6 @@
 import os
 import logging
+import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 from ignite.utils import to_onehot
@@ -142,7 +143,7 @@ class ChexpertDataset(Dataset):
         image_fname = row['Path']
 
         # Extract labels
-        labels = row[self.labels].to_numpy().astype('int')
+        labels = torch.ByteTensor(row[self.labels])
 
         # Load image
         image_fpath = os.path.join(self.image_dir, image_fname)

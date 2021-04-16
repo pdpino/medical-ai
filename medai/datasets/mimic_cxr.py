@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import torch
 import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
@@ -102,7 +103,7 @@ class MIMICCXRDataset(Dataset):
         image = self.load_image(image_fpath)
 
         # Extract labels
-        labels = row[self.labels].to_numpy().astype('int')
+        labels = torch.ByteTensor(row[self.labels])
 
         return BatchItem(
             image=image,

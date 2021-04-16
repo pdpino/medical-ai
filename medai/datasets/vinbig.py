@@ -119,7 +119,7 @@ class VinBigDataset(Dataset):
         image_id = row['image_id']
 
         # Extract labels
-        labels = row[self.labels].to_numpy().astype('int')
+        labels = torch.ByteTensor(row[self.labels])
 
         # Load image
         image_fpath = os.path.join(self.image_dir, f'{image_id}.png')
