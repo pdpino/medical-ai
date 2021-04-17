@@ -1,4 +1,3 @@
-import torch
 from torch import nn
 
 class CNN2Seq(nn.Module):
@@ -19,7 +18,8 @@ class CNN2Seq(nn.Module):
         images -- shape: batch_size, n_channels, height, width
         reports -- shape: batch_size, max_sentence_len
         """
-        features = self.cnn(images, features=True)
+        # FIXME: remove features param from CNNs?
+        features = self.cnn.features(images)
         # shape: batch_size, n_features, height, width
 
         result = self.decoder(features, reports=reports, **kwargs)

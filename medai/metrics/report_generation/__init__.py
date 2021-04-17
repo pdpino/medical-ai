@@ -4,6 +4,7 @@ import numpy as np
 from torch.nn.functional import interpolate
 from ignite.metrics import RunningAverage, MetricsLambda
 
+from medai.metrics import attach_losses
 from medai.metrics.segmentation.iou import IoU
 from medai.metrics.segmentation.iobb import IoBB
 from medai.metrics.report_generation.word_accuracy import WordAccuracy
@@ -81,19 +82,7 @@ def attach_attention_vs_masks(engine, device='cuda'):
     iobb.attach(engine, 'att_iobb')
 
 
-def attach_metrics_report_generation(engine, hierarchical=False, free=False,
-                                     supervise_attention=False, device='cuda'):
-    losses = ['loss']
-    if hierarchical:
-        losses.extend(['word_loss', 'stop_loss'])
-    if supervise_attention:
-        losses.append('att_loss')
-
-    # Attach losses
-    for loss_name in losses:
-        loss = RunningAverage(output_transform=operator.itemgetter(loss_name), device=device)
-        loss.attach(engine, loss_name)
-
+def attach_metrics_report_generation(engine, free=False, device='cuda'):
     metric_kwargs = {
         'output_transform': get_flat_reports,
         'device': device,
@@ -120,3 +109,13 @@ def attach_metrics_report_generation(engine, hierarchical=False, free=False,
 
     distinct_sentences = DistinctSentences(**metric_kwargs)
     distinct_sentences.attach(engine, 'distinct_sentences')
+
+
+def attach_losses_rg(engine, hierarchical=False, supervise_attention=False,
+                     device='cuda'):
+    losses = []
+    if hierarchical:
+        losses.extend(['word_loss', 'stop_loss'])
+    if supervise_attention:
+        losses.append('att_loss')
+    attach_losses(engine, losses, device=device)

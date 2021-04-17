@@ -135,10 +135,15 @@ def attach_lr_scheduler_handler(lr_scheduler,
         where the value is indeed calculated; other epochs will be skipped.
         For metrics that are calculated on every epoch, this has no effect.
     """
+    _IGNORE_WARNING_METRICS = ('chex_f1',)
+
     def _update_scheduler(unused_engine):
         val_metrics = validator.state.metrics
         if target_metric not in val_metrics:
-            LOGGER.warning('Cannot step LR-scheduler, %s not found in val_metrics', target_metric)
+            if target_metric not in _IGNORE_WARNING_METRICS:
+                LOGGER.warning(
+                    'Cannot step LR-scheduler, %s not found in val_metrics', target_metric,
+                )
             return
         value = val_metrics[target_metric]
 

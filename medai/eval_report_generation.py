@@ -9,6 +9,7 @@ from medai.metrics import save_results, are_results_saved
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_attention_vs_masks,
+    attach_losses_rg,
 )
 from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
 from medai.metrics.report_generation.writer import (
@@ -65,10 +66,9 @@ def _evaluate_model_in_dataloader(
                                 supervise_attention=supervise_attention,
                                 free=free,
                                 device=device))
+    attach_losses_rg(engine, hierarchical=hierarchical, supervise_attention=supervise_attention)
     attach_metrics_report_generation(engine,
-                                     hierarchical=hierarchical,
                                      free=free,
-                                     supervise_attention=supervise_attention,
                                      device=device,
                                      )
     attach_report_writer(engine, run_id,

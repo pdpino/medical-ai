@@ -97,7 +97,8 @@ class IUXRayDataset(Dataset):
 
         # Keep only max images
         if max_samples is not None:
-            self.reports = self.reports[:max_samples]
+            last_samples = -1 * max_samples
+            self.reports = self.reports[last_samples:]
 
         if self.enable_masks:
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)

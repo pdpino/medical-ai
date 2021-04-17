@@ -12,6 +12,7 @@ from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATA
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_attention_vs_masks,
+    attach_losses_rg,
 )
 from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
 from medai.models.classification import (
@@ -28,7 +29,7 @@ from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
-    load_compiled_model_classification,
+    load_compiled_model,
     load_compiled_model_report_generation,
     save_metadata,
 )
@@ -74,6 +75,7 @@ def train_model(run_id,
                 tb_kwargs={},
                 medical_correctness=True,
                 med_kwargs={},
+                att_vs_masks=False,
                 early_stopping=True,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
@@ -96,17 +98,18 @@ def train_model(run_id,
     else:
         get_step_fn = get_step_fn_flat
 
-
     # Create validator engine
     validator = Engine(get_step_fn(model,
                                    training=False,
                                    supervise_attention=supervise_attention,
                                    device=device))
-    attach_metrics_report_generation(validator,
-                                     hierarchical=hierarchical,
-                                     supervise_attention=supervise_attention,
-                                     device=device,
-                                     )
+    attach_losses_rg(
+        validator,
+        hierarchical=hierarchical,
+        supervise_attention=supervise_attention,
+        device=device,
+    )
+    attach_metrics_report_generation(validator, device=device)
 
     # Create trainer engine
     trainer = Engine(get_step_fn(model,
@@ -124,22 +127,25 @@ def train_model(run_id,
         'max_epochs': initial_epoch + n_epochs,
         'epoch_length': len(train_dataloader),
     })
-
-    attach_metrics_report_generation(trainer,
-                                     hierarchical=hierarchical,
-                                     supervise_attention=supervise_attention,
-                                     device=device,
-                                     )
+    attach_losses_rg(
+        trainer,
+        hierarchical=hierarchical,
+        supervise_attention=supervise_attention,
+        device=device,
+    )
+    attach_metrics_report_generation(trainer, device=device)
 
     # Attach medical correctness metrics
     if medical_correctness:
         vocab = train_dataloader.dataset.get_vocab()
         attach_medical_correctness(trainer, validator, vocab, device=device, **med_kwargs)
 
-    decoder_name = compiled_model.metadata['decoder_kwargs']['decoder_name']
-    if decoder_name.startswith('h-lstm-att'):
+    if att_vs_masks:
         attach_attention_vs_masks(trainer, device=device)
         attach_attention_vs_masks(validator, device=device)
+
+        if not train_dataloader.dataset.enable_masks:
+            raise Exception('Att-vs-masks attached, but masks are not enabled!')
 
     # Create Timer to measure wall time between epochs
     timer = Timer(average=True)
@@ -190,17 +196,15 @@ def train_model(run_id,
 
 
 @timeit_main(LOGGER)
-def resume_training(run_name,
+def resume_training(run_id,
                     n_epochs=10,
                     max_samples=None,
                     tb_kwargs={},
-                    debug=True,
                     multiple_gpu=False,
                     device='cuda',
                     ):
     """Resume training."""
-    run_id = RunId(run_name, debug, 'rg').resolve()
-
+    assert run_id.task == 'rg'
     # Load model
     compiled_model = load_compiled_model_report_generation(run_id,
                                                            device=device,
@@ -273,7 +277,7 @@ def train_from_scratch(run_name,
                        n_epochs=10,
                        medical_correctness=True,
                        med_kwargs={},
-                       cnn_run_name=None,
+                       cnn_run_id=None,
                        cnn_model_name='resnet-50',
                        cnn_imagenet=True,
                        cnn_freeze=False,
@@ -291,6 +295,7 @@ def train_from_scratch(run_name,
                        augment_kwargs={},
                        tb_kwargs={},
                        debug=True,
+                       experiment=None,
                        multiple_gpu=False,
                        num_workers=2,
                        device='cuda',
@@ -301,8 +306,8 @@ def train_from_scratch(run_name,
     run_name = f'{run_name}_{dataset_name}_{decoder_name}_lr{lr}'
     if supervise_attention:
         run_name += '_satt'
-    if cnn_run_name:
-        run_name += '_precnn'
+    if cnn_run_id:
+        run_name += f'_precnn-{cnn_run_id.short_name.replace("_", "-")}'
     else:
         run_name += f'_{cnn_model_name}'
     if image_size != 512:
@@ -323,7 +328,7 @@ def train_from_scratch(run_name,
     if lr_sch_metric:
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
-        run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+        run_name += f'_sch-{lr_sch_metric.replace("_", "-")}-p{patience}-f{factor}'
     if frontal_only and not supervise_attention: # If supervise attention, frontal_only is implied
         run_name += '_front'
 
@@ -331,7 +336,7 @@ def train_from_scratch(run_name,
     if decoder_name in DEPRECATED_DECODERS:
         raise Exception(f'RG model is deprecated: {decoder_name}')
 
-    run_id = RunId(run_name, debug, 'rg')
+    run_id = RunId(run_name, debug, 'rg', experiment)
 
     set_seed(seed)
 
@@ -351,7 +356,7 @@ def train_from_scratch(run_name,
 
     # Load data
     image_size = (image_size, image_size)
-    enable_masks = hierarchical
+    enable_masks = supervise_attention
     dataset_kwargs = {
         'dataset_name': dataset_name,
         'max_samples': max_samples,
@@ -389,17 +394,13 @@ def train_from_scratch(run_name,
 
 
     # Create CNN
-    if cnn_run_name:
+    if cnn_run_id:
         # Load pretrained
-        cnn_run_id = RunId(cnn_run_name, debug, 'cls').resolve()
-        compiled_cnn = load_compiled_model_classification(cnn_run_id,
-                                                          device=device,
-                                                          multiple_gpu=False,
-                                                          # gpus are handled in CNN2Seq!
-                                                          )
+        compiled_cnn = load_compiled_model(
+            cnn_run_id, device=device, multiple_gpu=False, # gpus are handled in CNN2Seq!
+        )
         cnn = compiled_cnn.model
         cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
-        cnn_run_name = cnn_run_id.name # Resolved name
     else:
         # Create new
         cnn_kwargs = {
@@ -437,7 +438,7 @@ def train_from_scratch(run_name,
     # Create lr_scheduler
     if lr_sch_metric:
         lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs)
-        LOGGER.info('Using ReduceLROnPlateau')
+        LOGGER.info('Using ReduceLROnPlateau (with %s})', lr_sch_metric)
     else:
         LOGGER.warning('Not using a LR scheduler')
         lr_scheduler = None
@@ -450,6 +451,7 @@ def train_from_scratch(run_name,
         'supervise_attention': supervise_attention,
         'medical_correctness': medical_correctness,
         'med_kwargs': med_kwargs,
+        'att_vs_masks': enable_masks,
     }
 
     # Save metadata
@@ -463,7 +465,7 @@ def train_from_scratch(run_name,
         'vocab': vocab,
         'image_size': image_size,
         'hparams': {
-            'pretrained_cnn': cnn_run_name,
+            'pretrained_cnn': cnn_run_id.to_dict() if cnn_run_id else None,
             'batch_size': batch_size,
         },
         'other_train_kwargs': other_train_kwargs,
@@ -512,6 +514,8 @@ def parse_args():
                         help='If present, does not use teacher forcing')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('-exp', '--experiment', type=str, default='',
+                        help='Custom experiment name')
     parser.add_argument('--seed', type=int, default=1234,
                         help='Set a seed (initial run only)')
 
@@ -535,6 +539,8 @@ def parse_args():
                         help='If present, freeze base cnn parameters (only train FC layers)')
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                         help='Run name of a pretrained CNN')
+    cnn_group.add_argument('-cp-task', '--cnn-pretrained-task', type=str, default='cls',
+                        choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
 
     parsers.add_args_early_stopping(parser, metric='chex_f1')
     parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
@@ -566,6 +572,13 @@ def parse_args():
             args.es_patience, args.med_after,
         )
 
+    if args.cnn_pretrained is not None:
+        args.precnn_run_id = RunId(
+            args.cnn_pretrained,
+            debug=False, # NOTE: Even when debugging, --no-debug pre-cnns are more common
+            task=args.cnn_pretrained_task,
+        )
+
     return args
 
 
@@ -582,11 +595,10 @@ if __name__ == '__main__':
     print_hw_options(DEVICE, ARGS)
 
     if ARGS.resume:
-        resume_training(ARGS.resume,
+        resume_training(RunId(ARGS.resume, not ARGS.no_debug, 'rg', ARGS.experiment).resolve(),
                         n_epochs=ARGS.epochs,
                         max_samples=ARGS.max_samples,
                         tb_kwargs=ARGS.tb_kwargs,
-                        debug=not ARGS.no_debug,
                         multiple_gpu=ARGS.multiple_gpu,
                         device=DEVICE,
                         )
@@ -607,7 +619,7 @@ if __name__ == '__main__':
                            medical_correctness=not ARGS.no_med,
                            med_kwargs=ARGS.med_kwargs,
                            image_size=ARGS.image_size,
-                           cnn_run_name=ARGS.cnn_pretrained,
+                           cnn_run_id=ARGS.precnn_run_id,
                            cnn_model_name=ARGS.cnn,
                            cnn_imagenet=not ARGS.no_imagenet,
                            cnn_freeze=ARGS.freeze,
@@ -624,6 +636,7 @@ if __name__ == '__main__':
                            augment_kwargs=ARGS.augment_kwargs,
                            tb_kwargs=ARGS.tb_kwargs,
                            debug=not ARGS.no_debug,
+                           experiment=ARGS.experiment,
                            multiple_gpu=ARGS.multiple_gpu,
                            num_workers=ARGS.num_workers,
                            device=DEVICE,
