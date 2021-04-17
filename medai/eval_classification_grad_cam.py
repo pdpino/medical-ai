@@ -7,7 +7,7 @@ from ignite.engine import Engine
 from medai.datasets import prepare_data_classification, UP_TO_DATE_MASKS_VERSION
 from medai.metrics import save_results
 from medai.metrics.classification import attach_metrics_image_saliency
-from medai.models.checkpoint import load_compiled_model_classification, load_compiled_model_cls_seg
+from medai.models.checkpoint import load_compiled_model
 from medai.training.classification.grad_cam import create_grad_cam, get_step_fn
 from medai.utils import (
     config_logging,
@@ -31,14 +31,7 @@ def run_evaluation(run_id,
                    multiple_gpu=False,
                    ):
     # Load model
-    if run_id.task == 'cls':
-        load_compiled_model_fn = load_compiled_model_classification
-    elif run_id.task == 'cls-seg':
-        load_compiled_model_fn = load_compiled_model_cls_seg
-    else:
-        raise Exception(f'Task not recognized: {run_id.task}')
-
-    compiled_model = load_compiled_model_fn(
+    compiled_model = load_compiled_model(
         run_id,
         device=device,
         multiple_gpu=False,

@@ -1,7 +1,5 @@
 import os
 import re
-from collections import namedtuple
-
 from medai.utils.common import WORKSPACE_DIR
 
 def _get_task_folder(task):
@@ -101,18 +99,38 @@ def _resolve_run_name(run_id, search_in='runs', workspace_dir=WORKSPACE_DIR):
     return None
 
 
-class RunId(namedtuple('RunId', ['name', 'debug', 'task', 'experiment'])):
+
+class RunId:
     """Class to hold run identification."""
+    def __init__(self, name='', debug=True, task=None, experiment=''):
+        self.name = name
+        self.debug = debug
+        self.task = task
+        self.experiment = experiment or ''
+
+        if _TIMESTAMP_ONLY_REGEX.match(self.name):
+            self.resolve()
 
     def __str__(self):
         return f'{self.name} (task={self.task}, exp={self.experiment}, debug={self.debug})'
+
+    @property
+    def short_name(self):
+        # timestamp is 11 characters long
+        return self.name[:11]
 
     def resolve(self):
         """Resolve the run-name."""
         resolved_name = _resolve_run_name(self)
         if resolved_name is not None:
-            return self._replace(name=resolved_name)
+            self.name = resolved_name
 
         return self
 
-RunId.__new__.__defaults__ = (None, True, None, '')
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'debug': self.debug,
+            'task': self.task,
+            'experiment': self.experiment,
+        }

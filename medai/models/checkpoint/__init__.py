@@ -64,7 +64,7 @@ def _load_meta(folder, run_id):
         data = json.load(f)
 
     if 'run_id' not in data:
-        data['run_id'] = run_id._asdict()
+        data['run_id'] = run_id.to_dict()
 
     return data
 
@@ -91,12 +91,12 @@ def save_metadata(data, run_id):
 
 
 
-def load_compiled_model_base(run_id,
-                             device='cuda',
-                             multiple_gpu=False,
-                             constructor=None,
-                             assert_task=None,
-                             ):
+def _load_compiled_model_base(run_id,
+                              device='cuda',
+                              multiple_gpu=False,
+                              constructor=None,
+                              assert_task=None,
+                              ):
     """Load a compiled model."""
     assert constructor is not None
 
@@ -140,27 +140,40 @@ def load_compiled_model_base(run_id,
 
 
 load_compiled_model_classification = partial(
-    load_compiled_model_base,
+    _load_compiled_model_base,
     constructor=create_cnn,
 )
 
 load_compiled_model_segmentation = partial(
-    load_compiled_model_base,
+    _load_compiled_model_base,
     assert_task='seg',
     constructor=create_fcn,
 )
 
 load_compiled_model_detection_seg = partial(
-    load_compiled_model_base,
+    _load_compiled_model_base,
     assert_task='det',
     constructor=create_detection_seg_model,
 )
 
 load_compiled_model_cls_seg = partial(
-    load_compiled_model_base,
+    _load_compiled_model_base,
     assert_task='cls-seg',
     constructor=create_cls_seg_model,
 )
+
+def load_compiled_model(run_id, **kwargs):
+    # TODO: this function should be preferred instead of using a specific one?? refactor?
+    _load_fns = {
+        'cls': load_compiled_model_classification,
+        'cls-seg': load_compiled_model_cls_seg,
+        'det': load_compiled_model_detection_seg,
+    }
+
+    if run_id.task not in _load_fns:
+        raise Exception('Task not found:', run_id.task)
+    load_fn = _load_fns[run_id.task]
+    return load_fn(run_id, **kwargs)
 
 
 
