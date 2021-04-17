@@ -49,6 +49,10 @@ class TBWriter:
             'mse-total': 'MSE-total',
             'mse-pos': 'MSE-pos',
             'mse-neg': 'MSE-neg',
+            'chex_f1': 'Chex_f1',
+            'bleu': 'Bleu',
+            'ciderD': 'Cider-D',
+            'rougeL': 'Rouge-L',
         }
 
         self._loss_regex = re.compile(r'(\w+)_loss')
