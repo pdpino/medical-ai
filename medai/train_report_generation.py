@@ -270,6 +270,7 @@ def train_from_scratch(run_name,
                        sort_samples=True,
                        shuffle=False,
                        frontal_only=False,
+                       norm_by_sample=False,
                        teacher_forcing=True,
                        embedding_size=100,
                        hidden_size=100,
@@ -310,6 +311,10 @@ def train_from_scratch(run_name,
         run_name += f'_precnn-{cnn_run_id.short_name.replace("_", "-")}'
     else:
         run_name += f'_{cnn_model_name}'
+    if norm_by_sample:
+        run_name += '_normS'
+    else:
+        run_name += '_normD'
     if image_size != 512:
         run_name += f'_size{image_size}'
     if not shuffle:
@@ -360,6 +365,7 @@ def train_from_scratch(run_name,
     dataset_kwargs = {
         'dataset_name': dataset_name,
         'max_samples': max_samples,
+        'norm_by_sample': norm_by_sample,
         'image_size': image_size,
         'batch_size': batch_size,
         'num_workers': num_workers,
@@ -528,6 +534,8 @@ def parse_args():
                             help='Shuffle samples on training')
     data_group.add_argument('--frontal-only', action='store_true',
                             help='Use only frontal images')
+    data_group.add_argument('--norm-by-sample', action='store_true',
+                            help='Normalize each sample (instead of by dataset stats)')
 
     cnn_group = parser.add_argument_group('CNN')
     cnn_group.add_argument('-c', '--cnn', type=str, default=None,
@@ -578,6 +586,8 @@ def parse_args():
             debug=False, # NOTE: Even when debugging, --no-debug pre-cnns are more common
             task=args.cnn_pretrained_task,
         )
+    else:
+        args.precnn_run_id = None
 
     return args
 
@@ -611,6 +621,7 @@ if __name__ == '__main__':
                            sort_samples=not ARGS.no_sort,
                            shuffle=ARGS.shuffle,
                            frontal_only=ARGS.frontal_only,
+                           norm_by_sample=ARGS.norm_by_sample,
                            teacher_forcing=not ARGS.no_teacher_forcing,
                            embedding_size=ARGS.embedding_size,
                            hidden_size=ARGS.hidden_size,

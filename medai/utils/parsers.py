@@ -196,8 +196,7 @@ def add_args_images(parser, image_format='RGB'):
     images_group.add_argument('--frontal-only', action='store_true',
                               help='Use only frontal images')
     images_group.add_argument('--norm-by-sample', action='store_true',
-                              help='If present, normalize each sample \
-                                    (instead of using dataset stats)')
+                              help='Normalize each sample (instead of by dataset stats)')
     images_group.add_argument('--image-format', type=str, default=image_format,
                               choices=['RGB', 'L'], help='Image format to use')
 

@@ -227,12 +227,14 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    augment_times=1, augment_kwargs={},
                                    num_workers=2,
                                    masks=False,
+                                   norm_by_sample=False,
                                    **kwargs,
                                    ):
 
     _info = {
         'bs': batch_size,
         'imgsize': image_size,
+        'normS': norm_by_sample,
     }
     _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
     LOGGER.info('Loading %s/%s rg-dataset, %s', dataset_name, dataset_type, _info_str)
@@ -246,6 +248,7 @@ def prepare_data_report_generation(create_dataloader_fn,
                            image_size=image_size,
                            sort_samples=sort_samples,
                            masks=masks,
+                           norm_by_sample=norm_by_sample,
                            **kwargs,
                            )
 
