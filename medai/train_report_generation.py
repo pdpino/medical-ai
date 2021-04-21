@@ -63,6 +63,17 @@ from medai.utils.handlers import (
 LOGGER = logging.getLogger('medai.rg.train')
 
 
+def _get_print_metrics(additional_metrics):
+    print_metrics = ['loss', 'bleu', 'ciderD', 'chex_f1', 'chex_timer']
+
+    for m in (additional_metrics or []):
+        if m not in print_metrics:
+            print_metrics.append(m)
+
+    return print_metrics
+
+
+
 def train_model(run_id,
                 compiled_model,
                 train_dataloader,
@@ -79,7 +90,7 @@ def train_model(run_id,
                 early_stopping=True,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
-                print_metrics=['loss', 'bleu', 'ciderD', 'chex_f1', 'chex_timer'],
+                print_metrics=None,
                 device='cuda',
                ):
     # Prepare run stuff
@@ -158,7 +169,7 @@ def train_model(run_id,
                        tb_writer,
                        timer,
                        logger=LOGGER,
-                       print_metrics=print_metrics,
+                       print_metrics=_get_print_metrics(print_metrics),
                        )
 
     # Attach checkpoint
@@ -200,6 +211,7 @@ def resume_training(run_id,
                     n_epochs=10,
                     max_samples=None,
                     tb_kwargs={},
+                    print_metrics=None,
                     multiple_gpu=False,
                     device='cuda',
                     ):
@@ -256,6 +268,7 @@ def resume_training(run_id,
                 hierarchical=hierarchical,
                 n_epochs=n_epochs,
                 tb_kwargs=tb_kwargs,
+                print_metrics=print_metrics,
                 device=device,
                 **other_train_kwargs,
                 )
@@ -301,6 +314,7 @@ def train_from_scratch(run_name,
                        num_workers=2,
                        device='cuda',
                        seed=None,
+                       print_metrics=None,
                        ):
     """Train a model from scratch."""
     # Create run name
@@ -491,6 +505,7 @@ def train_from_scratch(run_name,
                 n_epochs=n_epochs,
                 tb_kwargs=tb_kwargs,
                 device=device,
+                print_metrics=print_metrics,
                 **other_train_kwargs,
                 )
 
@@ -524,6 +539,8 @@ def parse_args():
                         help='Custom experiment name')
     parser.add_argument('--seed', type=int, default=1234,
                         help='Set a seed (initial run only)')
+    parser.add_argument('--print-metrics', type=str, nargs='*', default=None,
+                        help='Additional metrics to print to stdout')
 
     data_group = parser.add_argument_group('Data')
     data_group.add_argument('--image-size', type=int, default=512,
@@ -611,6 +628,7 @@ if __name__ == '__main__':
                         tb_kwargs=ARGS.tb_kwargs,
                         multiple_gpu=ARGS.multiple_gpu,
                         device=DEVICE,
+                        print_metrics=ARGS.print_metrics,
                         )
     else:
         train_from_scratch(get_timestamp(),
@@ -652,4 +670,5 @@ if __name__ == '__main__':
                            num_workers=ARGS.num_workers,
                            device=DEVICE,
                            seed=ARGS.seed,
+                           print_metrics=ARGS.print_metrics,
                            )

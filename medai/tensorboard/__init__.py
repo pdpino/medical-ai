@@ -10,7 +10,7 @@ from medai.utils.files import get_tb_log_folder, get_tb_large_log_folder
 
 IGNORE_METRICS = [
     r'\Acm', # Confusion-matrix, no sense to put it in TB
-    '_timer', # Medical correctness timers, return strings
+    # '_timer', # Medical correctness timers, return strings
 ]
 
 class TBWriter:
@@ -49,6 +49,7 @@ class TBWriter:
             'mse-total': 'MSE-total',
             'mse-pos': 'MSE-pos',
             'mse-neg': 'MSE-neg',
+            'chex_acc': 'Chex_acc',
             'chex_f1': 'Chex_f1',
             'chex_npv': 'Chex_npv',
             'chex_prec': 'Chex_prec',
@@ -60,12 +61,15 @@ class TBWriter:
         }
 
         self._loss_regex = re.compile(r'(\w+)_loss')
+        self._chex_macro_avg_regex = re.compile(r'chex_\w+_woNF\Z')
 
     def _map_metric_name(self, name):
         found = self._loss_regex.search(name)
         if found:
             captured = found.group(1)
             return f'Loss_{captured}'
+        if self._chex_macro_avg_regex.match(name):
+            return name.capitalize()
 
         return self._name_mappings.get(name, name)
 

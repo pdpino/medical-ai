@@ -23,8 +23,8 @@ class LabelerTimerMetric(Metric):
         pass
 
     def compute(self):
-        labeler_minutes = round(self._labeler.timer.total / 60, 1)
-        global_minutes = round(self._labeler.global_timer.total / 60, 1)
+        labeler_minutes = self._labeler.timer.total / 60
+        global_minutes = self._labeler.global_timer.total / 60
 
         LOGGER.debug(
             'Labeler took: %s/%s',
@@ -32,4 +32,8 @@ class LabelerTimerMetric(Metric):
             duration_to_str(self._labeler.global_timer.total),
         )
 
-        return f'{labeler_minutes}/{global_minutes}'
+        if labeler_minutes == 0 and global_minutes == 0:
+            # Empty value
+            return -1
+
+        return labeler_minutes

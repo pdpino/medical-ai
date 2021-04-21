@@ -20,6 +20,9 @@ _shorter_names = {
     'mse-neg': 'mse-n',
     'n-shapes-gen': 'shapes',
     'n-holes-gen': 'holes',
+    'chex_labeler_misses': 'miss',
+    'chex_labeler_misses_unique': 'miss_uniq',
+    'chex_labeler_misses_perc': 'miss_perc',
 }
 
 def _shorten(metric_name):

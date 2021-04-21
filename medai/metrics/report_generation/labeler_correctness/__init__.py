@@ -1,3 +1,4 @@
+import operator
 from functools import partial
 import logging
 import numpy as np
@@ -8,6 +9,7 @@ from medai.metrics.report_generation.labeler_correctness.metric import MedicalLa
 from medai.metrics.report_generation.labeler_correctness.light_labeler import ChexpertLightLabeler
 from medai.metrics.report_generation.labeler_correctness.labeler_timer import LabelerTimerMetric
 from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
+from medai.metrics.report_generation.labeler_correctness.hit_counter_metric import HitCounterMetric
 from medai.metrics.report_generation.transforms import get_flat_reports
 from medai.utils.lock import SyncLock
 from medai.utils.metrics import EveryNAfterMEpochs
@@ -17,6 +19,14 @@ LOGGER = logging.getLogger(__name__)
 
 _LOCK_FOLDER = LABELER_CACHE_DIR
 _LOCK_NAME = 'medical-correctness-cache'
+
+
+def _attach_hit_counter(engine, labeler, basename, device='cuda'):
+    hit_counter_metric = HitCounterMetric(labeler, device=device)
+
+    for i, subvalue in enumerate(['misses', 'misses_unique', 'misses_perc']):
+        metric = MetricsLambda(operator.itemgetter(i), hit_counter_metric)
+        metric.attach(engine, f'{basename}_labeler_{subvalue}')
 
 
 def _attach_labeler(engine, labeler, basename, usage=None,
@@ -34,6 +44,8 @@ def _attach_labeler(engine, labeler, basename, usage=None,
     if timer:
         timer_metric = LabelerTimerMetric(labeler=labeler, device=device)
         timer_metric.attach(engine, f'{basename}_timer')
+
+    _attach_hit_counter(engine, labeler, basename, device=device)
 
     metric_obj = MedicalLabelerCorrectness(
         labeler, output_transform=get_flat_reports, device=device,
@@ -54,6 +66,15 @@ def _attach_labeler(engine, labeler, basename, usage=None,
     def _macro_avg_getter(result, metric_name):
         return np.mean(result[metric_name])
 
+    ignore_no_finding_mask = np.zeros(len(labeler.diseases))
+    if labeler.no_finding_idx is not None:
+        ignore_no_finding_mask[labeler.no_finding_idx] = 1
+
+    def _macro_avg_getter_fonly(result, metric_name):
+        values = result[metric_name] # shape: n_findings
+        return np.ma.array(values, mask=ignore_no_finding_mask).mean()
+
+
     if usage:
         kwargs = {
             'usage': usage,
@@ -68,6 +89,14 @@ def _attach_labeler(engine, labeler, basename, usage=None,
             metric_obj,
         )
         macro_avg.attach(engine, f'{basename}_{metric_name}', **kwargs)
+
+        if labeler.no_finding_idx is not None:
+            # Attach macro-avg removing "no-finding"
+            macro_avg_fonly = MetricsLambda(
+                partial(_macro_avg_getter_fonly, metric_name=metric_name),
+                metric_obj,
+            )
+            macro_avg_fonly.attach(engine, f'{basename}_{metric_name}_woNF', **kwargs)
 
         # Attach for each disease
         for index, disease in enumerate(labeler.diseases):

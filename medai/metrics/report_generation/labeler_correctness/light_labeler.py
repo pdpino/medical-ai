@@ -14,6 +14,38 @@ from medai.utils.timer import Timer
 
 LOGGER = logging.getLogger(__name__)
 
+class CacheHitCounter:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self._misses = 0
+        self._unique_misses = 0
+        self._total = 0
+
+    def update(self, n_misses, n_unique_misses, n_total):
+        self._misses += n_misses
+        self._unique_misses += n_unique_misses
+        self._total += n_total
+
+    def compute(self):
+        return self._misses, self._unique_misses, self._total
+
+
+_IGNORE_TOKENS = ignore=('END', ',', '.', 'xxxx', '&lt', '/', '(', ')', 'UNK', '-')
+def clean_sentence(sentence):
+    sentence = [
+        token
+        for token in sentence
+        if token not in _IGNORE_TOKENS
+    ]
+    return [
+        token
+        for i, token in enumerate(sentence)
+        if i == 0 or token != sentence[i-1]
+    ]
+
+
 class LightLabeler(ABC):
     name = 'some-metric'
     diseases = ['dis1', 'dis2']
@@ -24,10 +56,13 @@ class LightLabeler(ABC):
     def __init__(self, vocab):
         self._labels_by_sentence = ReportLabelsCache(self.name, 'sentences', self.diseases)
 
-        self._report_reader = ReportReader(vocab)
+        self._report_reader = ReportReader(vocab, ignore_pad=True)
 
         self.global_timer = Timer()
         self.timer = Timer()
+
+        # FIXME: this is not implemented in full_labeler, fix code duplication!
+        self.hit_counter = CacheHitCounter()
 
     @abstractmethod
     def _label_reports(self, reports):
@@ -109,23 +144,34 @@ class LightLabeler(ABC):
         # Version 2
         splitted_reports = [
             [
-                self._report_reader.idx_to_text(sentence)
+                self._report_reader.idx_to_text(clean_sentence(sentence))
                 for sentence in sentence_iterator(report)
             ]
             for report in reports
         ]
         # list of lists of str, shape: batch_size, n_sentences
 
+        n_sentences = sum(len(r) for r in splitted_reports)
+
         # Check cache
-        cache_miss = set(
+        cache_miss = [
             sentence
             for report in splitted_reports
             for sentence in report
             if sentence not in self._labels_by_sentence
-        )
+        ]
+        n_sentences_missed = len(cache_miss)
+
+        # Remove repeated sentences
+        cache_miss = set(cache_miss)
+        n_unique_missed = len(cache_miss)
+
+        # Update hit-miss counter
+        self.hit_counter.update(n_sentences_missed, n_unique_missed, n_sentences)
 
         if len(cache_miss) > 0:
             # Label reports not in cache (misses)
+
             cache_miss = list(cache_miss)
             with self.timer:
                 new_labels = self._label_reports(cache_miss)
