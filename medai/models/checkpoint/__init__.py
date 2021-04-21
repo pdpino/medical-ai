@@ -168,6 +168,7 @@ def load_compiled_model(run_id, **kwargs):
         'cls': load_compiled_model_classification,
         'cls-seg': load_compiled_model_cls_seg,
         'det': load_compiled_model_detection_seg,
+        'seg': load_compiled_model_segmentation,
     }
 
     if run_id.task not in _load_fns:

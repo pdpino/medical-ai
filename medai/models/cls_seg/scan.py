@@ -5,7 +5,9 @@ from medai.models.segmentation.scan import _ParallelResBlocks, _ResBlock
 
 class ScanClsSeg(nn.Module):
     """Resnet-like CNN, using SCAN residual-blocks, with SEG and CLS output."""
-    def __init__(self, cl_labels, seg_labels, gpool='max', **unused_kwargs):
+    def __init__(self, cl_labels, seg_labels, gpool='max',
+                 dropout_features=0,
+                 **unused_kwargs):
         super().__init__()
 
         # height and width sizes are considering input size (400 x 400)
@@ -26,6 +28,8 @@ class ScanClsSeg(nn.Module):
             _ResBlock(64, 1), # output: 64 x 25 x 25
         )
 
+        self.dropout_features = dropout_features
+
         self.cl_labels = list(cl_labels)
         self.seg_labels = list(seg_labels)
         self.features_size = 64
@@ -37,7 +41,7 @@ class ScanClsSeg(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            get_adaptive_pooling_layer(gpool),
+            get_adaptive_pooling_layer(gpool, drop=self.dropout_features),
             nn.Linear(self.features_size, len(cl_labels)),
         )
 

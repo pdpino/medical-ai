@@ -5,19 +5,17 @@ from medai.losses import AVAILABLE_LOSSES
 from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import attach_metrics_iox
-from medai.models.checkpoint import load_compiled_model_cls_seg
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.cls_seg import create_cls_seg_model, AVAILABLE_CLS_SEG_MODELS
+from medai.models.checkpoint import load_compiled_model
 from medai.training.common import TrainingProcess
 from medai.training.detection.cls_seg import get_step_fn_cls_seg
-from medai.utils import parsers
+from medai.utils import parsers, RunId
 
 class TrainingClsSeg(TrainingProcess):
     LOGGER_NAME = 'medai.cls-seg.train'
     base_print_metrics = ['cl_loss', 'seg_loss', 'roc_auc', 'iou', 'iobb']
     task = 'cls-seg'
-
-    load_compiled_model_fn = staticmethod(load_compiled_model_cls_seg)
 
     allow_augmenting = True
     allow_sampling = False
@@ -43,6 +41,8 @@ class TrainingClsSeg(TrainingProcess):
                             help='If present, dont use imagenet pretrained weights')
         parser.add_argument('-drop', '--dropout', type=float, default=0,
                             help='dropout-rate to use (only available for some models)')
+        parser.add_argument('-dropf', '--dropout-features', type=float, default=0,
+                            help='dropout-rate to use after model features')
 
         parser.add_argument('--seg-lambda', type=float, default=1,
                             help='Factor to multiply seg-loss')
@@ -52,6 +52,16 @@ class TrainingClsSeg(TrainingProcess):
                             default='wbce', help='CL Loss to use')
         parser.add_argument('--not-weight-organs', action='store_true',
                             help='Do not add weight to organs')
+
+        parser.add_argument('--pretrained', type=str, default=None,
+                            help='Run name of a pretrained CNN')
+        parser.add_argument('--pretrained-task', type=str, default='cls',
+                            choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
+        parser.add_argument('--pretrained-seg', action='store_true',
+                            help='Copy segmentator weights also')
+        parser.add_argument('--pretrained-cls', action='store_true',
+                            help='Copy classifier weights also')
+
 
         parsers.add_args_h2bb(parser)
 
@@ -71,13 +81,28 @@ class TrainingClsSeg(TrainingProcess):
         else:
             args.weight_organs = None
 
+        if args.pretrained and args.pretrained_seg:
+            if args.pretrained_task != 'cls-seg':
+                parser.error(
+                    'To copy pretrained-segmentator weights, pretrained-task must be cls-seg')
+
+        if args.pretrained:
+            args.pretrained_run_id = RunId(args.pretrained, debug=False, task=args.pretrained_task)
+        else:
+            args.pretrained_run_id = None
+
         parsers.build_args_h2bb_(args)
 
     def _fill_run_name_model(self, run_name):
         run_name += f'_{self.args.model}'
 
+        if self.args.pretrained_run_id:
+            run_name += f'_pre{self.args.pretrained_run_id.short_name.replace("_", "-")}'
+
         if self.args.dropout != 0:
             run_name += f'_drop{self.args.dropout}'
+        if self.args.dropout_features:
+            run_name += f'_dropf{self.args.dropout_features}'
 
         if self.args.cnn_pooling not in ('avg', 'mean'):
             run_name += f'_g{self.args.cnn_pooling}'
@@ -121,9 +146,35 @@ class TrainingClsSeg(TrainingProcess):
             'seg_labels': organs,
             'gpool': self.args.cnn_pooling,
             'dropout': self.args.dropout,
+            'dropout_features': self.args.dropout_features,
             'imagenet': not self.args.no_imagenet,
         }
         self.model = create_cls_seg_model(**self.model_kwargs).to(self.device)
+
+    def _load_state_dict_pretrained_model(self):
+        if self.args.pretrained_run_id is None:
+            return
+
+        pretrained_model = load_compiled_model(
+            self.args.pretrained_run_id, device=self.device).model
+
+        # Copy features
+        self.model.features.load_state_dict(pretrained_model.features.state_dict())
+
+        if self.args.pretrained_cls:
+            raise NotImplementedError('--pretrained-cls not tested yet')
+            # assert len(pretrained_model.labels) == len(self.model.labels)
+            # task = self.args.pretrained_run_id.task
+            # if task == 'cls':
+            #     prev_layers = pretrained_model.prediction
+            # elif task == 'seg':
+            #     prev_layers = pretrained_model.classifier
+            # self.model.classifier.load_state_dict(prev_layers.state_dict())
+
+        if self.args.pretrained_seg:
+            raise NotImplementedError('--pretrained-seg not tested yet')
+            # self.model.segmentator.load_state_dict(pretrained_model.segmentator.state_dict())
+
 
     def _fill_other_train_kwargs(self):
         d = dict()

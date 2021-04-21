@@ -15,7 +15,7 @@ from medai.models.checkpoint import (
     CompiledModel,
     attach_checkpoint_saver,
     save_metadata,
-    load_compiled_model_classification,
+    load_compiled_model,
 )
 from medai.tensorboard import TBWriter
 from medai.utils import (
@@ -44,7 +44,6 @@ class TrainingProcess(abc.ABC):
     checkpoint_metric = None
     default_num_workers = 2
     prepare_data_fn = staticmethod(prepare_data_classification)
-    load_compiled_model_fn = staticmethod(load_compiled_model_classification)
 
     available_datasets = AVAILABLE_CLASSIFICATION_DATASETS
     default_dataset = 'cxr14'
@@ -211,14 +210,12 @@ class TrainingProcess(abc.ABC):
 
     def _fill_run_name_lr(self, run_name):
         run_name += f'_lr{self.args.learning_rate}'
-        if self.args.shuffle:
-            run_name += '_shuffle'
         if self.args.weight_decay != 0:
             run_name += f'_wd{self.args.weight_decay}'
         if self.args.lr_metric:
             factor = self.args.lr_sch_kwargs['factor']
             patience = self.args.lr_sch_kwargs['patience']
-            run_name += f'_sch-{self.args.lr_metric}-p{patience}-f{factor}'
+            run_name += f'_sch-{self.args.lr_metric.replace("_", "-")}-p{patience}-f{factor}'
 
             cooldown = self.args.lr_sch_kwargs.get('cooldown', 0)
             if cooldown != 0:
@@ -231,7 +228,7 @@ class TrainingProcess(abc.ABC):
             run_name += '_normS'
         else:
             run_name += '_normD'
-        if self.args.image_size != 512:
+        if self.args.image_size != 256:
             run_name += f'_size{self.args.image_size}'
 
         if isinstance(self.args.labels, (tuple, list)):
@@ -240,10 +237,14 @@ class TrainingProcess(abc.ABC):
             else:
                 run_name += f'_labels{len(self.args.labels)}'
 
+        if not self.args.shuffle:
+            run_name += '_no-shuffle'
+
         return run_name
 
     def _fill_run_name_checkpoint(self, run_name):
-        run_name += f'_best-{self.checkpoint_metric}'
+        if self.checkpoint_metric is None:
+            run_name += '_notbest'
 
         return run_name
 
@@ -291,6 +292,7 @@ class TrainingProcess(abc.ABC):
         self._create_dataloaders()
 
         self._create_model()
+        self._load_state_dict_pretrained_model()
         self._move_model_to_device()
 
         self._create_optimizer()
@@ -311,7 +313,7 @@ class TrainingProcess(abc.ABC):
         return self.train_model(**self.other_train_kwargs)
 
     def _load_resumed_model(self):
-        self.compiled_model = self.load_compiled_model_fn(
+        self.compiled_model = load_compiled_model(
             self.run_id,
             device=self.device,
             multiple_gpu=self.args.multiple_gpu,
@@ -410,6 +412,9 @@ class TrainingProcess(abc.ABC):
         """Create self.model and self.model_kwargs."""
         self.model_kwargs = {}
         self.model = None
+
+    def _load_state_dict_pretrained_model(self):
+        """Load state_dict from a pretrained model to self.model."""
 
     def _move_model_to_device(self):
         if self.args.multiple_gpu:

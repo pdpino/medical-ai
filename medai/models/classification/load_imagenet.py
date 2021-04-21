@@ -1,55 +1,17 @@
 import torch.nn as nn
-from torchvision import models
+import torch.nn.functional as F
 
 from medai.models.common import (
     get_adaptive_pooling_layer,
     get_linear_layers,
+    load_imagenet_model,
 )
-
-def _extract_densenet_121_features(densenet_121):
-    return densenet_121.features, 1024
-
-def _extract_resnet_50_features(resnet_50):
-    features = nn.Sequential(
-        resnet_50.conv1,
-        resnet_50.bn1,
-        resnet_50.relu,
-        resnet_50.maxpool,
-        resnet_50.layer1,
-        resnet_50.layer2,
-        resnet_50.layer3,
-        resnet_50.layer4,
-    )
-    return features, 2048
-
-def _extract_mobilenet_features(mobilenet):
-    return mobilenet.features, 1280
-
-_LOADERS = {
-    'densenet-121': (models.densenet121, _extract_densenet_121_features),
-    'resnet-50': (models.resnet50, _extract_resnet_50_features),
-    'mobilenet': (models.mobilenet_v2, _extract_mobilenet_features),
-}
-
-def load_imagenet_model(model_name, imagenet=True, dropout=0):
-    # Config by model
-    model_constructor, extractor = _LOADERS[model_name]
-
-    # Load base CNN
-    kwargs = {'pretrained': imagenet}
-    if dropout != 0 and model_name == 'densenet-121':
-        kwargs['drop_rate'] = dropout
-    base_cnn = model_constructor(**kwargs)
-
-    # Extract feature layers only
-    features, features_size = extractor(base_cnn)
-
-    return features, features_size
 
 class ImageNetModel(nn.Module):
     """Loads a torchvision model."""
     def __init__(self, labels=[], model_name='densenet-121',
                  imagenet=True, freeze=False, gpool='max', fc_layers=(), dropout=0,
+                 dropout_features=0,
                  **unused_kwargs):
         super().__init__()
         # Extract feature layers only
@@ -67,6 +29,8 @@ class ImageNetModel(nn.Module):
         self.model_name = model_name
 
         self.global_pool = get_adaptive_pooling_layer(gpool)
+
+        self.dropout_features = dropout_features
 
         # Create additional FC layers, if any
         pred_input_size = self.features_size
@@ -93,6 +57,9 @@ class ImageNetModel(nn.Module):
         # shape: batch_size, n_features
 
         embedding = x
+
+        if self.dropout_features > 0:
+            x = F.dropout(x, self.dropout_features, training=self.training)
 
         if self.fc:
             x = self.fc(x) # shape: batch_size, n_fc

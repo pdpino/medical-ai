@@ -158,8 +158,8 @@ class Augmentator(Dataset):
         stats = {
             'mode': mode,
             'times': times,
-            'new-total': len(self.indices),
-            'original': len(self.dataset),
+            'new-total': f'{len(self.indices):,}',
+            'original': f'{len(self.dataset):,}',
             'enable-masks': self.augment_masks,
         }
         stats_str = ' '.join(f'{k}={v}' for k, v in stats.items())

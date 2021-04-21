@@ -1,8 +1,8 @@
 import torch.nn as nn
 
-from medai.models.classification.load_imagenet import load_imagenet_model
 from medai.models.common import (
     get_adaptive_pooling_layer,
+    load_imagenet_model,
 )
 
 _ASSERT_IN_OUT_IMAGE_SIZE = False
@@ -10,6 +10,7 @@ _ASSERT_IN_OUT_IMAGE_SIZE = False
 class ImageNetClsSegModel(nn.Module):
     def __init__(self, cl_labels, seg_labels, model_name='densenet-121',
                  imagenet=True, freeze=False, gpool='max', dropout=0,
+                 dropout_features=0,
                  **unused_kwargs):
         super().__init__()
         self.features, self.features_size = load_imagenet_model(
@@ -27,6 +28,8 @@ class ImageNetClsSegModel(nn.Module):
         self.model_name = model_name
 
 
+        self.dropout_features = dropout_features
+
         # NOTE: this setup works for image input sizes 256, 512, 1024, to output the exact
         # same size in the segmentator (tested on densenet-121, resnet-50, mobilenet).
         # Other input sizes (as 200) may not work
@@ -39,7 +42,7 @@ class ImageNetClsSegModel(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            get_adaptive_pooling_layer(gpool),
+            get_adaptive_pooling_layer(gpool, drop=self.dropout_features),
             nn.Linear(self.features_size, len(cl_labels)),
         )
 
