@@ -117,7 +117,9 @@ class RunId:
     @property
     def full_name(self):
         if self.experiment:
-            return f'{self.name}__{self.experiment}'
+            suffix = f'__{self.experiment}'
+            if not self.name.endswith(suffix):
+                return self.name + suffix
         return self.name
 
     @property

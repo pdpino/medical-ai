@@ -320,9 +320,13 @@ def train_from_scratch(run_name,
                        ):
     """Train a model from scratch."""
     # Create run name
-    run_name = f'{run_name}_{dataset_name}_{decoder_name}_lr{lr}'
+    run_name = f'{run_name}_{dataset_name}_{decoder_name}'
     if supervise_attention:
         run_name += '_satt'
+    if embedding_size != 100:
+        run_name += f'_embs-{embedding_size}'
+    if hidden_size != 100:
+        run_name += f'_hs-{hidden_size}'
     if cnn_run_id:
         run_name += f'_precnn-{cnn_run_id.short_clean_name}'
     else:
@@ -331,7 +335,7 @@ def train_from_scratch(run_name,
         run_name += '_normS'
     else:
         run_name += '_normD'
-    if image_size != 512:
+    if image_size != 256:
         run_name += f'_size{image_size}'
     if not shuffle:
         if sort_samples:
@@ -346,6 +350,7 @@ def train_from_scratch(run_name,
             run_name += f'-{augment_label}'
             if augment_class is not None:
                 run_name += f'-cls{augment_class}'
+    run_name += f'_lr{lr}'
     if lr_sch_metric:
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
@@ -624,7 +629,7 @@ if __name__ == '__main__':
     print_hw_options(DEVICE, ARGS)
 
     if ARGS.resume:
-        resume_training(RunId(ARGS.resume, not ARGS.no_debug, 'rg', ARGS.experiment).resolve(),
+        resume_training(RunId(ARGS.resume, not ARGS.no_debug, 'rg'),
                         n_epochs=ARGS.epochs,
                         max_samples=ARGS.max_samples,
                         tb_kwargs=ARGS.tb_kwargs,

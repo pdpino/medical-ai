@@ -1,3 +1,4 @@
+import logging
 from functools import partial
 from medai.models.report_generation.decoder_lstm import LSTMDecoder
 from medai.models.report_generation.decoder_lstm_v2 import LSTMDecoderV2
@@ -6,6 +7,8 @@ from medai.models.report_generation.decoder_lstm_att_v2 import LSTMAttDecoderV2
 from medai.models.report_generation.decoder_lstm_att_v3 import LSTMAttDecoderV3
 from medai.models.report_generation.decoder_h_lstm_att import HierarchicalLSTMAttDecoder
 from medai.models.report_generation.decoder_h_lstm_att_v2 import HierarchicalLSTMAttDecoderV2
+
+LOGGER = logging.getLogger(__name__)
 
 _MODELS_DEF = {
     'lstm': LSTMDecoder,
@@ -46,6 +49,9 @@ def create_decoder(decoder_name, **kwargs):
         if isinstance(features_size, (tuple, list)):
             kwargs['features_size'] = features_size[0]
             kwargs['image_size'] = features_size[1:]
+
+    info_str = ' '.join(f'{k}={v}' for k, v in kwargs.items())
+    LOGGER.info('Creating decoder: %s, %s', decoder_name, info_str)
 
     ModelClass = _MODELS_DEF[decoder_name]
     model = ModelClass(**kwargs)
