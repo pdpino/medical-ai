@@ -566,6 +566,8 @@ def parse_args():
                         help='Run name of a pretrained CNN')
     cnn_group.add_argument('-cp-task', '--cnn-pretrained-task', type=str, default='cls',
                         choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
+    cnn_group.add_argument('-cp-exp', '--cnn-pretrained-exp', type=str, default=None,
+                        help='Experiment name of the pretrained CNN')
 
     parsers.add_args_early_stopping(parser, metric='chex_f1')
     parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
@@ -602,6 +604,7 @@ def parse_args():
             args.cnn_pretrained,
             debug=False, # NOTE: Even when debugging, --no-debug pre-cnns are more common
             task=args.cnn_pretrained_task,
+            experiment=args.cnn_pretrained_exp,
         )
     else:
         args.precnn_run_id = None

@@ -29,7 +29,7 @@ def create_cls_seg_model(model_name, **kwargs):
     if dropout != 0 and 'densenet' not in model_name:
         LOGGER.error('Dropout not implemented for %s, ignoring', model_name)
 
-    LOGGER.info('Creating CNN CLS+SEG: %s, %s', model_name, _get_printable_kwargs(kwargs))
+    LOGGER.info('Creating CLS+SEG: %s, %s', model_name, _get_printable_kwargs(kwargs))
 
     ModelClass = _MODELS_DEF[model_name]
     model = ModelClass(**kwargs)

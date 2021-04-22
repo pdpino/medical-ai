@@ -61,15 +61,18 @@ class TBWriter:
         }
 
         self._loss_regex = re.compile(r'(\w+)_loss')
-        self._chex_macro_avg_regex = re.compile(r'chex_\w+_woNF\Z')
+        self._chex_macro_avg_regex = re.compile(r'chex_(\w+_woNF)\Z')
 
     def _map_metric_name(self, name):
         found = self._loss_regex.search(name)
         if found:
             captured = found.group(1)
             return f'Loss_{captured}'
-        if self._chex_macro_avg_regex.match(name):
-            return name.capitalize()
+
+        found = self._chex_macro_avg_regex.search(name)
+        if found:
+            captured = found.group(1)
+            return f'Chex_{captured}'
 
         return self._name_mappings.get(name, name)
 

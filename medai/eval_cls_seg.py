@@ -169,6 +169,8 @@ def parse_args():
                         help='Number of epochs')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--experiment', type=str, default=None,
+                        help='Run experiment')
     parser.add_argument('--override', action='store_true',
                         help='Override previous results')
     parser.add_argument('--quiet', action='store_true',
@@ -190,7 +192,7 @@ if __name__ == '__main__':
 
     print_hw_options(DEVICE, ARGS)
 
-    evaluate_run(RunId(ARGS.run_name, not ARGS.no_debug, 'cls-seg').resolve(),
+    evaluate_run(RunId(ARGS.run_name, not ARGS.no_debug, 'cls-seg', ARGS.experiment).resolve(),
                  dataset_types=ARGS.eval_in,
                  max_samples=ARGS.max_samples,
                  batch_size=ARGS.batch_size,
