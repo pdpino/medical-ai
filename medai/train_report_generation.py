@@ -63,8 +63,10 @@ from medai.utils.handlers import (
 LOGGER = logging.getLogger('medai.rg.train')
 
 
+_CORRECTNESS_TARGET_METRIC = 'chex_f1_woNF'
+
 def _get_print_metrics(additional_metrics):
-    print_metrics = ['loss', 'bleu', 'ciderD', 'chex_f1', 'chex_timer']
+    print_metrics = ['loss', 'bleu', 'ciderD', _CORRECTNESS_TARGET_METRIC]
 
     for m in (additional_metrics or []):
         if m not in print_metrics:
@@ -173,7 +175,7 @@ def train_model(run_id,
                        )
 
     # Attach checkpoint
-    checkpoint_metric = 'chex_f1' if medical_correctness else None
+    checkpoint_metric = _CORRECTNESS_TARGET_METRIC if medical_correctness else None
     attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
@@ -567,7 +569,7 @@ def parse_args():
     cnn_group.add_argument('-cp-task', '--cnn-pretrained-task', type=str, default='cls',
                         choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
 
-    parsers.add_args_early_stopping(parser, metric='chex_f1')
+    parsers.add_args_early_stopping(parser, metric=_CORRECTNESS_TARGET_METRIC)
     parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
     parsers.add_args_tb(parser)
     parsers.add_args_augment(parser)

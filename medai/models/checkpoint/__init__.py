@@ -243,20 +243,21 @@ def attach_checkpoint_saver(run_id,
     if dryrun:
         return
 
-    _IGNORE_WARNING_METRICS = ('chex_f1',)
-    def score_fn(unused_engine):
-        value = validator.state.metrics.get(metric, -1)
-        if value == -1:
-            if metric not in _IGNORE_WARNING_METRICS:
-                LOGGER.warning(
-                    'Checkpoint-saver received %s=-1, will keep oldest checkpoint',
-                    metric,
-                )
-        if metric == 'loss':
-            value = -value
-        return value
-
     if metric is not None:
+        _SHOULD_IGNORE_WARNING_METRICS = metric.startswith('chex_')
+
+        def score_fn(unused_engine):
+            value = validator.state.metrics.get(metric, -1)
+            if value == -1:
+                if not _SHOULD_IGNORE_WARNING_METRICS:
+                    LOGGER.warning(
+                        'Checkpoint-saver received %s=-1, will keep oldest checkpoint',
+                        metric,
+                    )
+            if metric == 'loss':
+                value = -value
+            return value
+
         early_kwargs = {
             'score_function': score_fn,
             'score_name': metric,
