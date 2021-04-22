@@ -197,7 +197,7 @@ def train_model(run_id,
 def train_from_scratch(run_name,
                        shuffle=False,
                        image_format='RGB',
-                       cnn_pretrained=None,
+                       pretrained_run_id=None,
                        cnn_name='resnet-50',
                        dropout=0,
                        imagenet=True,
@@ -250,8 +250,8 @@ def train_from_scratch(run_name,
     # Create run name
     run_name = f'{run_name}_{dataset_name}'
 
-    if cnn_pretrained:
-        run_name += f'_precnn_{find_cnn_name_in_run_name(cnn_pretrained)}'
+    if pretrained_run_id:
+        run_name += f'_precnn-{find_cnn_name_in_run_name(pretrained_run_id.name)}'
     else:
         run_name += f'_{cnn_name}'
 
@@ -260,7 +260,7 @@ def train_from_scratch(run_name,
         run_name += f'-{cl_lambda}'
     run_name += f'-{hint_loss_name}'
 
-    if not cnn_pretrained:
+    if not pretrained_run_id:
         if not imagenet:
             run_name += '_noig'
         if cnn_pooling not in ('avg', 'mean'):
@@ -351,17 +351,14 @@ def train_from_scratch(run_name,
     val_dataloader = prepare_data_classification(dataset_type='val', **dataset_kwargs)
 
     # Create CNN
-    if cnn_pretrained:
+    if pretrained_run_id:
         # Load pretrained
-        # TODO: pass (debug, task, etc) parameters
-        pretrained_run_id = RunId(cnn_pretrained, False, 'cls').resolve()
         compiled_cnn = load_compiled_model_classification(pretrained_run_id,
                                                           device=device,
                                                           multiple_gpu=multiple_gpu,
                                                           )
         model = compiled_cnn.model
         cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
-        cnn_pretrained = pretrained_run_id.name # Resolved name
     else:
         cnn_kwargs = {
             'model_name': cnn_name,
@@ -410,7 +407,7 @@ def train_from_scratch(run_name,
         'opt_kwargs': opt_kwargs,
         'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
         'hparams': {
-            'pretrained_cnn': cnn_pretrained,
+            'pretrained_cnn': pretrained_run_id.to_dict(),
             'batch_size': batch_size,
         },
         'other_train_kwargs': other_train_kwargs,
@@ -492,6 +489,11 @@ def parse_args():
     # Shortcuts
     args.debug = not args.no_debug
 
+    if ARGS.cnn_pretrained:
+        args.pretrained_run_id = RunId(ARGS.cnn_pretrained, False, 'cls')
+    else:
+        args.pretrained_run_id = None
+
     # Build params
     parsers.build_args_h2bb_(args)
     parsers.build_args_sampling_(args)
@@ -520,7 +522,7 @@ if __name__ == '__main__':
         shuffle=ARGS.shuffle,
         image_format=ARGS.image_format,
         cnn_name=ARGS.model,
-        cnn_pretrained=ARGS.cnn_pretrained,
+        pretrained_run_id=ARGS.pretrained_run_id,
         dropout=ARGS.dropout,
         imagenet=not ARGS.no_imagenet,
         freeze=ARGS.freeze,

@@ -17,7 +17,7 @@ def _get_task_folder(task):
     return folder_by_task[task]
 
 
-def _get_parent_folder(folder, debug, task, experiment='', workspace_dir=WORKSPACE_DIR):
+def _get_parent_folder(folder, debug, task, workspace_dir=WORKSPACE_DIR):
     debug_folder = 'debug' if debug else ''
     task_folder = _get_task_folder(task)
 
@@ -26,7 +26,6 @@ def _get_parent_folder(folder, debug, task, experiment='', workspace_dir=WORKSPA
         task_folder,
         folder,
         debug_folder,
-        experiment if experiment else '',
     )
 
     return parent_folder
@@ -52,11 +51,10 @@ def _build_dir_getter(folder):
                 exception will be raised).
         """
         parent_folder = _get_parent_folder(
-            folder, run_id.debug, run_id.task, run_id.experiment,
-            workspace_dir=workspace_dir,
+            folder, run_id.debug, run_id.task, workspace_dir=workspace_dir,
         )
 
-        run_folder = os.path.join(parent_folder, run_id.name)
+        run_folder = os.path.join(parent_folder, run_id.full_name)
 
         if save_mode:
             os.makedirs(run_folder, exist_ok=True)
@@ -80,8 +78,7 @@ def _resolve_run_name(run_id, search_in='runs', workspace_dir=WORKSPACE_DIR):
 
     if _TIMESTAMP_ONLY_REGEX.match(run_id.name):
         parent_folder = _get_parent_folder(
-            search_in, run_id.debug, run_id.task, run_id.experiment,
-            workspace_dir=workspace_dir,
+            search_in, run_id.debug, run_id.task, workspace_dir=workspace_dir,
         )
 
         # Search the run with timestamp
@@ -102,28 +99,45 @@ def _resolve_run_name(run_id, search_in='runs', workspace_dir=WORKSPACE_DIR):
 
 class RunId:
     """Class to hold run identification."""
+    _experiment_regex = re.compile(r'[\w\-]+__([A-Za-z\-]+)\Z')
+
     def __init__(self, name='', debug=True, task=None, experiment=''):
         self.name = name
         self.debug = debug
         self.task = task
         self.experiment = experiment or ''
 
-        if _TIMESTAMP_ONLY_REGEX.match(self.name):
-            self.resolve()
+        self.experiment = self.experiment.replace('_', '-')
+
+        self.resolve()
 
     def __str__(self):
-        return f'{self.name} (task={self.task}, exp={self.experiment}, debug={self.debug})'
+        return f'{self.full_name}\n\t(task={self.task}, exp={self.experiment}, debug={self.debug})'
+
+    @property
+    def full_name(self):
+        if self.experiment:
+            return f'{self.name}__{self.experiment}'
+        return self.name
 
     @property
     def short_name(self):
         # timestamp is 11 characters long
         return self.name[:11]
 
+    @property
+    def short_clean_name(self):
+        return self.short_name.replace('_', '-')
+
     def resolve(self):
         """Resolve the run-name."""
         resolved_name = _resolve_run_name(self)
         if resolved_name is not None:
             self.name = resolved_name
+
+            exp_found = self._experiment_regex.search(resolved_name)
+            if exp_found:
+                self.experiment = exp_found.group(1)
 
         return self
 

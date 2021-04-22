@@ -97,7 +97,7 @@ class TrainingClsSeg(TrainingProcess):
         run_name += f'_{self.args.model}'
 
         if self.args.pretrained_run_id:
-            run_name += f'_pre{self.args.pretrained_run_id.short_name.replace("_", "-")}'
+            run_name += f'_pre{self.args.pretrained_run_id.short_clean_name}'
 
         if self.args.dropout != 0:
             run_name += f'_drop{self.args.dropout}'
