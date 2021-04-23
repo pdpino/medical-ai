@@ -280,6 +280,8 @@ def resume_training(run_id,
 def train_from_scratch(run_name,
                        dataset_name='iu-x-ray',
                        decoder_name='lstm',
+                       dropout_recursive=0,
+                       dropout_out=0,
                        supervise_attention=False,
                        batch_size=15,
                        sort_samples=True,
@@ -290,6 +292,7 @@ def train_from_scratch(run_name,
                        embedding_size=100,
                        hidden_size=100,
                        lr=0.0001,
+                       weight_decay=0,
                        n_epochs=10,
                        medical_correctness=True,
                        med_kwargs={},
@@ -323,6 +326,10 @@ def train_from_scratch(run_name,
     run_name = f'{run_name}_{dataset_name}_{decoder_name}'
     if supervise_attention:
         run_name += '_satt'
+    if dropout_recursive != 0:
+        run_name += f'_dropr{dropout_recursive}'
+    if dropout_out != 0:
+        run_name += f'_dropo{dropout_out}'
     if embedding_size != 100:
         run_name += f'_embs-{embedding_size}'
     if hidden_size != 100:
@@ -351,6 +358,8 @@ def train_from_scratch(run_name,
             if augment_class is not None:
                 run_name += f'-cls{augment_class}'
     run_name += f'_lr{lr}'
+    if weight_decay != 0:
+        run_name += f'_wd{weight_decay}'
     if lr_sch_metric:
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
@@ -446,6 +455,8 @@ def train_from_scratch(run_name,
         'hidden_size': hidden_size,
         'features_size': cnn.features_size,
         'teacher_forcing': teacher_forcing,
+        'dropout_recursive': dropout_recursive,
+        'dropout_out': dropout_out,
     }
     decoder = create_decoder(**decoder_kwargs).to(device)
 
@@ -459,6 +470,7 @@ def train_from_scratch(run_name,
     # Optimizer
     opt_kwargs = {
         'lr': lr,
+        'weight_decay': weight_decay,
     }
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
@@ -524,22 +536,12 @@ def parse_args():
                         help='Batch size', choices=AVAILABLE_REPORT_DATASETS)
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from a previous run')
-    parser.add_argument('-dec', '--decoder', type=str,
-                        choices=AVAILABLE_DECODERS, help='Choose Decoder')
-    parser.add_argument('--superv-att', action='store_true',
-                        help='If present, supervise the attention')
     parser.add_argument('-bs', '--batch_size', type=int, default=10,
                         help='Batch size')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
     parser.add_argument('-e', '--epochs', type=int, default=1,
                         help='Number of epochs')
-    parser.add_argument('-emb', '--embedding-size', type=int, default=100,
-                        help='Embedding size of the decoder')
-    parser.add_argument('-hs', '--hidden-size', type=int, default=100,
-                        help='Hidden size of the decoder')
-    parser.add_argument('-notf', '--no-teacher-forcing', action='store_true',
-                        help='If present, does not use teacher forcing')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
     parser.add_argument('-exp', '--experiment', type=str, default='',
@@ -548,6 +550,22 @@ def parse_args():
                         help='Set a seed (initial run only)')
     parser.add_argument('--print-metrics', type=str, nargs='*', default=None,
                         help='Additional metrics to print to stdout')
+
+    decoder_group = parser.add_argument_group('Decoder')
+    decoder_group.add_argument('-dec', '--decoder', type=str,
+                               choices=AVAILABLE_DECODERS, help='Choose Decoder')
+    decoder_group.add_argument('--superv-att', action='store_true',
+                               help='If present, supervise the attention')
+    decoder_group.add_argument('-emb', '--embedding-size', type=int, default=100,
+                               help='Embedding size of the decoder')
+    decoder_group.add_argument('-hs', '--hidden-size', type=int, default=100,
+                               help='Hidden size of the decoder')
+    decoder_group.add_argument('-drop-r', '--dropout-recursive', type=float, default=0,
+                               help='Recursive dropout (for LSTM models)')
+    decoder_group.add_argument('-drop-o', '--dropout-out', type=float, default=0,
+                               help='Out dropout')
+    decoder_group.add_argument('-notf', '--no-teacher-forcing', action='store_true',
+                               help='If present, does not use teacher forcing')
 
     data_group = parser.add_argument_group('Data')
     data_group.add_argument('--image-size', type=int, default=512,
@@ -642,6 +660,8 @@ if __name__ == '__main__':
                            dataset_name=ARGS.dataset,
                            decoder_name=ARGS.decoder,
                            supervise_attention=ARGS.superv_att,
+                           dropout_recursive=ARGS.dropout_recursive,
+                           dropout_out=ARGS.dropout_out,
                            batch_size=ARGS.batch_size,
                            sort_samples=not ARGS.no_sort,
                            shuffle=ARGS.shuffle,
@@ -651,6 +671,7 @@ if __name__ == '__main__':
                            embedding_size=ARGS.embedding_size,
                            hidden_size=ARGS.hidden_size,
                            lr=ARGS.learning_rate,
+                           weight_decay=ARGS.weight_decay,
                            n_epochs=ARGS.epochs,
                            medical_correctness=not ARGS.no_med,
                            med_kwargs=ARGS.med_kwargs,

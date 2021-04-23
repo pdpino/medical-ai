@@ -6,14 +6,17 @@
 from itertools import count
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from medai.models.report_generation.att_2layer import AttentionTwoLayers
 from medai.utils.nlp import PAD_IDX, START_IDX, END_IDX
 
 
 class LSTMAttDecoderV2(nn.Module):
+    implemented_dropout = True
+
     def __init__(self, vocab_size, embedding_size, hidden_size,
-                 features_size,
+                 features_size, dropout_out=0, dropout_recursive=0,
                  teacher_forcing=True, **unused_kwargs):
         super().__init__()
 
@@ -32,6 +35,9 @@ class LSTMAttDecoderV2(nn.Module):
         self.W_vocab = nn.Linear(hidden_size, vocab_size)
 
         self.attention = AttentionTwoLayers(features_size, hidden_size, double_bias=False)
+
+        self.dropout_out = dropout_out
+        self.dropout_recursive = dropout_recursive
 
 
     def forward(self, image_features, reports=None, free=False, max_words=10000):
@@ -65,9 +71,9 @@ class LSTMAttDecoderV2(nn.Module):
             should_stop = None
 
         # Build initial inputs
-        state = (initial_h_state, initial_c_state)
         next_words_indices = self.start_idx.to(device).repeat(batch_size) # shape: batch_size
-        h_t = initial_h_state
+        h_state_t = initial_h_state
+        c_state_t = initial_c_state
 
         # Generate word by word
         seq_out = []
@@ -75,7 +81,7 @@ class LSTMAttDecoderV2(nn.Module):
 
         for word_i in words_iterator:
             # Pass state through attention
-            att_features, att_scores = self.attention(image_features, h_t)
+            att_features, att_scores = self.attention(image_features, h_state_t)
                 # att_features shape: batch_size, features_size
                 # att_scores shape: batch_size, height, width
             scores_out.append(att_scores)
@@ -90,14 +96,17 @@ class LSTMAttDecoderV2(nn.Module):
 
 
             # Pass thru LSTM
-            state = self.lstm_cell(input_t, state)
-            h_t, unused_c_t = state
+            h_state_t, c_state_t = self.lstm_cell(input_t, (h_state_t, c_state_t))
             # shapes: batch_size, hidden_size
 
-            # Predict with FC
-            prediction_t = self.W_vocab(h_t) # shape: batch_size, vocab_size
-            seq_out.append(prediction_t)
+            # Pass thru out-dropout, if any
+            out_h_t = h_state_t
+            if self.dropout_out:
+                out_h_t = F.dropout(out_h_t, self.dropout_out, training=self.training)
 
+            # Predict with FC
+            prediction_t = self.W_vocab(out_h_t) # shape: batch_size, vocab_size
+            seq_out.append(prediction_t)
 
             # Decide if should stop
             # Remember if each element in the batch has outputted the END token
@@ -115,6 +124,12 @@ class LSTMAttDecoderV2(nn.Module):
             else:
                 _, next_words_indices = prediction_t.max(dim=1)
                 # shape: batch_size
+
+            # Apply recursive dropout
+            if self.dropout_recursive:
+                h_state_t = F.dropout(h_state_t, self.dropout_recursive, training=self.training)
+                c_state_t = F.dropout(c_state_t, self.dropout_recursive, training=self.training)
+
 
         seq_out = torch.stack(seq_out, dim=1)
         # shape: batch_size, max_sentence_len, vocab_size

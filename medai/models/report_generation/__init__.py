@@ -54,6 +54,18 @@ def create_decoder(decoder_name, **kwargs):
     LOGGER.info('Creating decoder: %s, %s', decoder_name, info_str)
 
     ModelClass = _MODELS_DEF[decoder_name]
+
+    if not getattr(ModelClass, 'implemented_dropout', False):
+        ignored_options = [
+            k
+            for k, v in kwargs.items()
+            if 'dropout' in k and v != 0
+        ]
+        if ignored_options:
+            LOGGER.warning(
+                'Dropout not implemented in %s, ignoring %s', decoder_name, ignored_options,
+            )
+
     model = ModelClass(**kwargs)
 
     return model
