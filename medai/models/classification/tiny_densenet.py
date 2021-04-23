@@ -10,6 +10,7 @@ class CustomDenseNetCNN(nn.Module):
     def __init__(self, labels, gpool='avg', model_name='densenet',
                  growth_rate=12, block_config=(6, 6, 6, 12),
                  num_init_features=64, bn_size=4, dropout=0,
+                 _features_size=None,
                  **unused_kwargs):
         super().__init__()
 
@@ -25,6 +26,8 @@ class CustomDenseNetCNN(nn.Module):
         )
 
         self.labels = list(labels)
+
+        self.features_size = _features_size
 
         self.features = densenet.features
         self.relu = nn.ReLU()
@@ -43,22 +46,34 @@ class CustomDenseNetCNN(nn.Module):
         return (x,)
 
 
+TINY_DENSENET_CONFIGS = {
+    'tiny-densenet': {
+        'growth_rate': 12,
+        'block_config': (6, 6, 6, 12),
+        'num_init_features': 64, # TODO: create version with only 32?
+        'bn_size': 4,
+        '_features_size': 215, # Calculated from parameters
+    },
+    'small-densenet': {
+        'growth_rate': 15,
+        'block_config': (6, 12, 12, 12),
+        'num_init_features': 32,
+        'bn_size': 4,
+        '_features_size': 330,
+    },
+}
+
+def _build_class(name):
+    densenet_params = TINY_DENSENET_CONFIGS[name]
+    return partial(
+        CustomDenseNetCNN,
+        model_name=name,
+        **densenet_params,
+    )
+
+
 # Num of params: 371,156
-TinyDenseNetCNN = partial(
-    CustomDenseNetCNN,
-    growth_rate=12,
-    block_config=(6, 6, 6, 12),
-    num_init_features=64, # TODO: create version with only 32?
-    bn_size=4,
-    model_name='tiny-densenet',
-)
+TinyDenseNetCNN = _build_class('tiny-densenet')
 
 # Num of params: 894,248
-SmallDenseNetCNN = partial(
-    CustomDenseNetCNN,
-    growth_rate=15,
-    block_config=(6, 12, 12, 12),
-    num_init_features=32,
-    bn_size=4,
-    model_name='small-densenet',
-)
+SmallDenseNetCNN = _build_class('small-densenet')

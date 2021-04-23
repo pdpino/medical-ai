@@ -16,7 +16,6 @@ from medai.metrics.report_generation import (
 )
 from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
 from medai.models.classification import (
-    create_cnn,
     AVAILABLE_CLASSIFICATION_MODELS,
 )
 from medai.models.report_generation import (
@@ -32,6 +31,7 @@ from medai.models.checkpoint import (
     load_compiled_model,
     load_compiled_model_report_generation,
     save_metadata,
+    create_cnn_rg,
 )
 from medai.tensorboard import TBWriter
 from medai.training.report_generation.flat import (
@@ -437,6 +437,8 @@ def train_from_scratch(run_name,
         )
         cnn = compiled_cnn.model
         cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
+        # HACK: kind of hacky solution to support both CLS and CLS-SEG tasks
+        cnn_kwargs['task'] = cnn_run_id.task
     else:
         # Create new
         cnn_kwargs = {
@@ -444,8 +446,9 @@ def train_from_scratch(run_name,
             'labels': [], # headless
             'imagenet': cnn_imagenet,
             'freeze': cnn_freeze,
+            'task': 'cls',
         }
-        cnn = create_cnn(**cnn_kwargs).to(device)
+        cnn = create_cnn_rg(**cnn_kwargs).to(device)
 
     # Create decoder
     decoder_kwargs = {
@@ -477,7 +480,7 @@ def train_from_scratch(run_name,
     # Create lr_scheduler
     if lr_sch_metric:
         lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs)
-        LOGGER.info('Using ReduceLROnPlateau (with %s})', lr_sch_metric)
+        LOGGER.info('Using ReduceLROnPlateau (with %s)', lr_sch_metric)
     else:
         LOGGER.warning('Not using a LR scheduler')
         lr_scheduler = None
@@ -581,16 +584,16 @@ def parse_args():
 
     cnn_group = parser.add_argument_group('CNN')
     cnn_group.add_argument('-c', '--cnn', type=str, default=None,
-                        choices=AVAILABLE_CLASSIFICATION_MODELS,
-                        help='Choose base CNN class (create new)')
+                          choices=AVAILABLE_CLASSIFICATION_MODELS,
+                          help='Choose base CNN class (create new)')
     cnn_group.add_argument('-noig', '--no-imagenet', action='store_true',
-                        help='If present, dont use imagenet pretrained weights')
+                          help='If present, dont use imagenet pretrained weights')
     cnn_group.add_argument('-frz', '--freeze', action='store_true',
-                        help='If present, freeze base cnn parameters (only train FC layers)')
+                          help='If present, freeze base cnn parameters (only train FC layers)')
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
-                        help='Run name of a pretrained CNN')
+                          help='Run name of a pretrained CNN')
     cnn_group.add_argument('-cp-task', '--cnn-pretrained-task', type=str, default='cls',
-                        choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
+                          choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
 
     parsers.add_args_early_stopping(parser, metric=_CORRECTNESS_TARGET_METRIC)
     parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)

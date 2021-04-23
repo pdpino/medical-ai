@@ -3,6 +3,7 @@ import logging
 
 from medai.models.cls_seg.scan import ScanClsSeg
 from medai.models.cls_seg.imagenet import ImageNetClsSegModel
+from medai.models.cls_seg import tiny_densenet
 
 LOGGER = logging.getLogger(__name__)
 
@@ -11,6 +12,8 @@ _MODELS_DEF = {
     'densenet-121-cls-seg': partial(ImageNetClsSegModel, model_name='densenet-121'),
     'resnet-50-cls-seg': partial(ImageNetClsSegModel, model_name='resnet-50'),
     'mobilenet-cls-seg': partial(ImageNetClsSegModel, model_name='mobilenet'),
+    'tiny-densenet-cls-seg': tiny_densenet.TinyDenseNetCNN,
+    'small-densenet-cls-seg': tiny_densenet.SmallDenseNetCNN,
 }
 
 AVAILABLE_CLS_SEG_MODELS = list(_MODELS_DEF)

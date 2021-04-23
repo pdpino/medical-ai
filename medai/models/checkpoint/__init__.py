@@ -177,6 +177,14 @@ def load_compiled_model(run_id, **kwargs):
     return load_fn(run_id, **kwargs)
 
 
+def create_cnn_rg(task='cls', **kwargs):
+    if task == 'cls':
+        return create_cnn(**kwargs)
+    if task == 'cls-seg':
+        return create_cls_seg_model(**kwargs)
+
+    raise Exception('CNN task not supported: ', task)
+
 
 def load_compiled_model_report_generation(run_id,
                                           device='cuda',
@@ -197,7 +205,14 @@ def load_compiled_model_report_generation(run_id,
     # Create CNN
     cnn_kwargs = metadata.get('cnn_kwargs', None)
     assert cnn_kwargs, 'CNN kwargs are not present in metadata'
-    cnn = create_cnn(**cnn_kwargs)
+    if 'task' not in cnn_kwargs:
+        # HACK: hotfix for backward compatibility
+        if 'cls-seg' in cnn_kwargs['model_name']:
+            task = 'cls-seg'
+        else:
+            task = 'cls'
+        cnn_kwargs['task'] = task
+    cnn = create_cnn_rg(**cnn_kwargs)
 
     # Create Decoder
     decoder = create_decoder(**metadata['decoder_kwargs'])

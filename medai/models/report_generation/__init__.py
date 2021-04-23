@@ -62,7 +62,7 @@ def create_decoder(decoder_name, **kwargs):
             if 'dropout' in k and v != 0
         ]
         if ignored_options:
-            LOGGER.warning(
+            LOGGER.error(
                 'Dropout not implemented in %s, ignoring %s', decoder_name, ignored_options,
             )
 
