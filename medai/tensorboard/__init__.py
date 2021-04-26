@@ -1,6 +1,7 @@
 """Tensorboard util functions."""
 import os
 import re
+import logging
 import numbers
 from tensorboardX import SummaryWriter
 from torch import nn
@@ -13,28 +14,46 @@ IGNORE_METRICS = [
     # '_timer', # Medical correctness timers, return strings
 ]
 
+LOGGER = logging.getLogger(__name__)
+
 class TBWriter:
     def __init__(self, run_id,
                  ignore_metrics=IGNORE_METRICS,
                  dryrun=False,
                  histogram=False,
-                 large=False,
+                 graph=False,
                  workspace_dir=utils.WORKSPACE_DIR, **kwargs):
-        if large:
-            _get_tb_folder = get_tb_large_log_folder
-        else:
-            _get_tb_folder = get_tb_log_folder
-
-        self.log_dir = _get_tb_folder(run_id, workspace_dir=workspace_dir)
-
-        self.writer = SummaryWriter(self.log_dir,
+        self.writer = SummaryWriter(get_tb_log_folder(run_id, workspace_dir=workspace_dir),
                                     write_to_disk=not dryrun,
                                     **kwargs)
+
+        _info = {
+            'dryrun': dryrun,
+            **kwargs,
+        }
+        _info_str = ' '.join(f"{k}={v}" for k, v in _info.items())
+        LOGGER.info('Creating TB: %s', _info_str)
+
+        if histogram or graph:
+            self.large_writer = SummaryWriter(
+                get_tb_large_log_folder(run_id, workspace_dir=workspace_dir),
+                write_to_disk=not dryrun,
+                **kwargs,
+            )
+            _info = {
+                'histogram': histogram,
+                'graph': graph,
+            }
+            _info_str = ' '.join(f"{k}={v}" for k, v in _info.items())
+            LOGGER.info('Creating TB-large saving: %s', _info_str)
+        else:
+            self.large_writer = None
 
         self.ignore_regex = '|'.join(ignore_metrics)
         self.ignore_regex = re.compile(f'({self.ignore_regex})')
 
         self._histogram = histogram
+        self._graph = graph
 
         # Capitalize so in TB appears first
         self._name_mappings = {
@@ -88,10 +107,10 @@ class TBWriter:
             if params.numel() == 0:
                 continue
 
-            self.writer.add_histogram(name, params, global_step=epoch, walltime=wall_time)
+            self.large_writer.add_histogram(name, params, global_step=epoch, walltime=wall_time)
 
             if params.grad is not None:
-                self.writer.add_histogram(
+                self.large_writer.add_histogram(
                     f'{name}/grad', params.grad, global_step=epoch, walltime=wall_time,
                 )
 
@@ -109,7 +128,10 @@ class TBWriter:
 
 
     def write_graph(self, model, inputs, verbose=False):
-        self.writer.add_graph(model, inputs, verbose=verbose)
+        if not self._graph:
+            return
+
+        self.large_writer.add_graph(model, inputs, verbose=verbose)
 
 
     def close(self):
