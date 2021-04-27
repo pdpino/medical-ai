@@ -266,7 +266,7 @@ def attach_checkpoint_saver(run_id,
             if value == -1:
                 if not _SHOULD_IGNORE_WARNING_METRICS:
                     LOGGER.warning(
-                        'Checkpoint-saver received %s=-1, will keep oldest checkpoint',
+                        'Checkpoint-saver received %s=-1, will keep with greater_or_equal',
                         metric,
                     )
             if metric == 'loss':

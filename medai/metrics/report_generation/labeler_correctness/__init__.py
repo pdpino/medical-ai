@@ -130,7 +130,7 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
         'val_steps': val_steps,
     }
     info_str = ' '.join(f"{k}={v}" for k, v in info.items())
-    LOGGER.info('Attaching medical correctness metrics %s', info_str)
+    LOGGER.info('Using medical correctness metrics %s', info_str)
 
     lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
 

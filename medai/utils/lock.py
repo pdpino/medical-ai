@@ -46,7 +46,6 @@ def with_lock(folder, lockname_key, **other):
 
     The folder where the lock is stored is fixed, but the name is
     obtained from the function call parameters.
-    If the
 
     Args:
         folder -- folder to save the lock

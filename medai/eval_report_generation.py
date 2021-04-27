@@ -135,10 +135,9 @@ def evaluate_model_and_save(
 
 
 @timeit_main(LOGGER)
-def evaluate_run(run_name,
+def evaluate_run(run_id,
                  n_epochs=1,
                  free_values=[False, True],
-                 debug=True,
                  device='cuda',
                  multiple_gpu=False,
                  batch_size=None,
@@ -148,8 +147,6 @@ def evaluate_run(run_name,
                  override=False,
                  ):
     """Evaluates a saved run."""
-    run_id = RunId(run_name, debug, 'rg')
-
     # Check if overriding
     if not override:
         filtered_free_values = []
@@ -213,7 +210,6 @@ def evaluate_run(run_name,
     # Other evaluation kwargs
     other_train_kwargs = metadata.get('other_train_kwargs', {})
     supervise_attention = other_train_kwargs.get('supervise_attention', False)
-    att_vs_masks = decoder_name.startswith('h-lstm-att') # HACK: copied from train_model()
 
 
     evaluate_model_and_save(
@@ -224,7 +220,7 @@ def evaluate_run(run_name,
         device=device,
         medical_correctness=medical_correctness,
         supervise_attention=supervise_attention,
-        att_vs_masks=att_vs_masks,
+        att_vs_masks=supervise_attention,
         n_epochs=n_epochs,
         free_values=free_values,
     )
@@ -285,10 +281,9 @@ if __name__ == '__main__':
 
     print_hw_options(DEVICE, ARGS)
 
-    evaluate_run(ARGS.run_name,
+    evaluate_run(run_id = RunId(ARGS.run_name, not ARGS.no_debug, 'rg'),
                  free_values=ARGS.free_values,
                  dataset_types=ARGS.eval_in,
-                 debug=not ARGS.no_debug,
                  multiple_gpu=ARGS.multiple_gpu,
                  device=DEVICE,
                  medical_correctness=not ARGS.no_med,

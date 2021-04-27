@@ -33,7 +33,8 @@ class MIMICCXRDataset(Dataset):
                  labels=None, image_size=(512, 512),
                  norm_by_sample=False,
                  image_format='RGB',
-                 sort_samples=False,
+                 sort_samples=False, frontal_only=False,
+                 mini=None,
                  vocab=None, recompute_vocab=False, **unused_kwargs):
         super().__init__()
 
@@ -69,6 +70,15 @@ class MIMICCXRDataset(Dataset):
             self.master_df = self.master_df.loc[self.master_df['split'] == dataset_type]
             if len(self.master_df) == 0:
                 raise Exception(f'{dataset_type} split not available, only {available_splits}')
+
+        if frontal_only:
+            df = self.master_df
+            self.master_df = df.loc[df['ViewPosition'].isin(_FRONTAL_POSITIONS)]
+
+        if mini is not None:
+            df = self.master_df
+            self.master_df = df.loc[df['mini'] == mini]
+        self._mini = mini
 
         # Keep only max images
         if max_samples is not None:

@@ -44,19 +44,26 @@ def _calculate_metrics_dict(df):
     """Calculates metrics for all dataset_types (train, val, test)."""
     all_metrics = {}
 
+    ignore_no_finding_mask = np.zeros(len(CHEXPERT_LABELS))
+    no_finding_idx = CHEXPERT_LABELS.index('No Finding')
+    ignore_no_finding_mask[no_finding_idx] = 1
+
+    def _add_to_results(metrics, array, prefix):
+        # Add mean value to dict
+        metrics[prefix] = array.mean()
+
+        # Add mean value without NF
+        metrics[f'{prefix}-woNF'] = np.ma.array(array, mask=ignore_no_finding_mask).mean()
+
+        # Add values for each label
+        array = array.tolist() # Avoid numpy-not-serializable issues
+        for label, value in zip(CHEXPERT_LABELS, array):
+            metrics[f'{prefix}-{label}'] = value
+
     for dataset_type in set(df['dataset_type']):
         sub_df = df[df['dataset_type'] == dataset_type]
 
         acc, precision, recall, f1, roc_auc = _calculate_metrics(sub_df)
-
-        def _add_to_results(metrics, array, prefix):
-            # Add mean value to dict
-            metrics[prefix] = array.mean()
-
-            # Add values for each label
-            array = array.tolist() # Avoid numpy-not-serializable issues
-            for label, value in zip(CHEXPERT_LABELS, array):
-                metrics[f'{prefix}-{label}'] = value
 
         metrics = {}
         _add_to_results(metrics, acc, 'acc')
@@ -166,7 +173,7 @@ if __name__ == '__main__':
 
     config_logging()
 
-    evaluate_run(RunId(ARGS.run_name, ARGS.debug, 'rg').resolve(),
+    evaluate_run(RunId(ARGS.run_name, ARGS.debug, 'rg'),
                  override=ARGS.override,
                  max_samples=ARGS.max_samples,
                  free=ARGS.free,

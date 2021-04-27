@@ -1,3 +1,4 @@
+from functools import partial
 import logging
 import numpy as np
 from torch.utils.data import DataLoader, Subset
@@ -38,6 +39,7 @@ _CL_DATASETS = {
 _RG_DATASETS = {
     'iu-x-ray': IUXRayDataset,
     'mimic-cxr': MIMICCXRDataset,
+    'mini-mimic': partial(MIMICCXRDataset, mini=1),
 }
 
 _SEG_DATASETS = {
