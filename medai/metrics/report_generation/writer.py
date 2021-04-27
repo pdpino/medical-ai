@@ -66,6 +66,10 @@ def attach_report_writer(engine, run_id, vocab, assert_n_samples=None, free=Fals
             report = report_reader.idx_to_text(report)
             generated = report_reader.idx_to_text(generated)
 
+            # HACK: If text is empty, may be loaded as NaN and produce errors
+            if generated == '':
+                generated = '--'
+
             # Add quotes to avoid issues with commas
             report = f'"{report}"'
             generated = f'"{generated}"'

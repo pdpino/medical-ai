@@ -16,6 +16,7 @@ from medai.utils.nlp import (
 LOGGER = logging.getLogger(__name__)
 
 DATASET_DIR = os.environ.get('DATASET_DIR_MIMIC_CXR')
+DATASET_DIR_FAST = os.environ.get('DATASET_DIR_MIMIC_CXR_FAST')
 
 _REPORTS_FNAME = 'reports.clean.v1.json'
 
@@ -51,7 +52,10 @@ class MIMICCXRDataset(Dataset):
             std=_DATASET_STD,
         )
 
-        self.images_dir = os.path.join(DATASET_DIR, 'images')
+        self.images_dir = os.path.join(
+            DATASET_DIR_FAST if mini == 1 else DATASET_DIR,
+            'images',
+        )
         self.reports_dir = os.path.join(DATASET_DIR, 'reports')
 
         # Save labels
