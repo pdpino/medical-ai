@@ -198,7 +198,8 @@ class IUXRayDataset(Dataset):
             ]
 
             for image in report['images']:
-                if frontal_only and 'frontal' not in image['side']:
+                position = image['side']
+                if frontal_only and 'frontal' not in position:
                     continue
 
                 if image['broken']:
@@ -208,6 +209,7 @@ class IUXRayDataset(Dataset):
                     'filename': filename,
                     'tokens_idxs': tokens_idxs,
                     'image_name': image['id'],
+                    # 'position': position, # Use this for debugging
                 })
 
         if sort_samples:
