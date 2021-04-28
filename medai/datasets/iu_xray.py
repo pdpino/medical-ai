@@ -13,17 +13,15 @@ from medai.datasets.common import (
     CHEXPERT_LABELS,
     JSRT_ORGANS,
     UP_TO_DATE_MASKS_VERSION,
+    LATEST_REPORTS_VERSION,
 )
-from medai.datasets.vocab import load_vocab, compute_vocab
+from medai.datasets.vocab import load_vocab
 from medai.utils.images import get_default_image_transform
-from medai.utils.nlp import (
-    UNKNOWN_IDX,
-)
 
 LOGGER = logging.getLogger(__name__)
 
 DATASET_DIR = os.environ.get('DATASET_DIR_IU_XRAY')
-_REPORTS_FNAME = 'reports.clean.v2.json'
+_REPORTS_FNAME = 'reports.clean.{}.json'
 
 _AVAILABLE_SPLITS = ['train', 'val', 'test', 'all']
 
@@ -42,8 +40,9 @@ class IUXRayDataset(Dataset):
                  norm_by_sample=False,
                  image_format='RGB',
                  masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
-                 seg_multilabel=True,
-                 vocab=None, recompute_vocab=False, **unused_kwargs):
+                 seg_multilabel=True, reports_version=LATEST_REPORTS_VERSION,
+                 vocab_greater=None,
+                 vocab=None, **unused_kwargs):
         super().__init__()
 
         if DATASET_DIR is None:
@@ -79,7 +78,7 @@ class IUXRayDataset(Dataset):
         self._preprocess_labels(labels)
 
         # Load reports
-        reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME)
+        reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME.format(reports_version))
         with open(reports_fname, 'r') as f:
             reports = list(json.load(f).values())
 
@@ -92,7 +91,8 @@ class IUXRayDataset(Dataset):
 
         # Prepare reports for getter calls
         self._preprocess_reports(reports, sort_samples=sort_samples,
-                                 vocab=vocab, recompute_vocab=recompute_vocab,
+                                 vocab=vocab,
+                                 vocab_greater=vocab_greater,
                                  frontal_only=frontal_only)
 
         # Keep only max images
@@ -169,17 +169,12 @@ class IUXRayDataset(Dataset):
     def get_vocab(self):
         return self.word_to_idx
 
-    def _preprocess_reports(self, reports, sort_samples=True, vocab=None,
-                            recompute_vocab=False, frontal_only=False):
-        if recompute_vocab:
-            self.word_to_idx = compute_vocab(
-                report['clean_text'].split()
-                for report in reports
-            )
-        elif vocab is not None:
+    def _preprocess_reports(self, reports, sort_samples=True, vocab=None, vocab_greater=None,
+                            frontal_only=False):
+        if vocab is not None:
             self.word_to_idx = vocab
         else:
-            self.word_to_idx = load_vocab('iu_xray')
+            self.word_to_idx = load_vocab('iu_xray', vocab_greater)
 
         self.n_unique_reports = len(reports)
 
@@ -191,8 +186,9 @@ class IUXRayDataset(Dataset):
             tokens = report['clean_text'].split()
 
             tokens_idxs = [
-                self.word_to_idx.get(token, UNKNOWN_IDX)
+                self.word_to_idx[token]
                 for token in tokens
+                if token in self.word_to_idx
             ]
 
             for image in report['images']:

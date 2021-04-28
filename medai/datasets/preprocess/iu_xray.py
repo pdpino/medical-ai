@@ -9,8 +9,9 @@ import json
 from collections import defaultdict, Counter
 
 from medai.datasets.preprocess.tokenize import text_to_tokens
+from medai.datasets.preprocess.common import assert_reports_not_exist, save_clean_reports
 from medai.datasets.iu_xray import DATASET_DIR
-from medai.datasets.vocab import compute_vocab, save_vocab
+from medai.datasets.vocab import save_vocabs
 
 
 IGNORE_TOKENS = set(['p.m.', 'pm', 'am'])
@@ -22,16 +23,6 @@ def load_raw_reports():
         reports_dict = json.load(f)
 
     return reports_dict
-
-
-def save_clean_reports(reports_dict):
-    version = 'v2'
-    fname = os.path.join(REPORTS_DIR, f'reports.clean.{version}.json')
-    with open(fname, 'w') as f:
-        json.dump(reports_dict, f)
-
-    print('Saved reports to: ', fname)
-
 
 def clean_reports(reports_dict):
     token_appearances = Counter()
@@ -72,13 +63,13 @@ def clean_reports(reports_dict):
         clean_reports_dict[filename] = cleaned_report
 
     print('Errors: ', {k: len(v) for k, v in errors.items()})
-    print('Different tokens: ', len(token_appearances))
+    print(f'Different tokens: {len(token_appearances):,}')
 
     n_reports_1 = len(reports_dict)
     n_reports_2 = len(clean_reports_dict) + len(errors['text-none']) + len(errors['no-images'])
     assert n_reports_1 == n_reports_2, f'N reports incorrect: {n_reports_1} vs {n_reports_2}'
 
-    return clean_reports_dict, token_appearances
+    return clean_reports_dict, token_appearances, errors
 
 
 def load_info():
@@ -114,20 +105,17 @@ def add_image_info(reports_dict):
     return reports_dict
 
 
-def preprocess_iu_x_ray():
+def preprocess_iu_x_ray(version, greater_values=[0, 5, 10], override=False):
+    assert_reports_not_exist(REPORTS_DIR, version, override)
+
     reports_dict = load_raw_reports()
 
-    reports_dict, token_appearances = clean_reports(reports_dict)
+    reports_dict, token_appearances, errors = clean_reports(reports_dict)
 
     reports_dict = add_image_info(reports_dict)
 
-    save_clean_reports(reports_dict)
+    save_clean_reports(REPORTS_DIR, reports_dict, version)
 
-    vocab = compute_vocab(r['clean_text'].split() for r in reports_dict.values())
-    save_vocab('iu_xray', vocab)
+    save_vocabs('iu_xray', reports_dict, token_appearances, greater_values)
 
-    return reports_dict, token_appearances
-
-
-if __name__ == '__main__':
-    preprocess_iu_x_ray()
+    return reports_dict, token_appearances, errors

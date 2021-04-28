@@ -6,19 +6,16 @@ import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
 
-from medai.datasets.common import BatchItem, CHEXPERT_DISEASES
-from medai.datasets.vocab import load_vocab, compute_vocab
+from medai.datasets.common import BatchItem, CHEXPERT_DISEASES, LATEST_REPORTS_VERSION
+from medai.datasets.vocab import load_vocab
 from medai.utils.images import get_default_image_transform
-from medai.utils.nlp import (
-    UNKNOWN_IDX,
-)
 
 LOGGER = logging.getLogger(__name__)
 
 DATASET_DIR = os.environ.get('DATASET_DIR_MIMIC_CXR')
 DATASET_DIR_FAST = os.environ.get('DATASET_DIR_MIMIC_CXR_FAST')
 
-_REPORTS_FNAME = 'reports.clean.v1.json'
+_REPORTS_FNAME = 'reports.clean.{}.json'
 
 _DATASET_MEAN = 0.4719
 _DATASET_STD = 0.3017
@@ -36,7 +33,8 @@ class MIMICCXRDataset(Dataset):
                  image_format='RGB',
                  sort_samples=False, frontal_only=False,
                  mini=None,
-                 vocab=None, recompute_vocab=False, **unused_kwargs):
+                 vocab_greater=None, reports_version=LATEST_REPORTS_VERSION,
+                 vocab=None, **unused_kwargs):
         super().__init__()
 
         if DATASET_DIR is None:
@@ -94,8 +92,9 @@ class MIMICCXRDataset(Dataset):
 
         # Prepare reports for getter calls
         self._preprocess_reports(
+            reports_version,
             vocab=vocab,
-            recompute_vocab=recompute_vocab,
+            vocab_greater=vocab_greater,
         )
 
     def __len__(self):
@@ -145,24 +144,16 @@ class MIMICCXRDataset(Dataset):
     def get_vocab(self):
         return self.word_to_idx
 
-    def _preprocess_reports(self, vocab=None,
-                            recompute_vocab=False):
+    def _preprocess_reports(self, reports_version, vocab=None, vocab_greater=None):
         # Load reports
-        reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME)
+        reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME.format(reports_version))
         with open(reports_fname, 'r') as f:
             reports = list(json.load(f).values())
 
-        if recompute_vocab:
-            self.word_to_idx = compute_vocab(
-                report['clean_text'].split()
-                for report in reports
-            )
-        elif vocab is not None:
+        if vocab is not None:
             self.word_to_idx = vocab
         else:
-            self.word_to_idx = load_vocab('mimic_cxr')
-
-        # n_unique_reports = len(reports)
+            self.word_to_idx = load_vocab('mimic_cxr', vocab_greater)
 
         # Compute final reports array
         self.reports = dict()
@@ -173,8 +164,9 @@ class MIMICCXRDataset(Dataset):
             tokens = clean_text.split()
 
             tokens_idxs = [
-                self.word_to_idx.get(token, UNKNOWN_IDX)
+                self.word_to_idx[token]
                 for token in tokens
+                if token in self.word_to_idx
             ]
             self.reports[study_id] = {
                 'clean_text': clean_text,

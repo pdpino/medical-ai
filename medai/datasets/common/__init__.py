@@ -31,3 +31,6 @@ BatchItems.__new__.__defaults__ = (None,) * len(BatchItems._fields)
 
 # Organ masks
 UP_TO_DATE_MASKS_VERSION = 'v2'
+
+# Reports versions
+LATEST_REPORTS_VERSION = 'v3'

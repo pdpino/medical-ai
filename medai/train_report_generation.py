@@ -9,6 +9,7 @@ from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
 from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATASETS
+from medai.datasets.common import LATEST_REPORTS_VERSION
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_attention_vs_masks,
@@ -288,6 +289,7 @@ def train_from_scratch(run_name,
                        shuffle=False,
                        frontal_only=False,
                        norm_by_sample=False,
+                       vocab_greater=None,
                        teacher_forcing=True,
                        embedding_size=100,
                        hidden_size=100,
@@ -349,6 +351,8 @@ def train_from_scratch(run_name,
             run_name += '_sorted'
         else:
             run_name += '_notshuffle'
+    if vocab_greater is not None:
+        run_name += f'_voc{vocab_greater}'
     if augment:
         run_name += f'_aug{augment_times}'
         if augment_mode != 'single':
@@ -401,6 +405,8 @@ def train_from_scratch(run_name,
         'num_workers': num_workers,
         'masks': enable_masks,
         'frontal_only': frontal_only,
+        'vocab_greater': vocab_greater,
+        'reports_version': LATEST_REPORTS_VERSION,
     }
     dataset_train_kwargs = {
         'sort_samples': sort_samples,
@@ -581,6 +587,9 @@ def parse_args():
                             help='Use only frontal images')
     data_group.add_argument('--norm-by-sample', action='store_true',
                             help='Normalize each sample (instead of by dataset stats)')
+    data_group.add_argument('--vocab-greater', type=int, default=None,
+                            help='Only keep tokens with more than k appearances')
+
 
     cnn_group = parser.add_argument_group('CNN')
     cnn_group.add_argument('-c', '--cnn', type=str, default=None,
@@ -670,6 +679,7 @@ if __name__ == '__main__':
                            shuffle=ARGS.shuffle,
                            frontal_only=ARGS.frontal_only,
                            norm_by_sample=ARGS.norm_by_sample,
+                           vocab_greater=ARGS.vocab_greater,
                            teacher_forcing=not ARGS.no_teacher_forcing,
                            embedding_size=ARGS.embedding_size,
                            hidden_size=ARGS.hidden_size,

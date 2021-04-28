@@ -5,15 +5,15 @@
 * Creates a common vocabulary for the dataset
 """
 import os
-import json
 from collections import defaultdict, Counter
 from tqdm.auto import tqdm
 
 import pandas as pd
 
 from medai.datasets.preprocess.tokenize import text_to_tokens
+from medai.datasets.preprocess.common import assert_reports_not_exist, save_clean_reports
 from medai.datasets.mimic_cxr import DATASET_DIR
-from medai.datasets.vocab import compute_vocab, save_vocab
+from medai.datasets.vocab import save_vocabs
 
 
 IGNORE_TOKENS = set(['p.m.', 'pm', 'am'])
@@ -35,15 +35,6 @@ def load_raw_reports_df():
     reports_df = reports_df.merge(sectioned_df, how='left', on='study')
 
     return reports_df
-
-
-def save_clean_reports(reports_dict):
-    version = 'v1'
-    fname = os.path.join(REPORTS_DIR, f'reports.clean.{version}.json')
-    with open(fname, 'w') as f:
-        json.dump(reports_dict, f)
-
-    print('Saved reports to: ', fname)
 
 
 def clean_reports(reports_df):
@@ -77,7 +68,8 @@ def clean_reports(reports_df):
             continue
 
         for token in tokens:
-            token_appearances[token] += 1
+            if token:
+                token_appearances[token] += 1
 
         cleaned_reports[study_id] = {
             'study_id': study_id,
@@ -86,7 +78,7 @@ def clean_reports(reports_df):
         }
 
     print('Errors: ', {k: len(v) for k, v in errors.items()})
-    print('Different tokens: ', len(token_appearances))
+    print(f'Different tokens: {len(token_appearances):,}')
 
     n_reports_1 = len(reports_df)
     n_reports_2 = len(cleaned_reports) + len(errors['tokens-empty'])
@@ -119,20 +111,17 @@ def add_report_len_to_master_df(reports_dict, errors):
     master_df.to_csv(fpath, index=False)
 
 
-def preprocess_mimic_cxr():
+def preprocess_mimic_cxr(version, greater_values=[0, 5, 10], override=False):
+    assert_reports_not_exist(REPORTS_DIR, version, override)
+
     reports_df = load_raw_reports_df()
 
     reports_dict, token_appearances, errors = clean_reports(reports_df)
 
-    save_clean_reports(reports_dict)
+    save_clean_reports(REPORTS_DIR, reports_dict, version)
 
-    vocab = compute_vocab(r['clean_text'].split() for r in reports_dict.values())
-    save_vocab('mimic_cxr', vocab)
+    save_vocabs('mimic_cxr', reports_dict, token_appearances, greater_values)
 
     add_report_len_to_master_df(reports_dict, errors)
 
     return reports_dict, token_appearances, errors
-
-
-if __name__ == '__main__':
-    preprocess_mimic_cxr()

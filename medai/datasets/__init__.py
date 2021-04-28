@@ -4,7 +4,7 @@ import numpy as np
 from torch.utils.data import DataLoader, Subset
 from torch.utils.data.dataloader import default_collate
 
-from medai.datasets.common import UP_TO_DATE_MASKS_VERSION
+from medai.datasets.common import UP_TO_DATE_MASKS_VERSION, LATEST_REPORTS_VERSION
 from medai.datasets.cxr14 import CXR14Dataset
 from medai.datasets.chexpert import ChexpertDataset
 from medai.datasets.covid_kaggle import CovidKaggleDataset
@@ -230,6 +230,7 @@ def prepare_data_report_generation(create_dataloader_fn,
                                    num_workers=2,
                                    masks=False,
                                    norm_by_sample=False,
+                                   reports_version=LATEST_REPORTS_VERSION,
                                    **kwargs,
                                    ):
 
@@ -237,6 +238,7 @@ def prepare_data_report_generation(create_dataloader_fn,
         'bs': batch_size,
         'imgsize': image_size,
         'normS': norm_by_sample,
+        'reports': reports_version,
     }
     _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
     LOGGER.info('Loading %s/%s rg-dataset, %s', dataset_name, dataset_type, _info_str)
@@ -251,8 +253,15 @@ def prepare_data_report_generation(create_dataloader_fn,
                            sort_samples=sort_samples,
                            masks=masks,
                            norm_by_sample=norm_by_sample,
+                           reports_version=reports_version,
                            **kwargs,
                            )
+
+    if reports_version != LATEST_REPORTS_VERSION:
+        LOGGER.warning(
+            'Not using latest reports: found=%s vs latest=%s',
+            reports_version, LATEST_REPORTS_VERSION,
+        )
 
     if len(dataset) == 0:
         LOGGER.error('\tEmpty dataset')
