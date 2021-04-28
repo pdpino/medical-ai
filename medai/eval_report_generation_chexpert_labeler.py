@@ -77,6 +77,14 @@ def _calculate_metrics_dict(df):
     return all_metrics
 
 
+def _find_dataset_name(run_name):
+    if 'mini-mimic' in run_name:
+        return 'mini-mimic'
+    if '_mimic' in run_name:
+        return 'mimic-cxr'
+    return 'iu-x-ray'
+
+
 @timeit_main(LOGGER)
 def evaluate_run(run_id,
                  override=False,
@@ -119,8 +127,11 @@ def evaluate_run(run_id,
         n_samples = len(df)
         LOGGER.info('Only using max_samples = %d', n_samples)
 
+    # Get dataset_name
+    dataset_name = _find_dataset_name(run_id.full_name)
+
     # Compute labels for both GT and generated
-    df = chexpert.apply_labeler_to_df(df, caller_id=get_timestamp())
+    df = chexpert.apply_labeler_to_df(df, caller_id=get_timestamp(), dataset_name=dataset_name)
 
     if len(df) != n_samples:
         LOGGER.error(

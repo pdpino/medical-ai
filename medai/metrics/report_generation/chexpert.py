@@ -5,7 +5,8 @@ import logging
 import pandas as pd
 
 from medai.datasets.common import CHEXPERT_LABELS
-from medai.datasets.iu_xray import DATASET_DIR
+from medai.datasets.iu_xray import DATASET_DIR as IU_DIR
+from medai.datasets.mimic_cxr import DATASET_DIR as MIMIC_DIR
 from medai.utils import TMP_DIR
 from medai.utils.lock import with_lock
 
@@ -17,7 +18,6 @@ CHEXPERT_FOLDER = '~/chexpert/chexpert-labeler'
 CHEXPERT_PYTHON = '~/software/miniconda3/envs/chexpert-label/bin/python'
 
 TMP_FOLDER = os.path.join(TMP_DIR, 'chexpert-labeler')
-GT_LABELS_FILEPATH = os.path.join(DATASET_DIR, 'reports', 'reports_with_chexpert_labels.csv')
 
 
 LOGGER = logging.getLogger(__name__)
@@ -29,13 +29,18 @@ def labels_with_suffix(suffix):
     return [f'{label}-{suffix}' for label in CHEXPERT_LABELS]
 
 
-def _load_gt_labels(df):
-    if not os.path.isfile(GT_LABELS_FILEPATH):
-        raise Exception('Ground truth labels not found: ', GT_LABELS_FILEPATH)
+def _load_gt_labels(df, dataset_name):
+    gt_labels_filepath = os.path.join(
+        MIMIC_DIR if 'mimic' in dataset_name else IU_DIR,
+        'reports', 'reports_with_chexpert_labels.csv',
+    )
+    if not os.path.isfile(gt_labels_filepath):
+        raise Exception('Ground truth labels not found: ', gt_labels_filepath)
 
     # Load CSV
-    gt_with_labels = pd.read_csv(GT_LABELS_FILEPATH, index_col=0)
-    gt_with_labels.replace((-1, -2), 0, inplace=True)
+    gt_with_labels = pd.read_csv(gt_labels_filepath, index_col=0)
+    gt_with_labels.replace(-2, 0, inplace=True)
+    gt_with_labels.replace(-1, 1, inplace=True)
 
     # Assure it has all necessary reports
     target_reports = set(df['filename'])
@@ -119,14 +124,14 @@ def apply_labeler_to_column(dataframe, column_name,
     return out_df[CHEXPERT_LABELS].to_numpy()
 
 
-def apply_labeler_to_df(df, caller_id='main'):
+def apply_labeler_to_df(df, caller_id='main', dataset_name='iu-x-ray'):
     """Calculates chexpert labels for a set of GT and generated reports.
 
     Args:
         df -- DataFrame with columns 'filename', 'generated'
     """
     # Load labels for ground truth
-    ground_truth = _load_gt_labels(df)
+    ground_truth = _load_gt_labels(df, dataset_name)
 
     # Calculate labels for generated
     generated = apply_labeler_to_column(
