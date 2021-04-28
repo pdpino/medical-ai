@@ -30,8 +30,10 @@ _DATASET_STD = 0.2374
 
 
 class IUXRayDataset(Dataset):
-    organs = list(JSRT_ORGANS)
+    dataset_name = 'iu-x-ray'
     dataset_dir = DATASET_DIR
+
+    organs = list(JSRT_ORGANS)
 
     def __init__(self, dataset_type='train', max_samples=None,
                  labels=None,

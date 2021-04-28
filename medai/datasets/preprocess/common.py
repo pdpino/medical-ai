@@ -21,3 +21,10 @@ def save_clean_reports(reports_dir, reports_dict, version):
         json.dump(reports_dict, f)
 
     print('Saved reports to: ', fpath)
+
+
+def load_clean_reports(reports_dir, version):
+    fpath = _get_clean_reports_fpath(reports_dir, version)
+
+    with open(fpath, 'r') as f:
+        return json.load(f)

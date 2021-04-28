@@ -10,10 +10,16 @@ from tqdm.auto import tqdm
 
 import pandas as pd
 
+from medai.datasets.common.sentences2organs.compute import save_sentences_with_organs
 from medai.datasets.preprocess.tokenize import text_to_tokens
-from medai.datasets.preprocess.common import assert_reports_not_exist, save_clean_reports
+from medai.datasets.preprocess.common import (
+    assert_reports_not_exist,
+    save_clean_reports,
+    load_clean_reports,
+)
 from medai.datasets.mimic_cxr import DATASET_DIR
 from medai.datasets.vocab import save_vocabs
+from medai.utils.nlp import get_sentences_appearances
 
 
 IGNORE_TOKENS = set(['p.m.', 'pm', 'am'])
@@ -112,6 +118,7 @@ def add_report_len_to_master_df(reports_dict, errors):
 
 
 def preprocess_mimic_cxr(version, greater_values=[0, 5, 10], override=False):
+    """Preprocess reports, saves reports and vocabularies as JSON."""
     assert_reports_not_exist(REPORTS_DIR, version, override)
 
     reports_df = load_raw_reports_df()
@@ -125,3 +132,19 @@ def preprocess_mimic_cxr(version, greater_values=[0, 5, 10], override=False):
     add_report_len_to_master_df(reports_dict, errors)
 
     return reports_dict, token_appearances, errors
+
+
+def compute_sentence_to_organs(version, studies=None, **kwargs):
+    """Computes sentence-to-organs mapping and save it as CSV."""
+    reports = load_clean_reports(REPORTS_DIR, version)
+    sentence_counter = get_sentences_appearances(
+        r['clean_text']
+        for study_id, r in reports
+        if studies is None or study_id in studies
+    )
+
+    sentences = list(sentence_counter.keys())
+
+    df_organs, errors = save_sentences_with_organs(DATASET_DIR, sentences, **kwargs)
+
+    return df_organs, errors

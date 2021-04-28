@@ -7,6 +7,14 @@ import re
 from collections import defaultdict
 from tqdm.auto import tqdm
 
+import pandas as pd
+
+from medai.datasets.common.constants import (
+    ORGAN_BACKGROUND,
+    ORGAN_HEART,
+    ORGAN_LEFT_LUNG,
+    ORGAN_RIGHT_LUNG,
+)
 
 ### MIRQI phrases are used, so we don't start from scratch
 MIRQI_DIR = os.path.join(os.environ['HOME'], 'software/MIRQI/predefined/phrases')
@@ -213,3 +221,28 @@ def find_organs_for_sentences(sentences, show=False):
 
     return organs, warnings
 
+
+def save_sentences_with_organs(dataset_dir, sentences, show=False, ignore_all_ones=True):
+    # Compute organs
+    organs, errors = find_organs_for_sentences(sentences, show=show)
+
+    # In the order defined in the above function
+    organ_names = [ORGAN_BACKGROUND, ORGAN_HEART, ORGAN_LEFT_LUNG, ORGAN_RIGHT_LUNG]
+
+    # Create DF
+    df_organs = pd.DataFrame(organs, columns=organ_names)
+    df_organs['sentence'] = sentences
+
+    if ignore_all_ones:
+        df_organs = df_organs.loc[(df_organs[ORGAN_BACKGROUND] == 0) | \
+            (df_organs[ORGAN_HEART] == 0) | \
+            (df_organs[ORGAN_LEFT_LUNG] == 0) | \
+            (df_organs[ORGAN_RIGHT_LUNG] == 0)]
+
+    # Save to file
+    fpath = os.path.join(dataset_dir, 'reports', 'sentences_with_organs.csv')
+    df_organs.to_csv(fpath, index=False)
+
+    print(f'Sentence-2-organs saved to {fpath}')
+
+    return df_organs, errors

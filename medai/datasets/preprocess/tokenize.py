@@ -180,6 +180,8 @@ def _text_to_tokens(text):
     tokens = remove_punctuation_after_dots(tokens)
     tokens = remove_initial_punctuation(tokens)
 
+    # TODO: remove repeated tokens? specially useless tokens, such as "xxxx xxxx"
+
     # Assure ending dot
     if len(tokens) >= 1 and tokens[-1] != '.':
         tokens.append('.')

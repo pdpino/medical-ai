@@ -563,7 +563,7 @@ def parse_args():
     decoder_group = parser.add_argument_group('Decoder')
     decoder_group.add_argument('-dec', '--decoder', type=str,
                                choices=AVAILABLE_DECODERS, help='Choose Decoder')
-    decoder_group.add_argument('--superv-att', action='store_true',
+    decoder_group.add_argument('--supervise-att', action='store_true',
                                help='If present, supervise the attention')
     decoder_group.add_argument('-emb', '--embedding-size', type=int, default=100,
                                help='Embedding size of the decoder')
@@ -671,7 +671,7 @@ if __name__ == '__main__':
         train_from_scratch(get_timestamp(),
                            dataset_name=ARGS.dataset,
                            decoder_name=ARGS.decoder,
-                           supervise_attention=ARGS.superv_att,
+                           supervise_attention=ARGS.supervise_att,
                            dropout_recursive=ARGS.dropout_recursive,
                            dropout_out=ARGS.dropout_out,
                            batch_size=ARGS.batch_size,

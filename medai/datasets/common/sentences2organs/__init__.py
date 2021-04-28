@@ -5,28 +5,26 @@ import torch
 
 from medai.datasets.common.constants import JSRT_ORGANS
 from medai.utils.nlp import ReportReader, trim_rubbish
-from medai.utils import WORKSPACE_DIR
 
 LOGGER = logging.getLogger(__name__)
 
-_DF_FPATH = os.path.join(WORKSPACE_DIR, 'sentences_with_organs.csv')
-
 class _SentenceToOrgans:
-    def __init__(self, vocab):
-        report_reader = ReportReader(vocab)
+    def __init__(self, dataset):
+        report_reader = ReportReader(dataset.get_vocab())
 
         self._sentence_to_organ_mapping = dict()
 
-        organs_df = pd.read_csv(_DF_FPATH)
+        _df_fpath = os.path.join(dataset.dataset_dir, 'reports', 'sentences_with_organs.csv')
+        organs_df = pd.read_csv(_df_fpath)
 
         # Save these to notify sentences that are not found
-        self.report_reader = report_reader
+        # self.report_reader = report_reader
         self.n_organs = len(JSRT_ORGANS)
 
         LOGGER.info('Preparing sentence2organ dict')
 
         for _, sample in organs_df.iterrows():
-            sentence_str = sample['sentences']
+            sentence_str = sample['sentence']
             organs = sample[JSRT_ORGANS].tolist()
 
             sentence_idxs = report_reader.text_to_idx(sentence_str)
@@ -49,12 +47,14 @@ class _SentenceToOrgans:
         sentence_hash = self._sentence_to_hash(sentence)
 
         if sentence_hash not in self._sentence_to_organ_mapping:
-            self._sentence_to_organ_mapping[sentence_hash] = [1] * self.n_organs
-            sentence_str = self.report_reader.idx_to_text(sentence)
-            LOGGER.warning(
-                'Organs not found for sentence: %s, (%s)',
-                sentence_str, sentence_hash,
-            )
+            # If does not appear in mapping, assumed to point to all organs
+            return [1] * self.n_organs
+            # self._sentence_to_organ_mapping[sentence_hash] = [1] * self.n_organs
+            # sentence_str = self.report_reader.idx_to_text(sentence)
+            # LOGGER.warning(
+            #     'Organs not found for sentence: %s, (%s)',
+            #     sentence_str, sentence_hash,
+            # )
 
         return self._sentence_to_organ_mapping[sentence_hash]
 

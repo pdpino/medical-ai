@@ -23,6 +23,8 @@ _DATASET_STD = 0.3017
 _FRONTAL_POSITIONS = ['PA', 'AP', 'AP AXIAL', 'LAO', 'LPO', 'RAO']
 
 class MIMICCXRDataset(Dataset):
+    dataset_name = 'mimic-cxr'
+
     dataset_dir = DATASET_DIR
     multilabel = True
     enable_masks = False

@@ -19,7 +19,7 @@ def create_hierarchical_dataloader(dataset, include_masks=False, **kwargs):
     Outputted reports have shape (batch_size, n_sentences, n_words)
     """
     if include_masks:
-        sentence_to_organs = SentenceToOrgans(dataset.get_vocab())
+        sentence_to_organs = SentenceToOrgans(dataset)
 
     def _collate_fn(batch_tuples):
         images = []
