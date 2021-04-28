@@ -1,20 +1,20 @@
-import random
 import torch
 from torch import nn
 from torch.nn.functional import pad, one_hot
 from torch.nn.utils.rnn import pad_sequence
 
 def _extract_reports(dataset):
-    reports = []
-    for report in dataset.reports:
-        report = report['tokens_idxs']
-        report = torch.tensor(report)
-        reports.append(report)
-
-    return reports
+    return [
+        # pylint: disable=not-callable
+        torch.tensor(report['tokens_idxs'])
+        for report in dataset.iter_reports_only()
+    ]
 
 class MostSimilarImage(nn.Module):
-    """Returns the report from the most similar image."""
+    """Returns the report from the most similar image.
+
+    NOTE: loads all features in memory, in the fit() method
+    """
     def __init__(self, cnn, vocab):
         super().__init__()
 
@@ -26,6 +26,8 @@ class MostSimilarImage(nn.Module):
         )
         self.vocab_size = len(vocab)
 
+        self.all_features = None
+        self.all_reports = None
 
     def fit(self, dataloader, device='cuda'):
         all_features = []
@@ -47,12 +49,13 @@ class MostSimilarImage(nn.Module):
 
 
     def images_to_features(self, images):
-        features = self.cnn(images, features=True).detach()
-        features = self.global_pool(features)
+        with torch.no_grad():
+            features = self.cnn(images, features=True)
+            features = self.global_pool(features)
         return features
 
 
-    def forward(self, images, reports=None, free=False, **unused):
+    def forward(self, images, reports=None, free=False, **unused_kwargs):
         device = images.device
 
         features = self.images_to_features(images)

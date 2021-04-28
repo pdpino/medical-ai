@@ -34,11 +34,14 @@ class MIMICCXRDataset(Dataset):
                  sort_samples=False, frontal_only=False,
                  mini=None,
                  vocab_greater=None, reports_version=LATEST_REPORTS_VERSION,
+                 do_not_load_image=False,
                  vocab=None, **unused_kwargs):
         super().__init__()
 
         if DATASET_DIR is None:
             raise Exception('DATASET_DIR_MIMIC_CXR not found in env variables')
+        if mini == 1 and DATASET_DIR_FAST is None:
+            raise Exception('DATASET_DIR_MIMIC_CXR_FAST not found in env variables')
 
         self.dataset_type = dataset_type
         self.image_format = image_format
@@ -97,6 +100,8 @@ class MIMICCXRDataset(Dataset):
             vocab_greater=vocab_greater,
         )
 
+        self.do_not_load_image = do_not_load_image
+
     def __len__(self):
         return len(self.master_df)
 
@@ -110,7 +115,7 @@ class MIMICCXRDataset(Dataset):
 
         # Extract report
         report = self.reports[study_id]
-        tokens = report['tokens']
+        tokens = report['tokens_idxs']
 
         # Load image
         image = self.load_image(image_fpath)
@@ -127,6 +132,10 @@ class MIMICCXRDataset(Dataset):
             )
 
     def load_image(self, image_fpath):
+        if self.do_not_load_image:
+            # pylint: disable=not-callable
+            return torch.tensor(-1)
+
         image_fpath = os.path.join(self.images_dir, image_fpath)
         try:
             image = Image.open(image_fpath).convert(self.image_format)
@@ -170,7 +179,7 @@ class MIMICCXRDataset(Dataset):
             ]
             self.reports[study_id] = {
                 'clean_text': clean_text,
-                'tokens': tokens_idxs,
+                'tokens_idxs': tokens_idxs,
             }
 
 
@@ -193,3 +202,8 @@ class MIMICCXRDataset(Dataset):
 
     def get_presence_for_no_finding(self):
         return self.get_labels_presence_for('No Finding')
+
+
+    ### API for dummy models
+    def iter_reports_only(self):
+        return self.reports.values()

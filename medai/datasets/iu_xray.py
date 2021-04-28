@@ -42,6 +42,7 @@ class IUXRayDataset(Dataset):
                  masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
                  seg_multilabel=True, reports_version=LATEST_REPORTS_VERSION,
                  vocab_greater=None,
+                 do_not_load_image=False,
                  vocab=None, **unused_kwargs):
         super().__init__()
 
@@ -104,6 +105,7 @@ class IUXRayDataset(Dataset):
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
             assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
 
+        self.do_not_load_image = do_not_load_image
 
     def __len__(self):
         return len(self.reports)
@@ -129,6 +131,10 @@ class IUXRayDataset(Dataset):
             )
 
     def load_image(self, image_name):
+        if self.do_not_load_image:
+            # pylint: disable=not-callable
+            return torch.tensor(-1)
+
         image_path = os.path.join(self.images_dir, f'{image_name}.png')
         try:
             image = Image.open(image_path).convert(self.image_format)
@@ -260,3 +266,7 @@ class IUXRayDataset(Dataset):
 
     def get_presence_for_no_finding(self):
         return self.get_labels_presence_for('No Finding')
+
+    ### API for dummy models
+    def iter_reports_only(self):
+        return self.reports

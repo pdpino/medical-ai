@@ -4,28 +4,39 @@ from torch import nn
 from torch.nn.functional import pad, one_hot
 from torch.nn.utils.rnn import pad_sequence
 
-def _extract_reports(dataset):
-    reports = []
-    for report in dataset.reports:
-        report = report['tokens_idxs']
-        report = torch.tensor(report)
-        reports.append(report)
-
-    return reports
-
 class RandomReport(nn.Module):
     """Returns a random report from a dataset."""
     def __init__(self, dataset):
         super().__init__()
-        
-        self.reports = _extract_reports(dataset)
+
+        self.reports = dataset.reports
+        self._prepare_for_random_selection()
+
         self.vocab_size = len(dataset.get_vocab())
+
+    def _prepare_for_random_selection(self):
+        if isinstance(self.reports, (list, tuple)):
+            self.report_choices = range(len(self.reports))
+        elif isinstance(self.reports, dict):
+            self.report_choices = list(self.reports.keys())
+        else:
+            raise Exception(f'dataset.reports type not recognized: {type(self.reports)}')
+
+    def _get_random_reports(self, n_reports):
+        idxs_chosen = random.choices(self.report_choices, k=n_reports)
+
+        reports = [
+            # pylint: disable=not-callable
+            torch.tensor(self.reports[idx]['tokens_idxs'])
+            for idx in idxs_chosen
+        ]
+        return reports
 
     def forward(self, images, reports=None, free=False, **unused_kwargs):
         batch_size = images.size()[0]
         device = images.device
 
-        output_reports = random.choices(self.reports, k=batch_size)
+        output_reports = self._get_random_reports(batch_size)
         # list of lists
 
         output_reports = pad_sequence(output_reports, batch_first=True)
@@ -48,4 +59,4 @@ class RandomReport(nn.Module):
 
         output_reports = output_reports.to(device)
 
-        return output_reports,
+        return (output_reports,)

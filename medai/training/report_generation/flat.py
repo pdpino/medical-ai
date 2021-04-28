@@ -65,7 +65,7 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
 
         generated_words = output_tuple[0]
         _, _, vocab_size = generated_words.size()
-        # shape: batch_size, n_sentences, vocab_size
+        # shape: batch_size, n_words, vocab_size
 
         if not free:
             # Compute word classification loss

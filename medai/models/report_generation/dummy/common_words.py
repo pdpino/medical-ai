@@ -8,7 +8,8 @@ from torch.nn.functional import one_hot
 def _get_stats(dataset):
     word_appearances = defaultdict(lambda: 0)
     reports_lens = Counter()
-    for report in dataset.reports:
+
+    for report in dataset.iter_reports_only():
         report = report['tokens_idxs']
         for word in report:
             word_appearances[word] += 1

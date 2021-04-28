@@ -2,7 +2,8 @@ import argparse
 import logging
 import torch
 
-from medai.datasets.iu_xray import IUXRayDataset
+from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATASETS
+from medai.datasets.common import LATEST_REPORTS_VERSION
 from medai.models.checkpoint import load_compiled_model_classification
 from medai.models.classification import create_cnn
 from medai.models.report_generation.dummy.constant import ConstantReport
@@ -40,42 +41,38 @@ def _is_hierarchical(model_name):
 
 @timeit_main(LOGGER)
 def evaluate_dummy_model(model_name,
+                         dataset_name='iu-x-ray',
                          batch_size=20,
                          k_first=100,
-                         similar_run_name=None,
+                         similar_cnn_id=None,
                          similar_cnn_kwargs={},
+                         image_size=256,
+                         norm_by_sample=False,
                          free_values=[False, True],
                          frontal_only=True,
                          medical_correctness=True,
                          debug=True,
                          device='cuda',
+                         max_samples=None,
                          ):
     # Run name
-    run_name = f'{get_timestamp()}_dummy-{model_name}'
+    run_name = f'{get_timestamp()}_{dataset_name}_dummy-{model_name}'
     if 'common-' in model_name:
         run_name += f'-{str(k_first)}'
     if model_name == 'most-similar-image':
-        if similar_run_name:
-            run_name += f'_{similar_run_name}'
+        if similar_cnn_id:
+            run_name += f'_{similar_cnn_id.short_clean_name}'
         else:
             cnn_name = similar_cnn_kwargs.get('model_name', None)
             run_name += f'_{cnn_name}'
+        if image_size != 256:
+            run_name += f'_size{image_size}'
     if frontal_only:
         run_name += '_front'
 
     run_id = RunId(run_name, debug, 'rg')
 
     LOGGER.info('Evaluating %s', run_id)
-
-    # Load datasets
-    dataset_kwargs = {
-        'frontal_only': frontal_only,
-    }
-    train_dataset = IUXRayDataset('train', **dataset_kwargs)
-    val_dataset = IUXRayDataset('val', **dataset_kwargs)
-    test_dataset = IUXRayDataset('test', **dataset_kwargs)
-
-    vocab = train_dataset.get_vocab()
 
     # Decide hierarchical
     is_hierarchical = _is_hierarchical(model_name)
@@ -85,11 +82,36 @@ def evaluate_dummy_model(model_name,
         create_dataloader = create_flat_dataloader
 
 
-    # Create dataloaders
-    train_dataloader = create_dataloader(train_dataset, batch_size=batch_size)
-    val_dataloader = create_dataloader(val_dataset, batch_size=batch_size)
-    test_dataloader = create_dataloader(test_dataset, batch_size=batch_size)
+    # Load datasets
+    dataset_kwargs = {
+        'dataset_name': dataset_name,
+        'max_samples': max_samples,
+        'norm_by_sample': norm_by_sample,
+        'image_size': (image_size, image_size),
+        'batch_size': batch_size,
+        'frontal_only': frontal_only,
+        'reports_version': LATEST_REPORTS_VERSION,
+        'do_not_load_image': model_name != 'most-similar-image',
+    }
+    train_dataloader = prepare_data_report_generation(
+        create_dataloader,
+        dataset_type='train',
+        **dataset_kwargs,
+    )
+    train_dataset = train_dataloader.dataset
+    vocab = train_dataloader.dataset.get_vocab()
+    dataset_kwargs['vocab'] = vocab
 
+    val_dataloader = prepare_data_report_generation(
+        create_dataloader,
+        dataset_type='val',
+        **dataset_kwargs,
+    )
+    test_dataloader = prepare_data_report_generation(
+        create_dataloader,
+        dataset_type='test',
+        **dataset_kwargs,
+    )
 
     # Choose model
     if model_name == 'constant':
@@ -105,9 +127,8 @@ def evaluate_dummy_model(model_name,
         model = RandomReport(train_dataset)
 
     elif model_name == 'most-similar-image':
-        if similar_run_name:
-            cnn_run_id = RunId(similar_run_name, debug, 'cls').resolve()
-            compiled_model = load_compiled_model_classification(cnn_run_id, device=device)
+        if similar_cnn_id:
+            compiled_model = load_compiled_model_classification(similar_cnn_id, device=device)
             cnn = compiled_model.model.to(device)
             compiled_model.optimizer = None # Not needed
         else:
@@ -138,7 +159,7 @@ def evaluate_dummy_model(model_name,
         free_values=free_values,
         medical_correctness=medical_correctness,
         device=device,
-        )
+    )
 
     LOGGER.info('Evaluated %s', run_id)
 
@@ -148,6 +169,8 @@ def parse_args():
 
     parser.add_argument('model_name', type=str, default=None,
                         choices=_AVAILABLE_DUMMY_MODELS, help='Dummy model to use')
+    parser.add_argument('-d', '--dataset', type=str, default='iu-x-ray',
+                        help='Batch size', choices=AVAILABLE_REPORT_DATASETS)
     parser.add_argument('-bs', '--batch_size', type=int, default=20,
                         help='Batch size to use')
     parser.add_argument('-k', '--k-first', type=int, default=100,
@@ -160,6 +183,8 @@ def parse_args():
                         help='MostSimilarImage: args to CNN')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--norm-by-sample', action='store_true',
+                        help='Normalize each sample (instead of by dataset stats)')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Max samples to load (debugging)')
     parser.add_argument('--no-med', action='store_true',
@@ -170,17 +195,22 @@ def parse_args():
 
     args = parser.parse_args()
 
-    args.similar_run_name = args.cnn_run_name
-    args.similar_cnn_kwargs = {
-        'model_name': args.cnn_name,
-        'labels': [],
-        'imagenet': args.imagenet,
-        'freeze': True,
-    }
 
     if args.model_name == 'most-similar-image':
-        if args.similar_run_name is None and args.cnn_name is None:
+        if args.similar_cnn_id is None and args.cnn_name is None:
             parser.error('most-similar-image: needs --cnn-run-name or --cnn-name')
+
+    if args.cnn_run_name:
+        args.similar_cnn_id = RunId(args.cnn_run_name, False, 'cls')
+        args.similar_cnn_kwargs = {}
+    else:
+        args.similar_cnn_id = None
+        args.similar_cnn_kwargs = {
+            'model_name': args.cnn_name,
+            'labels': [],
+            'imagenet': args.imagenet,
+            'freeze': True,
+        }
 
     parsers.build_args_free_values_(args, parser)
 
@@ -198,12 +228,15 @@ if __name__ == '__main__':
 
     evaluate_dummy_model(
         ARGS.model_name,
+        dataset_name=ARGS.dataset,
         batch_size=ARGS.batch_size,
+        norm_by_sample=ARGS.norm_by_sample,
         k_first=ARGS.k_first,
-        similar_run_name=ARGS.similar_run_name,
+        similar_cnn_id=ARGS.similar_cnn_id,
         similar_cnn_kwargs=ARGS.similar_cnn_kwargs,
         debug=not ARGS.no_debug,
         free_values=ARGS.free_values,
         medical_correctness=not ARGS.no_med,
         device=DEVICE,
-        )
+        max_samples=ARGS.max_samples,
+    )

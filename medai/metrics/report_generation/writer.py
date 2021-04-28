@@ -92,9 +92,9 @@ def attach_report_writer(engine, run_id, vocab, assert_n_samples=None, free=Fals
 
         if assert_n_samples is not None:
             if sample_counter == assert_n_samples:
-                LOGGER.info(
+                LOGGER.debug(
                     'Correct amount of samples: %d, written to %s',
-                    sample_counter, fpath,
+                    sample_counter, os.path.basename(fpath),
                 )
             else:
                 LOGGER.error(
