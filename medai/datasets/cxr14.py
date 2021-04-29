@@ -290,3 +290,11 @@ class CXR14Dataset(Dataset):
         no_finding = 1 - some_disease
 
         return list(no_finding.items())
+
+    def image_names_to_indexes(self, image_names):
+        if isinstance(image_names, str):
+            image_names = (image_names,)
+        image_names = set(image_names)
+
+        rows = self.label_index.loc[self.label_index['FileName'].isin(image_names)]
+        return rows.index

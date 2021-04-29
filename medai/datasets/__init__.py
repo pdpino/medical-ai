@@ -33,6 +33,8 @@ _CL_DATASETS = {
     'covid-fig1': CovidFig1Dataset,
     'covid-uc': CovidUCDataset,
     'iu-x-ray': IUXRayDataset,
+    'mimic-cxr': MIMICCXRDataset,
+    'mini-mimic': partial(MIMICCXRDataset, mini=1),
     'vinbig': VinBigDataset,
 }
 
@@ -59,7 +61,7 @@ _MISSING_SPLITS = set([
 ])
 
 _DATASETS_WITH_MASKS_IMPLEMENTED = set([
-    'cxr14', 'iu-x-ray', 'vinbig', 'chexpert',
+    'cxr14', 'iu-x-ray', 'vinbig', 'chexpert', 'mini-mimic',
 ])
 
 

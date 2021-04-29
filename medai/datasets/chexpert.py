@@ -44,12 +44,12 @@ _BROKEN_IMAGES = set([
 class ChexpertDataset(Dataset):
     dataset_dir = DATASET_DIR
     organs = list(JSRT_ORGANS)
-    seg_multilabel = False
 
     def __init__(self, dataset_type='train', labels=None,
                  max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
                  frontal_only=False, masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
+                 seg_multilabel=False,
                  **unused_kwargs):
         super().__init__()
 
@@ -86,7 +86,8 @@ class ChexpertDataset(Dataset):
                 LOGGER.warning('Diseases not found: %s (ignoring)', not_found_diseases)
 
         self.n_diseases = len(self.labels)
-        self.multilabel = True
+        self.multilabel = True # CL-multilabel
+        self.seg_multilabel = seg_multilabel
 
         assert self.n_diseases > 0, 'No diseases selected!'
 
@@ -208,3 +209,20 @@ class ChexpertDataset(Dataset):
 
     def get_presence_for_no_finding(self):
         return self.get_labels_presence_for('No Finding')
+
+    def image_names_to_indexes(self, image_names):
+        def _clean_name(name):
+            name = name.replace('-', '/').replace('.png', '')
+            if not name.endswith('.jpg'):
+                name = f'{name}.jpg'
+            return name
+
+        if isinstance(image_names, str):
+            image_names = (image_names,)
+        image_names = set(
+            _clean_name(name)
+            for name in image_names
+        )
+
+        rows = self.label_index.loc[self.label_index['Path'].isin(image_names)]
+        return rows.index

@@ -1,12 +1,21 @@
 import os
+import re
 import json
 import logging
 import torch
 import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
+from torchvision import transforms
+from ignite.utils import to_onehot
 
-from medai.datasets.common import BatchItem, CHEXPERT_DISEASES, LATEST_REPORTS_VERSION
+from medai.datasets.common import (
+    BatchItem,
+    CHEXPERT_DISEASES,
+    JSRT_ORGANS,
+    LATEST_REPORTS_VERSION,
+    UP_TO_DATE_MASKS_VERSION,
+)
 from medai.datasets.vocab import load_vocab
 from medai.utils.images import get_default_image_transform
 
@@ -22,12 +31,18 @@ _DATASET_STD = 0.3017
 
 _FRONTAL_POSITIONS = ['PA', 'AP', 'AP AXIAL', 'LAO', 'LPO', 'RAO']
 
+_BROKEN_IMAGES = set([
+    # Appears empty
+    'p10/p10291098/s57194260/0539ee33-9d402e49-a9cc6d36-7aabc539-3d80a62b.jpg',
+])
+
 class MIMICCXRDataset(Dataset):
+    organs = list(JSRT_ORGANS)
     dataset_name = 'mimic-cxr'
 
     dataset_dir = DATASET_DIR
+    dataset_dir_fast = DATASET_DIR_FAST
     multilabel = True
-    enable_masks = False
 
     def __init__(self, dataset_type='train', max_samples=None,
                  labels=None, image_size=(512, 512),
@@ -35,6 +50,8 @@ class MIMICCXRDataset(Dataset):
                  image_format='RGB',
                  sort_samples=False, frontal_only=False,
                  mini=None,
+                 masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
+                 seg_multilabel=True,
                  vocab_greater=None, reports_version=LATEST_REPORTS_VERSION,
                  do_not_load_image=False,
                  vocab=None, **unused_kwargs):
@@ -54,6 +71,8 @@ class MIMICCXRDataset(Dataset):
             mean=_DATASET_MEAN,
             std=_DATASET_STD,
         )
+
+        self.seg_multilabel = seg_multilabel
 
         self.images_dir = os.path.join(
             DATASET_DIR_FAST if mini == 1 else DATASET_DIR,
@@ -87,22 +106,38 @@ class MIMICCXRDataset(Dataset):
             self.master_df = df.loc[df['mini'] == mini]
         self._mini = mini
 
+        # Ignore broken images
+        self.master_df = self.master_df.loc[~self.master_df['image_fpath'].isin(_BROKEN_IMAGES)]
+
         # Keep only max images
         if max_samples is not None:
             self.master_df = self.master_df.tail(max_samples)
 
         if sort_samples:
             self.master_df = self.master_df.sort_values('report_length', ascending=True)
-            self.master_df.reset_index(drop=True, inplace=True)
+        self.master_df.reset_index(drop=True, inplace=True)
 
         # Prepare reports for getter calls
         self._preprocess_reports(
             reports_version,
+            studies=set(self.master_df['study_id']),
             vocab=vocab,
             vocab_greater=vocab_greater,
         )
 
         self.do_not_load_image = do_not_load_image
+
+        self.enable_masks = masks
+        if masks:
+            self.masks_dir = os.path.join(DATASET_DIR_FAST, 'masks', masks_version)
+
+            assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
+
+            self.transform_mask = transforms.Compose([
+                transforms.Resize(image_size, 0), # Nearest mode
+                transforms.ToTensor(),
+            ])
+
 
     def __len__(self):
         return len(self.master_df)
@@ -125,13 +160,17 @@ class MIMICCXRDataset(Dataset):
         # Extract labels
         labels = torch.ByteTensor(row[self.labels])
 
+        # Load masks
+        masks = self.load_masks(image_fpath) if self.enable_masks else -1
+
         return BatchItem(
             image=image,
             labels=labels,
             report=tokens,
+            masks=masks,
             image_fname=image_fpath,
             report_fname=report_fpath,
-            )
+        )
 
     def load_image(self, image_fpath):
         if self.do_not_load_image:
@@ -152,14 +191,37 @@ class MIMICCXRDataset(Dataset):
         image = self.transform(image)
         return image
 
-    def get_vocab(self):
-        return self.word_to_idx
+    def load_masks(self, image_fpath):
+        image_fpath = image_fpath.replace('/', '-').replace('.jpg', '.png')
 
-    def _preprocess_reports(self, reports_version, vocab=None, vocab_greater=None):
+        filepath = os.path.join(self.masks_dir, image_fpath)
+
+        if not os.path.isfile(filepath):
+            LOGGER.error('No such mask: %s', filepath)
+            return None
+
+        mask = Image.open(filepath).convert('L')
+        mask = self.transform_mask(mask)
+        # shape: n_channels=1, height, width
+
+        mask = (mask * 255).long()
+        # shape: 1, height, width
+
+        if self.seg_multilabel:
+            mask = to_onehot(mask, len(self.organs))
+            # shape: 1, n_organs, height, width
+
+        mask = mask.squeeze(0)
+        # shape(seg_multilabel=True): n_organs, height, width
+        # shape(seg_multilabel=False): height, width
+
+        return mask
+
+    def _preprocess_reports(self, reports_version, studies, vocab=None, vocab_greater=None):
         # Load reports
         reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME.format(reports_version))
         with open(reports_fname, 'r') as f:
-            reports = list(json.load(f).values())
+            reports_master_dict = json.load(f)
 
         if vocab is not None:
             self.word_to_idx = vocab
@@ -168,8 +230,8 @@ class MIMICCXRDataset(Dataset):
 
         # Compute final reports array
         self.reports = dict()
-        for report in reports:
-            study_id = report['study_id']
+        for study_id in studies:
+            report = reports_master_dict[str(study_id)]
 
             clean_text = report['clean_text']
             tokens = clean_text.split()
@@ -184,6 +246,8 @@ class MIMICCXRDataset(Dataset):
                 'tokens_idxs': tokens_idxs,
             }
 
+    def get_vocab(self):
+        return self.word_to_idx
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
@@ -205,6 +269,26 @@ class MIMICCXRDataset(Dataset):
     def get_presence_for_no_finding(self):
         return self.get_labels_presence_for('No Finding')
 
+    def image_names_to_indexes(self, image_names):
+        _clean_name_regex = re.compile(r'(p\d{2})-(p\d+)-(s\d+)-([\d\-\.\w]+)')
+        def _clean_name(name):
+            found = _clean_name_regex.search(name)
+            if found:
+                name = '/'.join(found.group(g) for g in (1, 2, 3, 4))
+            name = name.replace('.png', '')
+            if not name.endswith('.jpg'):
+                name = f'{name}.jpg'
+            return name
+
+        if isinstance(image_names, str):
+            image_names = (image_names,)
+        image_names = set(
+            _clean_name(name)
+            for name in image_names
+        )
+
+        rows = self.master_df.loc[self.master_df['image_fpath'].isin(image_names)]
+        return rows.index
 
     ### API for dummy models
     def iter_reports_only(self):
