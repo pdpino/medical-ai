@@ -283,6 +283,7 @@ def train_from_scratch(run_name,
                        decoder_name='lstm',
                        dropout_recursive=0,
                        dropout_out=0,
+                       att_double_bias=False,
                        supervise_attention=False,
                        batch_size=15,
                        sort_samples=True,
@@ -336,6 +337,8 @@ def train_from_scratch(run_name,
         run_name += f'_embs-{embedding_size}'
     if hidden_size != 100:
         run_name += f'_hs-{hidden_size}'
+    if 'att' in decoder_name and att_double_bias:
+        run_name += '_att-bias2'
     if cnn_run_id:
         run_name += f'_precnn-{cnn_run_id.short_clean_name}'
     else:
@@ -466,6 +469,7 @@ def train_from_scratch(run_name,
         'teacher_forcing': teacher_forcing,
         'dropout_recursive': dropout_recursive,
         'dropout_out': dropout_out,
+        'double_bias': att_double_bias,
     }
     decoder = create_decoder(**decoder_kwargs).to(device)
 
@@ -575,6 +579,8 @@ def parse_args():
                                help='Out dropout')
     decoder_group.add_argument('-notf', '--no-teacher-forcing', action='store_true',
                                help='If present, does not use teacher forcing')
+    decoder_group.add_argument('--att-double-bias', action='store_true',
+                               help='Use double bias in the attention layer')
 
     data_group = parser.add_argument_group('Data')
     data_group.add_argument('--image-size', type=int, default=512,
@@ -674,6 +680,7 @@ if __name__ == '__main__':
                            supervise_attention=ARGS.supervise_att,
                            dropout_recursive=ARGS.dropout_recursive,
                            dropout_out=ARGS.dropout_out,
+                           att_double_bias=ARGS.att_double_bias,
                            batch_size=ARGS.batch_size,
                            sort_samples=not ARGS.no_sort,
                            shuffle=ARGS.shuffle,

@@ -1,4 +1,3 @@
-import torch
 from torch import nn
 
 class AttentionTwoLayers(nn.Module):
@@ -21,18 +20,18 @@ class AttentionTwoLayers(nn.Module):
     def forward(self, features, h_state):
         # features shape: batch_size, n_features, height, width
         # h_state shape: batch_size, lstm_size
-        
+
         features_reshape = features.permute(0, 2, 3, 1)
         features_out = self.visual_fc(features_reshape)
         # shape: batch_size, height, width, internal_size
 
         h_state_out = self.state_fc(h_state)
         # shape: batch_size, internal_size
-        
+
         out = features_out + h_state_out.unsqueeze(1).unsqueeze(1)
         # shape: batch_size, height, width, internal_size
-        
-        out = self.last_fc(out)
+
+        out = self.last_fc(out) # shape: batch_size, height, width, 1
         out = out.squeeze(-1)
         batch_size, height, width = out.size()
         # shape: batch_size, height, width

@@ -50,6 +50,11 @@ def create_decoder(decoder_name, **kwargs):
             kwargs['features_size'] = features_size[0]
             kwargs['image_size'] = features_size[1:]
 
+    # NOTE: backward compatibility for older models that do not specify this
+    if decoder_name == 'h-lstm-att':
+        if 'double_bias' not in kwargs:
+            kwargs['double_bias'] = True
+
     info_str = ' '.join(f'{k}={v}' for k, v in kwargs.items())
     LOGGER.info('Creating decoder: %s, %s', decoder_name, info_str)
 

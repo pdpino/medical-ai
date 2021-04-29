@@ -22,6 +22,9 @@ class HitCounterMetric(Metric):
     def compute(self):
         n_misses, n_unique_misses, n_total = self._labeler.hit_counter.compute()
 
-        percentage = n_misses / n_total if n_total > 0 else 0
+        if n_total == 0:
+            return -1, -1, -1
+
+        percentage = n_misses / n_total
 
         return n_misses, n_unique_misses, percentage

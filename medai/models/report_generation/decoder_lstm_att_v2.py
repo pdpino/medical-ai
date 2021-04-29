@@ -17,6 +17,7 @@ class LSTMAttDecoderV2(nn.Module):
 
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size, dropout_out=0, dropout_recursive=0,
+                 double_bias=False,
                  teacher_forcing=True, **unused_kwargs):
         super().__init__()
 
@@ -34,7 +35,9 @@ class LSTMAttDecoderV2(nn.Module):
         self.lstm_cell = nn.LSTMCell(embedding_size + features_size, hidden_size)
         self.W_vocab = nn.Linear(hidden_size, vocab_size)
 
-        self.attention = AttentionTwoLayers(features_size, hidden_size, double_bias=False)
+        self.attention = AttentionTwoLayers(
+            features_size, hidden_size, double_bias=double_bias,
+        )
 
         self.dropout_out = dropout_out
         self.dropout_recursive = dropout_recursive

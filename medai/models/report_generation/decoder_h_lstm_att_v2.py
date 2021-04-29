@@ -13,7 +13,7 @@ from medai.utils.nlp import PAD_IDX, START_IDX, END_IDX
 class HierarchicalLSTMAttDecoderV2(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size, teacher_forcing=True, stop_threshold=0.5,
-                 attention=True, **unused_kwargs):
+                 attention=True, double_bias=False, **unused_kwargs):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -24,7 +24,9 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         # Attention input
         self._use_attention = attention
         if attention:
-            self.attention_layer = AttentionTwoLayers(features_size, hidden_size)
+            self.attention_layer = AttentionTwoLayers(
+                features_size, hidden_size, double_bias=double_bias,
+            )
         else:
             self.attention_layer = NoAttention(reduction='mean')
 
