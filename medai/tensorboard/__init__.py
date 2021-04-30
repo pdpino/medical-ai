@@ -62,7 +62,13 @@ class TBWriter:
             'hamming': 'Hamming',
             'bce': 'BCELoss',
             'roc_auc': 'Roc_auc',
+            'pr_auc': 'PR_auc',
+            'recall': 'Recall',
+            'prec': 'Prec',
+            'spec': 'Spec',
             'iou': 'IoU',
+            'iou-grad-cam': 'IoU-grad-cam',
+            'iobb-grad-cam': 'IoBB-grad-cam',
             'iobb': 'IoBB',
             'mAP': 'MAP', # mean Average-precision (coco-challenge)
             'mse-total': 'MSE-total',

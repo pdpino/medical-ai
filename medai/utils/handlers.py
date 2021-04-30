@@ -12,6 +12,7 @@ LOGGER = logging.getLogger(__name__)
 
 _shorter_names = {
     'roc_auc': 'roc',
+    'pr_auc': 'pr',
     'cl_loss': 'cl',
     'hint_loss': 'hint',
     'seg_loss': 'seg',

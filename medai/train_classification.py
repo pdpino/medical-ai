@@ -53,11 +53,11 @@ LOGGER = logging.getLogger('medai.cl.train')
 
 def _choose_print_metrics(dataset_name, additional=None):
     if dataset_name == 'cxr14':
-        print_metrics = ['loss', 'roc_auc', 'hamming']
+        print_metrics = ['loss', 'roc_auc', 'pr_auc', 'hamming']
     elif 'covid' in dataset_name:
-        print_metrics = ['loss', 'roc_auc', 'prec_covid', 'recall_covid']
+        print_metrics = ['loss', 'roc_auc', 'pr_auc', 'prec_covid', 'recall_covid']
     else:
-        print_metrics = ['loss', 'roc_auc']
+        print_metrics = ['loss', 'roc_auc', 'pr_auc']
 
     if additional is not None:
         print_metrics += [m for m in additional if m not in print_metrics]

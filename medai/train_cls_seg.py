@@ -14,7 +14,7 @@ from medai.utils import parsers, RunId
 
 class TrainingClsSeg(TrainingProcess):
     LOGGER_NAME = 'medai.cls-seg.train'
-    base_print_metrics = ['cl_loss', 'seg_loss', 'roc_auc', 'iou', 'iobb']
+    base_print_metrics = ['cl_loss', 'seg_loss', 'roc_auc', 'pr_auc', 'iou'] # iobb
     task = 'cls-seg'
 
     allow_augmenting = True
@@ -24,10 +24,10 @@ class TrainingClsSeg(TrainingProcess):
     default_image_format = 'L'
 
     # TODO: use better metric? that captures both cls and seg
-    key_metric = 'roc_auc'
+    key_metric = 'pr_auc'
     default_es_metric = None
     default_lr_metric = None
-    checkpoint_metric = 'roc_auc'
+    checkpoint_metric = 'pr_auc'
 
 
     def _add_additional_args(self, parser):
