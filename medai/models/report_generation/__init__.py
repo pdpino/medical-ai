@@ -51,7 +51,7 @@ def create_decoder(decoder_name, **kwargs):
             kwargs['image_size'] = features_size[1:]
 
     # NOTE: backward compatibility for older models that do not specify this
-    if decoder_name == 'h-lstm-att':
+    if decoder_name == 'h-lstm-att-v2':
         if 'double_bias' not in kwargs:
             kwargs['double_bias'] = True
 

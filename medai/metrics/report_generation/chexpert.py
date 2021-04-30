@@ -98,7 +98,7 @@ def apply_labeler_to_column(dataframe, column_name,
 
     try:
         if not quiet:
-            LOGGER.info('Labelling %s, %d reports...', column_name, f'{len(reports_only):,}')
+            LOGGER.info('Labelling %s: %s reports...', column_name, f'{len(reports_only):,}')
         subprocess.run(
             cmd, shell=True, check=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -150,7 +150,7 @@ def apply_labeler_to_df(df, caller_id='main', avoid_duplicated=True, dataset_nam
         # np.array of shape: n_unique_reports
 
         LOGGER.info(
-            'Reduced duplicated reports, from %d to %d unique',
+            'Reduced duplicated reports: from %s to %s unique',
             f'{n_samples:,}',
             f'{len(unique_reports):,}',
         )
