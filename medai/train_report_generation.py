@@ -35,14 +35,8 @@ from medai.models.checkpoint import (
     create_cnn_rg,
 )
 from medai.tensorboard import TBWriter
-from medai.training.report_generation.flat import (
-    create_flat_dataloader,
-    get_step_fn_flat,
-)
-from medai.training.report_generation.hierarchical import (
-    create_hierarchical_dataloader,
-    get_step_fn_hierarchical,
-)
+from medai.training.report_generation.flat import get_step_fn_flat
+from medai.training.report_generation.hierarchical import get_step_fn_hierarchical
 from medai.utils import (
     get_timestamp,
     duration_to_str,
@@ -232,11 +226,6 @@ def resume_training(run_id,
     # Decide hierarchical
     decoder_name = metadata['decoder_kwargs']['decoder_name']
     hierarchical = is_decoder_hierarchical(decoder_name)
-    if hierarchical:
-        create_dataloader = create_hierarchical_dataloader
-    else:
-        create_dataloader = create_flat_dataloader
-
 
     # Load data
     dataset_kwargs = metadata.get('dataset_kwargs', None)
@@ -248,16 +237,18 @@ def resume_training(run_id,
             'max_samples': max_samples,
             'batch_size': metadata['hparams'].get('batch_size', 24),
         }
+    if 'hierarchical' not in dataset_kwargs:
+        # Backward compatibility
+        dataset_kwargs['hierarchical'] = hierarchical
+
     dataset_train_kwargs = metadata.get('dataset_train_kwargs', {})
 
     train_dataloader = prepare_data_report_generation(
-        create_dataloader,
         dataset_type='train',
         **dataset_kwargs,
         **dataset_train_kwargs,
     )
     val_dataloader = prepare_data_report_generation(
-        create_dataloader,
         dataset_type='val',
         **dataset_kwargs,
     )
@@ -384,10 +375,6 @@ def train_from_scratch(run_name,
 
     # Decide hierarchical
     hierarchical = is_decoder_hierarchical(decoder_name)
-    if hierarchical:
-        create_dataloader = create_hierarchical_dataloader
-    else:
-        create_dataloader = create_flat_dataloader
 
     if supervise_attention:
         if not hierarchical:
@@ -401,6 +388,7 @@ def train_from_scratch(run_name,
     enable_masks = supervise_attention
     dataset_kwargs = {
         'dataset_name': dataset_name,
+        'hierarchical': hierarchical,
         'max_samples': max_samples,
         'norm_by_sample': norm_by_sample,
         'image_size': image_size,
@@ -423,7 +411,6 @@ def train_from_scratch(run_name,
         'augment_seg_mask': enable_masks,
     }
     train_dataloader = prepare_data_report_generation(
-        create_dataloader,
         dataset_type='train',
         **dataset_kwargs,
         **dataset_train_kwargs,
@@ -432,7 +419,6 @@ def train_from_scratch(run_name,
     dataset_kwargs['vocab'] = vocab
 
     val_dataloader = prepare_data_report_generation(
-        create_dataloader,
         dataset_type='val',
         **dataset_kwargs,
     )

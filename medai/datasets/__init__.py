@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader, Subset
 from torch.utils.data.dataloader import default_collate
 
 from medai.datasets.common import UP_TO_DATE_MASKS_VERSION, LATEST_REPORTS_VERSION
+from medai.datasets.report_generation import get_dataloader_constructor
+
 from medai.datasets.cxr14 import CXR14Dataset
 from medai.datasets.chexpert import ChexpertDataset
 from medai.datasets.covid_kaggle import CovidKaggleDataset
@@ -216,10 +218,10 @@ def create_report_dataset_subset(dataset, max_n_words=None, max_n_sentences=None
     return Subset(dataset, indices)
 
 
-def prepare_data_report_generation(create_dataloader_fn,
-                                   dataset_name=None,
+def prepare_data_report_generation(dataset_name=None,
                                    dataset_type='train',
                                    max_samples=None,
+                                   hierarchical=False,
                                    vocab=None,
                                    image_size=(512, 512),
                                    batch_size=10,
@@ -241,6 +243,7 @@ def prepare_data_report_generation(create_dataloader_fn,
         'imgsize': image_size,
         'normS': norm_by_sample,
         'reports': reports_version,
+        'hierarchical': hierarchical,
     }
     _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
     LOGGER.info('Loading %s/%s rg-dataset, %s', dataset_name, dataset_type, _info_str)
@@ -279,6 +282,8 @@ def prepare_data_report_generation(create_dataloader_fn,
                               times=augment_times,
                               seg_mask=augment_seg_mask,
                               **augment_kwargs)
+
+    create_dataloader_fn = get_dataloader_constructor(hierarchical)
 
     dataloader = create_dataloader_fn(dataset,
                                       include_masks=masks,

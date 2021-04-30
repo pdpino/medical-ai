@@ -11,8 +11,6 @@ from medai.models.report_generation.dummy.common_words import MostCommonWords
 from medai.models.report_generation.dummy.common_sentences import MostCommonSentences
 from medai.models.report_generation.dummy.random import RandomReport
 from medai.models.report_generation.dummy.most_similar_image import MostSimilarImage
-from medai.training.report_generation.flat import create_flat_dataloader
-from medai.training.report_generation.hierarchical import create_hierarchical_dataloader
 from medai.eval_report_generation import evaluate_model_and_save
 from medai.utils import (
     get_timestamp,
@@ -76,15 +74,11 @@ def evaluate_dummy_model(model_name,
 
     # Decide hierarchical
     is_hierarchical = _is_hierarchical(model_name)
-    if is_hierarchical:
-        create_dataloader = create_hierarchical_dataloader
-    else:
-        create_dataloader = create_flat_dataloader
-
 
     # Load datasets
     dataset_kwargs = {
         'dataset_name': dataset_name,
+        'hierarchical': is_hierarchical,
         'max_samples': max_samples,
         'norm_by_sample': norm_by_sample,
         'image_size': (image_size, image_size),
@@ -94,7 +88,6 @@ def evaluate_dummy_model(model_name,
         'do_not_load_image': model_name != 'most-similar-image',
     }
     train_dataloader = prepare_data_report_generation(
-        create_dataloader,
         dataset_type='train',
         **dataset_kwargs,
     )
@@ -103,12 +96,10 @@ def evaluate_dummy_model(model_name,
     dataset_kwargs['vocab'] = vocab
 
     val_dataloader = prepare_data_report_generation(
-        create_dataloader,
         dataset_type='val',
         **dataset_kwargs,
     )
     test_dataloader = prepare_data_report_generation(
-        create_dataloader,
         dataset_type='test',
         **dataset_kwargs,
     )

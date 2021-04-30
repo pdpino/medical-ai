@@ -18,14 +18,8 @@ from medai.metrics.report_generation.writer import (
 )
 from medai.models.report_generation import is_decoder_hierarchical
 from medai.models.checkpoint import load_compiled_model_report_generation
-from medai.training.report_generation.flat import (
-    create_flat_dataloader,
-    get_step_fn_flat,
-)
-from medai.training.report_generation.hierarchical import (
-    create_hierarchical_dataloader,
-    get_step_fn_hierarchical,
-)
+from medai.training.report_generation.flat import get_step_fn_flat
+from medai.training.report_generation.hierarchical import get_step_fn_hierarchical
 from medai.utils import (
     print_hw_options,
     parsers,
@@ -173,11 +167,6 @@ def evaluate_run(run_id,
     # Decide hierarchical
     decoder_name = metadata['decoder_kwargs']['decoder_name']
     hierarchical = is_decoder_hierarchical(decoder_name)
-    if hierarchical:
-        create_dataloader = create_hierarchical_dataloader
-    else:
-        create_dataloader = create_flat_dataloader
-
     # Load data kwargs
     dataset_kwargs = metadata.get('dataset_kwargs', None)
     if dataset_kwargs is None:
@@ -187,6 +176,9 @@ def evaluate_run(run_id,
             'image_size': metadata.get('image_size', (512, 512)),
             'batch_size': metadata['hparams'].get('batch_size', 24),
         }
+    if 'hierarchical' not in dataset_kwargs:
+        # backward compatibility
+        dataset_kwargs['hierarchical'] = hierarchical
     dataset_train_kwargs = metadata.get('dataset_train_kwargs', {})
 
     if max_samples is not None:
@@ -197,7 +189,6 @@ def evaluate_run(run_id,
     # Create dataloaders
     dataloaders = [
         prepare_data_report_generation(
-            create_dataloader,
             dataset_type=dataset_type,
             **dataset_kwargs,
             **(dataset_train_kwargs if dataset_type == 'train' else {}),
