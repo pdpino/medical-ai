@@ -131,7 +131,8 @@ def evaluate_run(run_id,
     dataset_name = _find_dataset_name(run_id.full_name)
 
     # Compute labels for both GT and generated
-    df = chexpert.apply_labeler_to_df(df, caller_id=get_timestamp(), dataset_name=dataset_name)
+    caller_id = f'{run_id.short_name}_eval{get_timestamp()}'
+    df = chexpert.apply_labeler_to_df(df, caller_id=caller_id, dataset_name=dataset_name)
 
     if len(df) != n_samples:
         LOGGER.error(

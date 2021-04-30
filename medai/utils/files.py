@@ -72,24 +72,33 @@ get_results_folder = _build_dir_getter('results')
 get_checkpoint_folder = _build_dir_getter('models')
 
 
-def _resolve_run_name(run_id, search_in='runs', workspace_dir=WORKSPACE_DIR):
+def _resolve_run_name(run_id, search_in=('runs', 'results'), workspace_dir=WORKSPACE_DIR):
     """Given a run_id with a timestamp-only run_name, expands the run_name."""
-    assert search_in in ('runs', 'runs-large', 'models', 'results')
 
     if _TIMESTAMP_ONLY_REGEX.match(run_id.name):
-        parent_folder = _get_parent_folder(
-            search_in, run_id.debug, run_id.task, workspace_dir=workspace_dir,
-        )
+        matching_runs = []
 
-        # Search the run with timestamp
-        if not os.path.isdir(parent_folder):
-            raise FileNotFoundError(f'No folder to search run: {parent_folder}')
-        matching_runs = [
-            saved_run
-            for saved_run in os.listdir(parent_folder)
-            if saved_run.startswith(run_id.name)
-        ]
-        assert len(matching_runs) == 1, f'Matching runs != 1: {matching_runs}'
+        for search_folder in search_in:
+            assert search_folder in ('runs', 'runs-large', 'models', 'results')
+
+            parent_folder = _get_parent_folder(
+                search_folder, run_id.debug, run_id.task, workspace_dir=workspace_dir,
+            )
+
+            # Search the run with timestamp
+            if not os.path.isdir(parent_folder):
+                raise FileNotFoundError(f'No folder to search run: {parent_folder}')
+            matching_runs = [
+                saved_run
+                for saved_run in os.listdir(parent_folder)
+                if saved_run.startswith(run_id.name)
+            ]
+
+            if len(matching_runs) > 0:
+                break
+
+        assert len(matching_runs) < 2, f'Found more than one run: {matching_runs}'
+        assert len(matching_runs) > 0, f'Could not find any run in {search_in}'
 
         return matching_runs[0]
 

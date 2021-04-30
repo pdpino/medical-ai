@@ -98,7 +98,7 @@ def apply_labeler_to_column(dataframe, column_name,
 
     try:
         if not quiet:
-            LOGGER.info('Labelling %s...', column_name)
+            LOGGER.info('Labelling %s, %d reports...', column_name, f'{len(reports_only):,}')
         subprocess.run(
             cmd, shell=True, check=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -124,7 +124,7 @@ def apply_labeler_to_column(dataframe, column_name,
     return out_df[CHEXPERT_LABELS].to_numpy()
 
 
-def apply_labeler_to_df(df, caller_id='main', dataset_name='iu-x-ray'):
+def apply_labeler_to_df(df, caller_id='main', avoid_duplicated=True, dataset_name='iu-x-ray'):
     """Calculates chexpert labels for a set of GT and generated reports.
 
     Args:
@@ -133,14 +133,43 @@ def apply_labeler_to_df(df, caller_id='main', dataset_name='iu-x-ray'):
     # Load labels for ground truth
     ground_truth = _load_gt_labels(df, dataset_name)
 
-    # Calculate labels for generated
-    generated = apply_labeler_to_column(
-        df, 'generated', fill_empty=0, fill_uncertain=1,
-        caller_id=caller_id,
-    )
-
-    # Concat in main dataframe
+    # Concat GT in main dataframe
     df = _concat_df_matrix(df, ground_truth, 'gt')
-    df = _concat_df_matrix(df, generated, 'gen')
+
+    kwargs = {
+        'fill_empty': 0,
+        'fill_uncertain': 1,
+        'caller_id': caller_id,
+    }
+
+    if avoid_duplicated:
+        # Calculate labels for unique generated
+        n_samples = len(df)
+
+        unique_reports = df['generated'].unique()
+        # np.array of shape: n_unique_reports
+
+        LOGGER.info(
+            'Reduced duplicated reports, from %d to %d unique',
+            f'{n_samples:,}',
+            f'{len(unique_reports):,}',
+        )
+
+        df_unique = pd.DataFrame(unique_reports, columns=['gen-unique'])
+
+        unique_generated = apply_labeler_to_column(df_unique, 'gen-unique', **kwargs)
+        # shape: n_unique_reports, n_labels
+
+        df_unique = _concat_df_matrix(df_unique, unique_generated, 'gen')
+
+        df = df.merge(df_unique, how='inner', left_on='generated', right_on='gen-unique')
+
+        del df['gen-unique']
+
+        assert len(df) == n_samples, f'Merge failed amounts: final={len(df)} original={n_samples}'
+    else:
+        # Calculate labels for all generated
+        generated = apply_labeler_to_column(df, 'generated', **kwargs)
+        df = _concat_df_matrix(df, generated, 'gen')
 
     return df
