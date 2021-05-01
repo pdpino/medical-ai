@@ -1,8 +1,10 @@
 import csv
 import os
+import math
 import subprocess
 import logging
 import pandas as pd
+import numpy as np
 
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.datasets.iu_xray import DATASET_DIR as IU_DIR
@@ -124,7 +126,31 @@ def apply_labeler_to_column(dataframe, column_name,
     return out_df[CHEXPERT_LABELS].to_numpy()
 
 
-def apply_labeler_to_df(df, caller_id='main', avoid_duplicated=True, dataset_name='iu-x-ray'):
+def _apply_labeler_to_column_in_batches(dataframe, column_name, n_batches=5, **kwargs):
+    if n_batches <= 1:
+        return apply_labeler_to_column(dataframe, column_name, **kwargs)
+
+    n_samples = len(dataframe)
+
+    LOGGER.info(
+        'Splitted in n_batches=%d of approx %s reports each',
+        n_batches, math.ceil(n_samples / n_batches),
+    )
+
+    batches = np.array_split(dataframe, n_batches)
+
+    result = np.concatenate([
+        apply_labeler_to_column(df, column_name, **kwargs)
+        for df in batches
+    ], axis=0)
+
+    assert result.shape == (n_samples, 14), f'Wrong result by batches: {result.shape}'
+
+    return result
+
+
+def apply_labeler_to_df(df, caller_id='main',
+                        batches=None, avoid_duplicated=True, dataset_name='iu-x-ray'):
     """Calculates chexpert labels for a set of GT and generated reports.
 
     Args:
@@ -149,15 +175,27 @@ def apply_labeler_to_df(df, caller_id='main', avoid_duplicated=True, dataset_nam
         unique_reports = df['generated'].unique()
         # np.array of shape: n_unique_reports
 
+        n_unique_reports = len(unique_reports)
+
+        if batches is None:
+            batch_default_limit = 35000
+            if n_unique_reports > batch_default_limit:
+                batches = math.ceil(n_unique_reports / batch_default_limit)
+            else:
+                batches = 1
+
+
         LOGGER.info(
             'Reduced duplicated reports: from %s to %s unique',
             f'{n_samples:,}',
-            f'{len(unique_reports):,}',
+            f'{n_unique_reports:,}',
         )
 
         df_unique = pd.DataFrame(unique_reports, columns=['gen-unique'])
 
-        unique_generated = apply_labeler_to_column(df_unique, 'gen-unique', **kwargs)
+        unique_generated = _apply_labeler_to_column_in_batches(
+            df_unique, 'gen-unique', n_batches=batches, **kwargs,
+        )
         # shape: n_unique_reports, n_labels
 
         df_unique = _concat_df_matrix(df_unique, unique_generated, 'gen')

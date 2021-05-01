@@ -91,6 +91,7 @@ def evaluate_run(run_id,
                  max_samples=None,
                  free=False,
                  quiet=False,
+                 batches=None,
                  ):
     """Evaluates a run with the Chexpert-labeler."""
     # Folder containing run results
@@ -132,7 +133,9 @@ def evaluate_run(run_id,
 
     # Compute labels for both GT and generated
     caller_id = f'{run_id.short_name}_eval{get_timestamp()}'
-    df = chexpert.apply_labeler_to_df(df, caller_id=caller_id, dataset_name=dataset_name)
+    df = chexpert.apply_labeler_to_df(
+        df, caller_id=caller_id, dataset_name=dataset_name, batches=batches,
+    )
 
     if len(df) != n_samples:
         LOGGER.error(
@@ -172,6 +175,8 @@ def parse_args():
                         help='Debug: use a max amount of samples')
     parser.add_argument('--quiet', action='store_true',
                         help='Do not print metrics to stdout')
+    parser.add_argument('--batches', type=int, default=None,
+                        help='Process the reports in batches')
 
     args = parser.parse_args()
 
@@ -190,4 +195,5 @@ if __name__ == '__main__':
                  max_samples=ARGS.max_samples,
                  free=ARGS.free,
                  quiet=ARGS.quiet,
+                 batches=ARGS.batches,
                  )

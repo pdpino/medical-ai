@@ -45,7 +45,7 @@ class TBWriter:
                 'graph': graph,
             }
             _info_str = ' '.join(f"{k}={v}" for k, v in _info.items())
-            LOGGER.info('Creating TB-large saving: %s', _info_str)
+            LOGGER.info('Creating TB-large: %s', _info_str)
         else:
             self.large_writer = None
 
