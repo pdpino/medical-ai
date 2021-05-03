@@ -4,18 +4,21 @@ from torch import nn
 
 from medai.models.report_generation.att_2layer import AttentionTwoLayers
 from medai.models.report_generation.att_no_att import NoAttention
-from medai.utils.nlp import PAD_IDX, START_IDX, END_OF_SENTENCE_IDX, END_IDX
+from medai.utils.nlp import PAD_IDX, START_IDX, END_IDX
 
 
 class HierarchicalLSTMAttDecoder(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size, teacher_forcing=True, stop_threshold=0.5,
                  attention=True, **kwargs):
+        raise NotImplementedError('Rename layers first!!')
+
+        # pylint: disable=unreachable
         super().__init__()
 
         self.hidden_size = hidden_size
         self.teacher_forcing = teacher_forcing
-        self.start_idx = torch.tensor(START_IDX)
+        self.start_idx = torch.tensor(START_IDX) # pylint: disable=not-callable
         self.stop_threshold = stop_threshold
 
         # Attention input
@@ -61,6 +64,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
 
         # Set iteration maximum
         if free:
+            # pylint: disable=not-callable
             sentences_iterator = range(max_sentences) if max_sentences else count()
             should_stop = torch.tensor(False).to(device).repeat(batch_size)
         else:
@@ -77,7 +81,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
         for sentence_i in sentences_iterator:
             # Pass thru LSTM
             state = self.sentence_lstm(sentence_input_t, state)
-            h_t, c_t = state
+            h_t, unused_c_t = state
             # shapes: batch_size, hidden_size
 
             # Generate topic vector
@@ -145,6 +149,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
 
         # Set iteration maximum
         if free:
+            # pylint: disable=not-callable
             words_iterator = range(max_words) if max_words else count()
             should_stop = torch.tensor(False).to(device).repeat(batch_size)
         else:
@@ -157,7 +162,7 @@ class HierarchicalLSTMAttDecoder(nn.Module):
         for word_j in words_iterator:
             # Pass thru Word LSTM
             state = self.word_lstm(input_t, state)
-            h_t, c_t = state
+            h_t, unused_c_t = state
             # shapes: batch_size, hidden_size
 
             # Predict words

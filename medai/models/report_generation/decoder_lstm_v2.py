@@ -21,15 +21,15 @@ class LSTMDecoderV2(nn.Module):
         self.teacher_forcing = teacher_forcing
         self.start_idx = torch.tensor(START_IDX) # pylint: disable=not-callable
 
-        self.features_fc = nn.Sequential(
+        self.features_reduction = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(features_size, hidden_size * 2),
         )
+        self.features_fc = nn.Linear(features_size, hidden_size * 2)
 
-        self.embeddings_table = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
-        self.lstm_cell = nn.LSTMCell(embedding_size, hidden_size)
-        self.W_vocab = nn.Linear(hidden_size, vocab_size)
+        self.word_embeddings = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
+        self.word_lstm = nn.LSTMCell(embedding_size, hidden_size)
+        self.word_fc = nn.Linear(hidden_size, vocab_size)
 
         self.dropout_out = dropout_out
         self.dropout_recursive = dropout_recursive
@@ -54,7 +54,7 @@ class LSTMDecoderV2(nn.Module):
         device = features.device
 
         # Transform features to correct size
-        initial_state = self.features_fc(features)
+        initial_state = self.features_fc(self.features_reduction(features))
             # shape: batch_size, hidden_size*2
         initial_h_state = initial_state[:, :self.hidden_size]
         initial_c_state = initial_state[:, self.hidden_size:]
@@ -90,11 +90,11 @@ class LSTMDecoderV2(nn.Module):
 
         for word_i in words_iterator:
             # Pass words thru embedding
-            input_t = self.embeddings_table(next_words_indices)
+            input_t = self.word_embeddings(next_words_indices)
             # shape: batch_size, embedding_size
 
             # Pass thru LSTM
-            h_state_t, c_state_t = self.lstm_cell(input_t, (h_state_t, c_state_t))
+            h_state_t, c_state_t = self.word_lstm(input_t, (h_state_t, c_state_t))
             # shapes: batch_size, hidden_size
 
             # Pass thru out-dropout, if any
@@ -103,7 +103,7 @@ class LSTMDecoderV2(nn.Module):
                 out_h_t = F.dropout(out_h_t, self.dropout_out, training=self.training)
 
             # Predict with FC
-            prediction_t = self.W_vocab(out_h_t) # shape: batch_size, vocab_size
+            prediction_t = self.word_fc(out_h_t) # shape: batch_size, vocab_size
             seq_out.append(prediction_t)
 
             # Decide if should stop

@@ -24,25 +24,22 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         # Attention input
         self._use_attention = attention
         if attention:
-            self.attention_layer = AttentionTwoLayers(
+            self.attention = AttentionTwoLayers(
                 features_size, hidden_size, double_bias=double_bias,
             )
         else:
-            self.attention_layer = NoAttention(reduction='mean')
+            self.attention = NoAttention(reduction='mean')
 
         # To initialize S-LSTM hidden states
-        self.features_fc = nn.Sequential(
+        self.features_reduction = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(features_size, hidden_size * 2),
         )
+        self.features_fc = nn.Linear(features_size, hidden_size * 2)
 
         # Sentence LSTM
         self.sentence_lstm = nn.LSTMCell(features_size, hidden_size)
-        self.stop_control = nn.Sequential(
-            nn.Linear(hidden_size, 1),
-            nn.Sigmoid(),
-        )
+        self.stop_control = nn.Linear(hidden_size, 1)
 
         # Word LSTM
         self.word_embeddings = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
@@ -55,7 +52,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         device = features.device
 
         # Build initial state
-        initial_state = self.features_fc(features)
+        initial_state = self.features_fc(self.features_reduction(features))
             # shape: batch_size, hidden_size*2
         initial_h_state = initial_state[:, :self.hidden_size]
         initial_c_state = initial_state[:, self.hidden_size:]
@@ -89,7 +86,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
 
         for sentence_i in sentences_iterator:
             # Get next input
-            att_features, att_scores = self.attention_layer(features, h_t)
+            att_features, att_scores = self.attention(features, h_t)
                 # att_features shape: batch_size, features_size
                 # att_scores features: (batch_size, features-height, features-width), or None
             sentence_input_t = att_features
@@ -116,7 +113,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
             seq_out.append(words)
 
             # Decide stop
-            stop = self.stop_control(h_t).squeeze(-1) # shape: batch_size
+            stop = torch.sigmoid(self.stop_control(h_t)).squeeze(-1) # shape: batch_size
             stops_out.append(stop)
             if free:
                 should_stop |= (stop >= self.stop_threshold)

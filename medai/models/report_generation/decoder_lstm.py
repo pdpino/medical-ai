@@ -1,7 +1,6 @@
 from itertools import count
 import torch
 from torch import nn
-import numpy as np
 
 from medai.utils.nlp import PAD_IDX, START_IDX, END_IDX
 
@@ -10,11 +9,14 @@ class LSTMDecoder(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size,
                  teacher_forcing=True, **kwargs):
+        raise NotImplementedError('Rename layers first!!')
+
+        # pylint: disable=unreachable
         super().__init__()
 
         self.hidden_size = hidden_size
         self.teacher_forcing = teacher_forcing
-        self.start_idx = torch.tensor(START_IDX)
+        self.start_idx = torch.tensor(START_IDX) # pylint: disable=not-callable
 
         self.features_fc = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
@@ -28,7 +30,7 @@ class LSTMDecoder(nn.Module):
 
     def forward(self, features, reports=None, free=False, max_words=10000):
         """Forward pass.
-        
+
         Args:
             features: tensor of shape (batch_size, n_features, height, width)
             reports: tensor of shape (batch_size, n_words), or None
@@ -66,6 +68,7 @@ class LSTMDecoder(nn.Module):
 
         # Set iteration maximum
         if free:
+            # pylint: disable=not-callable
             words_iterator = range(max_words) if max_words else count()
             should_stop = torch.tensor(False).to(device).repeat(batch_size)
         else:
@@ -80,7 +83,7 @@ class LSTMDecoder(nn.Module):
         for word_i in words_iterator:
             # Pass thru LSTM
             state = self.lstm_cell(input_t, state)
-            h_t, c_t = state
+            h_t, unused_c_t = state
             # shapes: batch_size, hidden_size
 
             # Predict with FC
@@ -110,4 +113,4 @@ class LSTMDecoder(nn.Module):
         seq_out = torch.stack(seq_out, dim=1)
         # shape: batch_size, max_sentence_len, vocab_size
 
-        return seq_out,
+        return (seq_out,)

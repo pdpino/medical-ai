@@ -72,7 +72,7 @@ get_results_folder = _build_dir_getter('results')
 get_checkpoint_folder = _build_dir_getter('models')
 
 
-def _resolve_run_name(run_id, search_in=('runs', 'results'), workspace_dir=WORKSPACE_DIR):
+def _resolve_run_name(run_id, search_in=('runs', 'results', 'models'), workspace_dir=WORKSPACE_DIR):
     """Given a run_id with a timestamp-only run_name, expands the run_name."""
 
     if _TIMESTAMP_ONLY_REGEX.match(run_id.name):
@@ -122,6 +122,9 @@ class RunId:
 
     def __str__(self):
         return f'{self.full_name}\n\t(task={self.task}, exp={self.experiment}, debug={self.debug})'
+
+    def __repr__(self):
+        return self.__str__().replace('\n\t', ' ')
 
     @property
     def full_name(self):

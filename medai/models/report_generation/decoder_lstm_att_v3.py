@@ -14,11 +14,14 @@ class LSTMAttDecoderV3(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size,
                  features_size,
                  teacher_forcing=True, **unused):
+        raise NotImplementedError('Rename layers first!!')
+
+        # pylint: disable=unreachable
         super().__init__()
 
         self.hidden_size = hidden_size
         self.teacher_forcing = teacher_forcing
-        self.start_idx = torch.tensor(START_IDX)
+        self.start_idx = torch.tensor(START_IDX) # pylint: disable=not-callable
 
         self.embeddings_table = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
         self.lstm_cell = nn.LSTMCell(embedding_size, hidden_size)
@@ -52,9 +55,10 @@ class LSTMAttDecoderV3(nn.Module):
             and self.training \
             and reports is not None \
             and not free
-        
+
         # Set iteration maximum
         if free:
+            # pylint: disable=not-callable
             words_iterator = range(max_words) if max_words else count()
             should_stop = torch.tensor(False).to(device).repeat(batch_size)
         else:
@@ -70,7 +74,7 @@ class LSTMAttDecoderV3(nn.Module):
         for word_i in words_iterator:
             # Pass thru LSTM
             state = self.lstm_cell(input_t, state)
-            h_t, c_t = state
+            h_t, unused_c_t = state
             # shapes: batch_size, hidden_size
 
             # Pass state thru attention
