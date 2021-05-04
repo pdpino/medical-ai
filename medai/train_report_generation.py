@@ -25,6 +25,7 @@ from medai.models.report_generation import (
     AVAILABLE_DECODERS,
     DEPRECATED_DECODERS,
 )
+from medai.models.report_generation.word_embedding import AVAILABLE_PRETRAINED_EMBEDDINGS
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.checkpoint import (
     CompiledModel,
@@ -170,7 +171,8 @@ def train_model(run_id,
                        )
 
     # Attach checkpoint
-    checkpoint_metric = _CORRECTNESS_TARGET_METRIC if medical_correctness else None
+    # FIXME: for now, only save last checkpoints (metric is too unstable!)
+    checkpoint_metric = _CORRECTNESS_TARGET_METRIC if medical_correctness and False else None
     attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
@@ -208,6 +210,8 @@ def resume_training(run_id,
                     n_epochs=10,
                     max_samples=None,
                     tb_kwargs={},
+                    med_kwargs={},
+                    early_stopping=None,
                     print_metrics=None,
                     multiple_gpu=False,
                     device='cuda',
@@ -230,13 +234,16 @@ def resume_training(run_id,
     # Load data
     dataset_kwargs = metadata.get('dataset_kwargs', None)
     if dataset_kwargs is None:
-        # HACK: backward compatibility
-        dataset_kwargs = {
-            'vocab': metadata['vocab'],
-            'image_size': metadata.get('image_size', (512, 512)),
-            'max_samples': max_samples,
-            'batch_size': metadata['hparams'].get('batch_size', 24),
-        }
+        raise NotImplementedError('Fully deprecated...')
+        # # HACK: backward compatibility
+        # dataset_kwargs = {
+        #     'vocab': metadata['vocab'],
+        #     'image_size': metadata.get('image_size', (512, 512)),
+        #     'max_samples': max_samples,
+        #     'batch_size': metadata['hparams'].get('batch_size', 24),
+        # }
+    if max_samples is not None:
+        dataset_kwargs['max_samples'] = max_samples
     if 'hierarchical' not in dataset_kwargs:
         # Backward compatibility
         dataset_kwargs['hierarchical'] = hierarchical
@@ -253,8 +260,21 @@ def resume_training(run_id,
         **dataset_kwargs,
     )
 
-    # Train
+    # Override train_kwargs
     other_train_kwargs = metadata.get('other_train_kwargs', {})
+    if other_train_kwargs.get('early_stopping', True) and not early_stopping:
+        # FIXME: when resuming, you can only change this from false to true,
+        other_train_kwargs['early_stopping'] = False
+
+    if other_train_kwargs.get('medical_correctness', False):
+        # FIXME: you can only change med_kwargs
+        for key in other_train_kwargs['med_kwargs']:
+            new_value = med_kwargs.get(key, None)
+            if new_value is not None:
+                other_train_kwargs['med_kwargs'][key] = new_value
+
+
+    # Train
     train_model(run_id,
                 compiled_model,
                 train_dataloader,
@@ -284,6 +304,7 @@ def train_from_scratch(run_name,
                        vocab_greater=None,
                        teacher_forcing=True,
                        embedding_size=100,
+                       embedding_kwargs={},
                        hidden_size=100,
                        lr=0.0001,
                        weight_decay=0,
@@ -325,7 +346,19 @@ def train_from_scratch(run_name,
     if dropout_out != 0:
         run_name += f'_dropo{dropout_out}'
     if embedding_size != 100:
-        run_name += f'_embs-{embedding_size}'
+        run_name += f'_embsize-{embedding_size}'
+    if embedding_kwargs is not None:
+        pretrained = embedding_kwargs.get('pretrained')
+        scale_grad_by_freq = embedding_kwargs.get('scale_grad_by_freq')
+        if pretrained is not None:
+            run_name += f'_emb-{pretrained}'
+            freeze = embedding_kwargs.get('freeze')
+            if freeze:
+                run_name += '-frz'
+            if scale_grad_by_freq:
+                run_name += '-scale'
+        elif scale_grad_by_freq:
+            run_name += '_emb-scale'
     if hidden_size != 100:
         run_name += f'_hs-{hidden_size}'
     if 'att' in decoder_name and att_double_bias:
@@ -448,8 +481,9 @@ def train_from_scratch(run_name,
     # Create decoder
     decoder_kwargs = {
         'decoder_name': decoder_name,
-        'vocab_size': len(vocab),
+        'vocab': vocab,
         'embedding_size': embedding_size,
+        'embedding_kwargs': embedding_kwargs,
         'hidden_size': hidden_size,
         'features_size': cnn.features_size,
         'teacher_forcing': teacher_forcing,
@@ -500,7 +534,7 @@ def train_from_scratch(run_name,
         'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
-        'vocab': vocab,
+        # 'vocab': vocab, # save space, is already saved in the dataset_kwargs
         'image_size': image_size,
         'hparams': {
             'pretrained_cnn': cnn_run_id.to_dict() if cnn_run_id else None,
@@ -596,6 +630,15 @@ def parse_args():
     cnn_group.add_argument('-cp-task', '--cnn-pretrained-task', type=str, default='cls',
                           choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
 
+    emb_group = parser.add_argument_group('Word embedding')
+    emb_group.add_argument('--emb-pretrained', type=str, default=None,
+                          choices=AVAILABLE_PRETRAINED_EMBEDDINGS,
+                          help='Choose pretrained embedding')
+    emb_group.add_argument('--emb-freeze', action='store_true',
+                          help='Freeze the pretrained embedding')
+    emb_group.add_argument('--emb-scaled', action='store_true',
+                          help='embedding param: scale_grad_by_freq')
+
     parsers.add_args_early_stopping(parser, metric=_CORRECTNESS_TARGET_METRIC)
     parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
     parsers.add_args_tb(parser)
@@ -635,6 +678,15 @@ def parse_args():
     else:
         args.precnn_run_id = None
 
+
+    # Build word-embedding kwargs
+    args.embedding_kwargs = {
+        'pretrained': args.emb_pretrained,
+        'freeze': args.emb_freeze,
+        'scale_grad_by_freq': args.emb_scaled,
+    }
+
+
     return args
 
 
@@ -658,6 +710,8 @@ if __name__ == '__main__':
                         multiple_gpu=ARGS.multiple_gpu,
                         device=DEVICE,
                         print_metrics=ARGS.print_metrics,
+                        med_kwargs=ARGS.med_kwargs,
+                        early_stopping=ARGS.early_stopping,
                         )
     else:
         train_from_scratch(get_timestamp(),
@@ -675,6 +729,7 @@ if __name__ == '__main__':
                            vocab_greater=ARGS.vocab_greater,
                            teacher_forcing=not ARGS.no_teacher_forcing,
                            embedding_size=ARGS.embedding_size,
+                           embedding_kwargs=ARGS.embedding_kwargs,
                            hidden_size=ARGS.hidden_size,
                            lr=ARGS.learning_rate,
                            weight_decay=ARGS.weight_decay,

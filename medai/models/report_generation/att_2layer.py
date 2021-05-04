@@ -8,10 +8,10 @@ class AttentionTwoLayers(nn.Module):
         self.visual_fc = nn.Linear(features_size, internal_size)
         self.state_fc = nn.Linear(lstm_size, internal_size, bias=double_bias)
 
-        self.last_fc = nn.Sequential(
-            nn.Tanh(),
-            nn.Linear(internal_size, 1),
-        )
+        self.transition = nn.Tanh()
+
+        self.last_fc = nn.Linear(internal_size, 1)
+
         self.softmax = nn.Sequential(
             nn.Flatten(start_dim=1, end_dim=-1),
             nn.Softmax(dim=-1),
@@ -29,6 +29,10 @@ class AttentionTwoLayers(nn.Module):
         # shape: batch_size, internal_size
 
         out = features_out + h_state_out.unsqueeze(1).unsqueeze(1)
+        # shape: batch_size, height, width, internal_size
+
+        # Activation
+        out = self.transition(out)
         # shape: batch_size, height, width, internal_size
 
         out = self.last_fc(out) # shape: batch_size, height, width, 1

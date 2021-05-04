@@ -6,14 +6,16 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from medai.utils.nlp import PAD_IDX, START_IDX, END_IDX
+from medai.utils.nlp import START_IDX, END_IDX
+from medai.models.report_generation.word_embedding import create_word_embedding
 
 
 class LSTMDecoderV2(nn.Module):
     implemented_dropout = True
 
-    def __init__(self, vocab_size, embedding_size, hidden_size,
+    def __init__(self, vocab, embedding_size, hidden_size,
                  features_size, dropout_out=0, dropout_recursive=0,
+                 embedding_kwargs={},
                  teacher_forcing=True, **unused_kwargs):
         super().__init__()
 
@@ -27,9 +29,9 @@ class LSTMDecoderV2(nn.Module):
         )
         self.features_fc = nn.Linear(features_size, hidden_size * 2)
 
-        self.word_embeddings = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
+        self.word_embeddings = create_word_embedding(vocab, embedding_size, **embedding_kwargs)
         self.word_lstm = nn.LSTMCell(embedding_size, hidden_size)
-        self.word_fc = nn.Linear(hidden_size, vocab_size)
+        self.word_fc = nn.Linear(hidden_size, len(vocab))
 
         self.dropout_out = dropout_out
         self.dropout_recursive = dropout_recursive

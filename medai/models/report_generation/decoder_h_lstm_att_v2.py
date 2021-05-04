@@ -7,12 +7,14 @@ from torch import nn
 
 from medai.models.report_generation.att_2layer import AttentionTwoLayers
 from medai.models.report_generation.att_no_att import NoAttention
-from medai.utils.nlp import PAD_IDX, START_IDX, END_IDX
+from medai.utils.nlp import START_IDX, END_IDX
+from medai.models.report_generation.word_embedding import create_word_embedding
 
 
 class HierarchicalLSTMAttDecoderV2(nn.Module):
-    def __init__(self, vocab_size, embedding_size, hidden_size,
+    def __init__(self, vocab, embedding_size, hidden_size,
                  features_size, teacher_forcing=True, stop_threshold=0.5,
+                 embedding_kwargs={},
                  attention=True, double_bias=False, **unused_kwargs):
         super().__init__()
 
@@ -42,9 +44,9 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         self.stop_control = nn.Linear(hidden_size, 1)
 
         # Word LSTM
-        self.word_embeddings = nn.Embedding(vocab_size, embedding_size, padding_idx=PAD_IDX)
+        self.word_embeddings = create_word_embedding(vocab, embedding_size, **embedding_kwargs)
         self.word_lstm = nn.LSTMCell(embedding_size, hidden_size)
-        self.word_fc = nn.Linear(hidden_size, vocab_size)
+        self.word_fc = nn.Linear(hidden_size, len(vocab))
 
     def forward(self, features, reports=None, free=False, max_sentences=100, max_words=1000):
         # features shape: batch_size, features_size, height, width

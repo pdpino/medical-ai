@@ -170,12 +170,13 @@ def evaluate_run(run_id,
     # Load data kwargs
     dataset_kwargs = metadata.get('dataset_kwargs', None)
     if dataset_kwargs is None:
-        # HACK: backward compatibility
-        dataset_kwargs = {
-            'vocab': metadata['vocab'],
-            'image_size': metadata.get('image_size', (512, 512)),
-            'batch_size': metadata['hparams'].get('batch_size', 24),
-        }
+        raise NotImplementedError('Fully deprecated')
+        # # HACK: backward compatibility
+        # dataset_kwargs = {
+        #     'vocab': metadata['vocab'],
+        #     'image_size': metadata.get('image_size', (512, 512)),
+        #     'batch_size': metadata['hparams'].get('batch_size', 24),
+        # }
     if 'hierarchical' not in dataset_kwargs:
         # backward compatibility
         dataset_kwargs['hierarchical'] = hierarchical

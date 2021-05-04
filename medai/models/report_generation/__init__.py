@@ -36,6 +36,18 @@ def is_decoder_hierarchical(decoder_name):
     return 'h-lstm' in decoder_name
 
 
+def _get_info_str(**kwargs):
+    _printable_kwargs = {}
+    for k, v in kwargs.items():
+        if k == 'vocab':
+            v = len(v)
+        # elif k == 'embedding_kwargs':
+        #     v = v['pretrained']
+
+        _printable_kwargs[k] = v
+    return ' '.join(f'{k}={v}' for k, v in _printable_kwargs.items())
+
+
 def create_decoder(decoder_name, **kwargs):
     if decoder_name not in _MODELS_DEF:
         raise Exception(f'Decoder not found: {decoder_name}')
@@ -55,8 +67,16 @@ def create_decoder(decoder_name, **kwargs):
         if 'double_bias' not in kwargs:
             kwargs['double_bias'] = True
 
-    info_str = ' '.join(f'{k}={v}' for k, v in kwargs.items())
-    LOGGER.info('Creating decoder: %s, %s', decoder_name, info_str)
+    # NOTE: backward compatibility
+    # Before: only vocab_size was passed
+    # After: whole vocab
+    if 'vocab_size' in kwargs:
+        # Pass a dummy vocabulary as vocab
+        # This does not break anything, because older implementations will only use len(vocab)
+        kwargs['vocab'] = range(kwargs['vocab_size'])
+        del kwargs['vocab_size']
+
+    LOGGER.info('Creating decoder: %s, %s', decoder_name, _get_info_str(**kwargs))
 
     ModelClass = _MODELS_DEF[decoder_name]
 
