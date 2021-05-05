@@ -60,13 +60,31 @@ AVAILABLE_PRETRAINED_EMBEDDINGS = list(_PRETRAINED_EMBEDDINGS)
 
 def create_word_embedding(vocab, embedding_size,
                           pretrained=None, freeze=False,
-                          scale_grad_by_freq=False,
+                          scale_grad_by_freq=False, batch_normalization=False,
                           ):
+    """Creates layers needed for word-embedding.
+
+    Args:
+        vocab -- dictionary with (word: idx) pairs
+        embedding_size -- int
+        pretrained -- specify a pretrained embedding
+        freeze -- freeze the embedding (only useful if pretrained is specified)
+        scale_grad_by_freq -- nn.Embedding option
+        batch_normalization -- whether or not to include a batch_normalization layer
+    Returns:
+        tuple (embedding_layer, bn_layer)
+        If batch_normalization == False, bn_layer is a dummy lambda function.
+        Notice layers are returned separated, since the embeddings may be calculated without BN
+        during analysis (hence, it is useful to have them separated).
+    """
     info = {
         'scale_grad_by_freq': scale_grad_by_freq,
+        'bn': batch_normalization,
     }
+
+    ## Create embedding layer
     if pretrained is None:
-        layer = nn.Embedding(
+        emb_layer = nn.Embedding(
             len(vocab),
             embedding_size,
             padding_idx=PAD_IDX,
@@ -93,7 +111,7 @@ def create_word_embedding(vocab, embedding_size,
         shape = (len(vocab), embedding_size)
         assert vectors.size() == shape, f'Emb size mismatch: {vectors.size()} vs {shape}'
 
-        layer = nn.Embedding.from_pretrained(
+        emb_layer = nn.Embedding.from_pretrained(
             vectors,
             padding_idx=PAD_IDX,
             freeze=freeze,
@@ -104,6 +122,12 @@ def create_word_embedding(vocab, embedding_size,
             'pretrained': pretrained,
         })
 
+    ## Create BN layer
+    if batch_normalization:
+        bn_layer = nn.BatchNorm1d(embedding_size)
+    else:
+        bn_layer = lambda x: x
+
     LOGGER.info('Created word-embedding layer: %s', info)
 
-    return layer
+    return emb_layer, bn_layer

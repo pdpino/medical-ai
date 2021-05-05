@@ -41,8 +41,8 @@ def _get_info_str(**kwargs):
     for k, v in kwargs.items():
         if k == 'vocab':
             v = len(v)
-        # elif k == 'embedding_kwargs':
-        #     v = v['pretrained']
+        elif k == 'embedding_kwargs':
+            continue
 
         _printable_kwargs[k] = v
     return ' '.join(f'{k}={v}' for k, v in _printable_kwargs.items())

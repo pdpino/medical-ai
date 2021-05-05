@@ -29,7 +29,11 @@ class LSTMDecoderV2(nn.Module):
         )
         self.features_fc = nn.Linear(features_size, hidden_size * 2)
 
-        self.word_embeddings = create_word_embedding(vocab, embedding_size, **embedding_kwargs)
+        self.word_embeddings, self.word_embeddings_bn = create_word_embedding(
+            vocab,
+            embedding_size,
+            **embedding_kwargs,
+        )
         self.word_lstm = nn.LSTMCell(embedding_size, hidden_size)
         self.word_fc = nn.Linear(hidden_size, len(vocab))
 
@@ -93,6 +97,7 @@ class LSTMDecoderV2(nn.Module):
         for word_i in words_iterator:
             # Pass words thru embedding
             input_t = self.word_embeddings(next_words_indices)
+            input_t = self.word_embeddings_bn(input_t)
             # shape: batch_size, embedding_size
 
             # Pass thru LSTM

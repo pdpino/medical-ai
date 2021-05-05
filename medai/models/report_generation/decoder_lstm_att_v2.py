@@ -33,7 +33,11 @@ class LSTMAttDecoderV2(nn.Module):
         )
         self.features_fc = nn.Linear(features_size, hidden_size * 2)
 
-        self.word_embeddings = create_word_embedding(vocab, embedding_size, **embedding_kwargs)
+        self.word_embeddings, self.word_embeddings_bn = create_word_embedding(
+            vocab,
+            embedding_size,
+            **embedding_kwargs,
+        )
         self.word_lstm = nn.LSTMCell(embedding_size + features_size, hidden_size)
         self.word_fc = nn.Linear(hidden_size, len(vocab))
 
@@ -93,7 +97,8 @@ class LSTMAttDecoderV2(nn.Module):
 
             # Embed words
             input_words = self.word_embeddings(next_words_indices)
-                # shape: batch_size, embedding_size
+            input_words = self.word_embeddings_bn(input_words)
+            # shape: batch_size, embedding_size
 
             # Concat words and attended image-features
             input_t = torch.cat((input_words, att_features), dim=1)

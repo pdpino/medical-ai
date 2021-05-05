@@ -44,8 +44,12 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         self.sentence_lstm = nn.LSTMCell(features_size, hidden_size)
         self.stop_control = nn.Linear(hidden_size, 1)
 
-        # Word LSTM
-        self.word_embeddings = create_word_embedding(vocab, embedding_size, **embedding_kwargs)
+        # Word LSTM (REVIEW: reuse code with flat-lstm??)
+        self.word_embeddings, self.word_embeddings_bn = create_word_embedding(
+            vocab,
+            embedding_size,
+            **embedding_kwargs,
+        )
         self.word_lstm = nn.LSTMCell(embedding_size, hidden_size)
         self.word_fc = nn.Linear(hidden_size, len(vocab))
 
@@ -57,8 +61,8 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         # Build initial state
         initial_state = self.features_fc(self.features_reduction(features))
             # shape: batch_size, hidden_size*2
-        initial_h_state = initial_state[:, :self.hidden_size]
-        initial_c_state = initial_state[:, self.hidden_size:]
+        h_state_t = initial_state[:, :self.hidden_size]
+        c_state_t = initial_state[:, self.hidden_size:]
             # shapes: batch_size, hidden_size
 
         # Decide teacher forcing
@@ -78,10 +82,6 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
             sentences_iterator = range(actual_n_sentences)
             should_stop = None
 
-        # Build initial inputs
-        h_t = initial_h_state
-        state = (initial_h_state, initial_c_state)
-
         # Iterate over sentences
         seq_out = []
         stops_out = []
@@ -90,7 +90,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
 
         for sentence_i in sentences_iterator:
             # Get next input
-            att_features, att_scores = self.attention(features, h_t)
+            att_features, att_scores = self.attention(features, h_state_t)
                 # att_features shape: batch_size, features_size
                 # att_scores features: (batch_size, features-height, features-width), or None
             sentence_input_t = att_features
@@ -99,12 +99,11 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
                 scores_out.append(att_scores)
 
             # Pass thru LSTM
-            state = self.sentence_lstm(sentence_input_t, state)
-            h_t, unused_c_t = state
+            h_state_t, c_state_t = self.sentence_lstm(sentence_input_t, (h_state_t, c_state_t))
             # shapes: batch_size, hidden_size
 
             # Generate topic vector
-            topic = h_t
+            topic = h_state_t
             if self.return_topics:
                 topics_out.append(topic)
 
@@ -119,7 +118,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
             seq_out.append(words)
 
             # Decide stop
-            stop = torch.sigmoid(self.stop_control(h_t)).squeeze(-1) # shape: batch_size
+            stop = torch.sigmoid(self.stop_control(h_state_t)).squeeze(-1) # shape: batch_size
             stops_out.append(stop)
             if free:
                 should_stop |= (stop >= self.stop_threshold)
@@ -155,13 +154,11 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         device = topic.device
 
         # Build initial state
-        initial_h_state = topic
-        initial_c_state = torch.zeros(batch_size, self.hidden_size, device=device)
-        state = (initial_h_state, initial_c_state)
+        h_state_t = topic
+        c_state_t = torch.zeros(batch_size, self.hidden_size, device=device)
 
         # Build initial input
-        start_idx = self.start_idx.to(device).repeat(batch_size)
-        input_t = self.word_embeddings(start_idx)
+        next_words_indices = self.start_idx.to(device).repeat(batch_size)
 
         words_out = []
 
@@ -179,13 +176,17 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
 
 
         for word_j in words_iterator:
+            # Prepare input
+            input_t = self.word_embeddings(next_words_indices)
+            input_t = self.word_embeddings_bn(input_t)
+            # shape: batch_size, embedding_size
+
             # Pass thru Word LSTM
-            state = self.word_lstm(input_t, state)
-            h_t, unused_c_t = state
+            h_state_t, c_state_t = self.word_lstm(input_t, (h_state_t, c_state_t))
             # shapes: batch_size, hidden_size
 
             # Predict words
-            prediction_t = self.word_fc(h_t) # shape: batch_size, vocab_size
+            prediction_t = self.word_fc(h_state_t) # shape: batch_size, vocab_size
             words_out.append(prediction_t)
 
             # Decide if stop
@@ -203,9 +204,6 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
             else:
                 _, next_words_indices = prediction_t.max(dim=1)
                 # shape: batch_size
-
-            input_t = self.word_embeddings(next_words_indices)
-            # shape: batch_size, embedding_size
 
         words_out = torch.stack(words_out, dim=1)
         # shape: batch_size, max_n_words, vocab_size

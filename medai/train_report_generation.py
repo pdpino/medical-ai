@@ -349,17 +349,21 @@ def train_from_scratch(run_name,
     if embedding_size != 100:
         run_name += f'_embsize-{embedding_size}'
     if embedding_kwargs is not None:
-        pretrained = embedding_kwargs.get('pretrained')
-        scale_grad_by_freq = embedding_kwargs.get('scale_grad_by_freq')
-        if pretrained is not None:
-            run_name += f'_emb-{pretrained}'
-            freeze = embedding_kwargs.get('freeze')
-            if freeze:
-                run_name += '-frz'
-            if scale_grad_by_freq:
-                run_name += '-scale'
-        elif scale_grad_by_freq:
-            run_name += '_emb-scale'
+        # Collect all embedding options
+        options = []
+        _pretrained = embedding_kwargs.get('pretrained')
+        if _pretrained is not None:
+            options.append(_pretrained)
+            _freeze = embedding_kwargs.get('freeze')
+            if _freeze:
+                options.append('frz')
+        if embedding_kwargs.get('scale_grad_by_freq'):
+            options.append('scale')
+        if embedding_kwargs.get('batch_normalization'):
+            options.append('bn')
+        # Add options to run_name
+        if len(options) > 0:
+            run_name += f'_emb-{"-".join(options)}'
     if hidden_size != 100:
         run_name += f'_hs-{hidden_size}'
     if 'att' in decoder_name and att_double_bias:
@@ -644,6 +648,8 @@ def parse_args():
                           help='Freeze the pretrained embedding')
     emb_group.add_argument('--emb-scaled', action='store_true',
                           help='embedding param: scale_grad_by_freq')
+    emb_group.add_argument('--emb-bn', action='store_true',
+                          help='Use a batch-normalization after the word-embedding')
 
     lr_group = parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
     lr_group.add_argument('--custom-lr-word-embedding', type=float, default=None,
@@ -693,6 +699,7 @@ def parse_args():
         'pretrained': args.emb_pretrained,
         'freeze': args.emb_freeze,
         'scale_grad_by_freq': args.emb_scaled,
+        'batch_normalization': args.emb_bn,
     }
 
     if args.custom_lr_word_embedding is not None:
