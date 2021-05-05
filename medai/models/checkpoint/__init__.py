@@ -12,6 +12,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Events
 from ignite.handlers import Checkpoint, DiskSaver
 
+from medai.losses.optimizers import create_optimizer
 from medai.models.classification import create_cnn
 from medai.models.report_generation import create_decoder
 from medai.models.segmentation import create_fcn
@@ -225,7 +226,7 @@ def load_compiled_model_report_generation(run_id,
 
     # Create optimizer
     opt_kwargs = metadata['opt_kwargs']
-    optimizer = optim.Adam(model.parameters(), **opt_kwargs)
+    optimizer = create_optimizer(model, **opt_kwargs)
 
     # Create LR scheduler
     lr_scheduler_kwargs = metadata.get('lr_scheduler_kwargs', None)

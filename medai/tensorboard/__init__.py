@@ -20,19 +20,32 @@ class TBWriter:
     def __init__(self, run_id,
                  ignore_metrics=IGNORE_METRICS,
                  dryrun=False,
+                 scalars=True,
                  histogram=False,
+                 histogram_filter=None,
+                 histogram_freq=None,
                  graph=False,
                  workspace_dir=utils.WORKSPACE_DIR, **kwargs):
-        self.writer = SummaryWriter(get_tb_log_folder(run_id, workspace_dir=workspace_dir),
-                                    write_to_disk=not dryrun,
-                                    **kwargs)
 
-        _info = {
-            'dryrun': dryrun,
-            **kwargs,
-        }
-        _info_str = ' '.join(f"{k}={v}" for k, v in _info.items())
-        LOGGER.info('Creating TB: %s', _info_str)
+        self._histogram = histogram
+        self._hist_filter = histogram_filter
+        self._hist_freq = histogram_freq or 1
+        self._graph = graph
+        self._scalars = scalars
+
+        if scalars:
+            self.writer = SummaryWriter(get_tb_log_folder(run_id, workspace_dir=workspace_dir),
+                                        write_to_disk=not dryrun,
+                                        **kwargs)
+            _info = {
+                'dryrun': dryrun,
+                **kwargs,
+            }
+            _info_str = ' '.join(f"{k}={v}" for k, v in _info.items())
+            LOGGER.info('Creating TB: %s', _info_str)
+        else:
+            LOGGER.warning('Not saving scalars to TB')
+            self.writer = None
 
         if histogram or graph:
             self.large_writer = SummaryWriter(
@@ -41,8 +54,10 @@ class TBWriter:
                 **kwargs,
             )
             _info = {
-                'histogram': histogram,
                 'graph': graph,
+                'histogram': histogram,
+                'hist-freq': histogram_freq,
+                'hist-filter': histogram_filter,
             }
             _info_str = ' '.join(f"{k}={v}" for k, v in _info.items())
             LOGGER.info('Creating TB-large: %s', _info_str)
@@ -51,9 +66,6 @@ class TBWriter:
 
         self.ignore_regex = '|'.join(ignore_metrics)
         self.ignore_regex = re.compile(f'({self.ignore_regex})')
-
-        self._histogram = histogram
-        self._graph = graph
 
         # Capitalize so in TB appears first
         self._name_mappings = {
@@ -106,12 +118,21 @@ class TBWriter:
         if not self._histogram:
             return
 
+        if epoch != 1 and epoch % self._hist_freq != 0:
+            # Write always on the first epoch
+            # Write only every _hist_freq epochs
+            return
+
         if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             model = model.module
 
         for name, params in model.named_parameters():
             if params.numel() == 0:
                 continue
+
+            if self._hist_filter is not None:
+                if self._hist_filter not in name:
+                    continue
 
             self.large_writer.add_histogram(name, params, global_step=epoch, walltime=wall_time)
 
@@ -122,6 +143,9 @@ class TBWriter:
 
 
     def write_metrics(self, metrics, run_type, epoch, wall_time):
+        if not self._scalars:
+            return
+
         for name, value in metrics.items():
             if self.ignore_regex.search(name) or not isinstance(value, numbers.Number):
                 continue
@@ -141,4 +165,8 @@ class TBWriter:
 
 
     def close(self):
-        self.writer.close()
+        if self.writer:
+            self.writer.close()
+
+        if self.large_writer:
+            self.large_writer.close()

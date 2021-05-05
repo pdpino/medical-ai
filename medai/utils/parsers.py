@@ -58,15 +58,24 @@ def build_args_augment_(args):
         args.augment_label = parse_str_or_int(args.augment_label)
 
 
-def add_args_tb(parser):
+def add_args_tb(parser, tb_hist_filter=None, tb_hist_freq=1):
     tb_group = parser.add_argument_group('Tensorboard params')
+    tb_group.add_argument('--tb-no-scalars', action='store_true',
+                           help='If present, do not save scalars to TB')
     tb_group.add_argument('--tb-hist', action='store_true',
                            help='If present, save histograms to TB')
+    tb_group.add_argument('--tb-hist-freq', type=int, default=tb_hist_freq,
+                           help='In add_hist, only write every n epochs')
+    tb_group.add_argument('--tb-hist-filter', type=str, default=tb_hist_filter,
+                           help='In add_hist, include only layers matching this string')
 
 
 def build_args_tb_(args):
     args.tb_kwargs = {
+        'scalars': not args.tb_no_scalars,
         'histogram': args.tb_hist,
+        'histogram_filter': args.tb_hist_filter,
+        'histogram_freq': args.tb_hist_freq,
     }
 
 
@@ -97,6 +106,7 @@ def add_args_lr_sch(parser, lr=0.0001, patience=5, factor=0.5, cooldown=0, metri
     lr_group.add_argument('-wd', '--weight-decay', type=float, default=0,
                           help='Weight decay passed to the optimizer')
 
+    return lr_group
 
 def build_args_lr_sch_(args):
     args.lr_sch_kwargs = {

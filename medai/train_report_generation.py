@@ -3,7 +3,6 @@ import logging
 
 import torch
 from torch import nn
-from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
@@ -35,6 +34,7 @@ from medai.models.checkpoint import (
     save_metadata,
     create_cnn_rg,
 )
+from medai.losses.optimizers import create_optimizer
 from medai.tensorboard import TBWriter
 from medai.training.report_generation.flat import get_step_fn_flat
 from medai.training.report_generation.hierarchical import get_step_fn_hierarchical
@@ -308,6 +308,7 @@ def train_from_scratch(run_name,
                        hidden_size=100,
                        lr=0.0001,
                        weight_decay=0,
+                       custom_lr=None,
                        n_epochs=10,
                        medical_correctness=True,
                        med_kwargs={},
@@ -389,6 +390,10 @@ def train_from_scratch(run_name,
             if augment_class is not None:
                 run_name += f'-cls{augment_class}'
     run_name += f'_lr{lr}'
+    if custom_lr is not None:
+        lr_emb = custom_lr.get('word_embeddings')
+        if lr_emb is not None:
+            run_name += f'_lr-emb{lr_emb}'
     if weight_decay != 0:
         run_name += f'_wd{weight_decay}'
     if lr_sch_metric:
@@ -504,8 +509,9 @@ def train_from_scratch(run_name,
     opt_kwargs = {
         'lr': lr,
         'weight_decay': weight_decay,
+        'custom_lr': custom_lr,
     }
-    optimizer = optim.Adam(model.parameters(), **opt_kwargs)
+    optimizer = create_optimizer(model, **opt_kwargs)
 
     # Create lr_scheduler
     if lr_sch_metric:
@@ -538,7 +544,7 @@ def train_from_scratch(run_name,
         'image_size': image_size,
         'hparams': {
             'pretrained_cnn': cnn_run_id.to_dict() if cnn_run_id else None,
-            'batch_size': batch_size,
+            # 'batch_size': batch_size,
         },
         'other_train_kwargs': other_train_kwargs,
         'seed': seed,
@@ -639,9 +645,12 @@ def parse_args():
     emb_group.add_argument('--emb-scaled', action='store_true',
                           help='embedding param: scale_grad_by_freq')
 
+    lr_group = parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
+    lr_group.add_argument('--custom-lr-word-embedding', type=float, default=None,
+                          help='Custom LR for the word_embedding params')
+
     parsers.add_args_early_stopping(parser, metric=_CORRECTNESS_TARGET_METRIC)
-    parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
-    parsers.add_args_tb(parser)
+    parsers.add_args_tb(parser, tb_hist_filter='decoder', tb_hist_freq=10)
     parsers.add_args_augment(parser)
 
     parsers.add_args_hw(parser, num_workers=4)
@@ -685,6 +694,13 @@ def parse_args():
         'freeze': args.emb_freeze,
         'scale_grad_by_freq': args.emb_scaled,
     }
+
+    if args.custom_lr_word_embedding is not None:
+        args.custom_lr = {
+            'word_embeddings': args.custom_lr_word_embedding,
+        }
+    else:
+        args.custom_lr = None
 
 
     return args
@@ -733,6 +749,7 @@ if __name__ == '__main__':
                            hidden_size=ARGS.hidden_size,
                            lr=ARGS.learning_rate,
                            weight_decay=ARGS.weight_decay,
+                           custom_lr=ARGS.custom_lr,
                            n_epochs=ARGS.epochs,
                            medical_correctness=not ARGS.no_med,
                            med_kwargs=ARGS.med_kwargs,

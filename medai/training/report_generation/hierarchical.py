@@ -10,9 +10,10 @@ from medai.losses.out_of_target import OutOfTargetSumLoss
 def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
     """Flattens generated reports.
 
-    generated_words -- tensor of shape (batch_size, n_max_sentences,
-        n_max_words_per_sentence, vocab_size)
-    stops_prediction -- tensor of shape (batch_size, n_max_sentences)
+    Args:
+        generated_words -- tensor of shape
+            (batch_size, n_max_sentences, n_max_words_per_sentence, vocab_size)
+        stops_prediction -- tensor of shape (batch_size, n_max_sentences)
 
     Returns:
         padded tensor of shape batch_size, n_max_words
@@ -28,6 +29,7 @@ def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
         torch.zeros_like(stops_prediction),
     )
     # shape: batch_size, n_max_sentences
+    # Binary indicator of valid sentences: 1 if the sentence is valid, 0 otherwise
 
     for report, valid in zip(generated_words, valid_sentences):
         # report shape: n_sentences, n_words
