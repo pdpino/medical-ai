@@ -14,7 +14,7 @@ from medai.models.report_generation.word_embedding import create_word_embedding
 class HierarchicalLSTMAttDecoderV2(nn.Module):
     def __init__(self, vocab, embedding_size, hidden_size,
                  features_size, teacher_forcing=True, stop_threshold=0.5,
-                 embedding_kwargs={},
+                 embedding_kwargs={}, return_topics=False,
                  attention=True, double_bias=False, **unused_kwargs):
         super().__init__()
 
@@ -22,6 +22,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         self.teacher_forcing = teacher_forcing
         self.start_idx = torch.tensor(START_IDX) # pylint: disable=not-callable
         self.stop_threshold = stop_threshold
+        self.return_topics = return_topics # debug and analysis option
 
         # Attention input
         self._use_attention = attention
@@ -85,6 +86,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         seq_out = []
         stops_out = []
         scores_out = []
+        topics_out = []
 
         for sentence_i in sentences_iterator:
             # Get next input
@@ -103,6 +105,8 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
 
             # Generate topic vector
             topic = h_t
+            if self.return_topics:
+                topics_out.append(topic)
 
             # Generate sentence with topic
             words = self.generate_sentence(topic,
@@ -135,7 +139,12 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         else:
             scores_out = None
 
-        return seq_out, stops_out, scores_out
+        if self.return_topics:
+            topics_out = torch.stack(topics_out, dim=1)
+            # shape: batch_size, n_sentences, hidden_size
+
+        # TODO: use a namedtuple??
+        return seq_out, stops_out, scores_out, topics_out
 
     def generate_sentence(self, topic, sentence_i,
                           reports=None, teacher_forcing=True, free=False, max_words=1000):
