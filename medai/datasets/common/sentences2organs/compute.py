@@ -34,7 +34,10 @@ HEART_MENTIONS = \
     load_phrases('cardiomegaly') + \
     load_phrases('enlarged_cardiomediastinum') + \
     ['heart failure', 'chf', 'vascular congestion', 'vascular prominence'] + \
-    ['heart', 'aorta', 'aortic', ' cardio', 'mediastinal', 'mediastinum']
+    [
+        'heart', 'aorta', 'aortic', ' cardio', 'mediastinal', 'mediastinum', 'vascular',
+        'vasculature', 'vascularity', 'cardiac',
+    ]
 
 REGEX_HEART = re.compile('|'.join(HEART_MENTIONS))
 
@@ -62,6 +65,11 @@ LUNGS_MENTIONS += [
     'the lung',
     'pleural space',
     'pleural air collection',
+    'midlung',
+    'alveolar',
+    'pulmonary',
+    'pleural',
+    'costophrenic',
 ]
 
 
@@ -102,6 +110,13 @@ def regex_mentions_lungs(sentence):
 INTRA_MENTIONS = [
     'intrathoracic',
     'central vascular',
+    'cardiopulmonary',
+    'bronchovascular',
+    'thorax',
+    'thoracic',
+    'rib',
+    'chest',
+    'sternotomy',
 ]
 
 REGEX_INTHRATORACIC = re.compile('|'.join(INTRA_MENTIONS))
@@ -246,3 +261,23 @@ def save_sentences_with_organs(dataset_dir, sentences, show=False, ignore_all_on
     print(f'Sentence-2-organs saved to {fpath}')
 
     return df_organs, errors
+
+
+def get_main_organ(one_hot, sentence, warnings=None):
+    """Given a one-hot array indicating organs, return the main organ indicated."""
+    background, heart, right_lung, left_lung = one_hot
+
+    neutral_sentences = warnings['all-empty'] if warnings is not None else set()
+
+    if background == 1:
+        if sentence in neutral_sentences:
+            return 'neutral'
+        return 'all'
+    if heart + right_lung + left_lung == 3:
+        return 'thorax'
+    if right_lung + left_lung >= 1:
+        return 'lungs'
+    if heart:
+        return 'heart'
+    print('Case not covered: ', one_hot, sentence)
+    return 'unk'
