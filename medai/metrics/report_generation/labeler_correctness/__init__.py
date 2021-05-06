@@ -109,7 +109,8 @@ def _attach_labeler(engine, labeler, basename, usage=None,
     return metric_obj
 
 
-def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None, val_steps=None,
+def attach_medical_correctness(trainer, validator, vocab,
+                               after=None, steps=None, val_after=None, val_steps=None,
                                device='cuda'):
     """Attaches medical correctness metrics to engines.
 
@@ -124,9 +125,12 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
         vocab -- dataset vocabulary (dict)
         device -- passed to Metrics
     """
+    val_after = val_after if val_after is not None else after
+    val_steps = val_steps if val_steps is not None else steps
     info = {
-        'after': after,
+        'train_after': after,
         'train_steps': steps,
+        'val_after': val_after,
         'val_steps': val_steps,
     }
     info_str = ' '.join(f"{k}={v}" for k, v in info.items())
@@ -140,12 +144,9 @@ def attach_medical_correctness(trainer, validator, vocab, after=None, steps=None
         )
         return
 
-    if after or steps or val_steps:
-        train_usage = EveryNAfterMEpochs(steps, after, trainer)
-        val_usage = EveryNAfterMEpochs(val_steps or steps, after, trainer)
-    else:
-        train_usage = None
-        val_usage = None
+    train_usage = EveryNAfterMEpochs(steps, after, trainer) if after or steps else None
+    val_usage = EveryNAfterMEpochs(val_steps, val_after, trainer) \
+        if val_after or val_steps else None
 
     for engine in (trainer, validator):
         if engine is None:

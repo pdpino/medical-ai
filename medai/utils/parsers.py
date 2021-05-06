@@ -166,17 +166,20 @@ def add_args_med(parser):
     med_group.add_argument('--no-med', action='store_true',
                            help='If present, do not use medical-correctness metrics')
     med_group.add_argument('--med-after', type=int, default=None,
-                           help='Only start using med-metrics after N epochs')
+                           help='Start using med-metrics after N epochs (in training)')
     med_group.add_argument('--med-steps', type=int, default=None,
-                           help='Only run med-metrics every N epochs (in training)')
+                           help='Run med-metrics every N epochs (in training)')
+    med_group.add_argument('--med-val-after', type=int, default=None,
+                           help='Start using med-metrics after N epochs (in validation)')
     med_group.add_argument('--med-val-steps', type=int, default=None,
-                           help='Only run med-metrics every N epochs (in training)')
+                           help='Run med-metrics every N epochs (in validation)')
 
 
 def build_args_med_(args):
     args.med_kwargs = {
         'after': args.med_after,
         'steps': args.med_steps,
+        'val_after': args.med_val_after,
         'val_steps': args.med_val_steps,
     }
 
