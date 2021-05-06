@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 
-from medai.utils.nlp import PAD_IDX
+from medai.utils.nlp import PAD_IDX, END_OF_SENTENCE_IDX
 from medai.losses.out_of_target import OutOfTargetSumLoss
 
 
@@ -23,6 +23,21 @@ def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
     generated_words = generated_words.argmax(dim=-1)
     # shape: batch_size, n_max_sentences, n_max_words_per_sentence
 
+    batch_size, n_max_sentences = generated_words.size()[:2]
+
+    # Create dummy end-of-sentence token array
+    # pylint: disable=not-callable
+    extra_end_of_sentence = torch.tensor(
+        [END_OF_SENTENCE_IDX],
+        device=generated_words.device,
+    ).expand(batch_size, n_max_sentences, -1)
+    # shape: batch_size, n_max_sentences, 1
+
+    # Ensure all sentences end with a dot (END_OF_SENTENCE), by concating the dummy array
+    # The extra dots are eliminated anyway
+    generated_words = torch.cat((generated_words, extra_end_of_sentence), dim=-1)
+    # shape: batch_size, n_max_sentences, n_max_words_per_sentence + 1
+
     valid_sentences = torch.where(
         stops_prediction < threshold,
         torch.ones_like(stops_prediction),
@@ -32,13 +47,23 @@ def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
     # Binary indicator of valid sentences: 1 if the sentence is valid, 0 otherwise
 
     for report, valid in zip(generated_words, valid_sentences):
-        # report shape: n_sentences, n_words
+        # report shape: n_sentences, n_words+1
         # valid shape: n_sentences
 
         report = report[valid.nonzero(as_tuple=True)]
-        # shape: n_valid_sentences, n_words
+        # shape: n_valid_sentences, n_words+1
 
-        report = report[(report != PAD_IDX).nonzero(as_tuple=True)]
+        dot_positions = (report == END_OF_SENTENCE_IDX).type(torch.uint8)
+        # shape: n_valid_sentences, n_words+1
+        # has 1s in positions with a dot, 0s elsewhere
+
+        dot_positions = torch.cumsum(torch.cumsum(dot_positions, dim=1), dim=1)
+        # shape: n_valid_sentences, n_words+1
+        # will have 0s in the first sentence, 1 in the first dot, and >1 afterwards
+        # Two cumsums are needed so there are no 1s right after the first dot
+        # REVIEW: is there are more efficient and elegant way to do this? Avoid for loops!
+
+        report = report[dot_positions <= 1]
         # shape: n_total_words
 
         texts.append(report)
@@ -140,6 +165,9 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
         if training:
             total_loss.backward()
             optimizer.step()
+
+        generated_words = generated_words.detach()
+        stop_prediction = stop_prediction.detach()
 
         flat_reports_gen = _flatten_gen_reports(generated_words, stop_prediction)
         flat_reports = _flatten_gt_reports(reports)
