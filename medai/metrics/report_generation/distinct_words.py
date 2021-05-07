@@ -22,15 +22,15 @@ class DistinctWords(Metric):
         """Update on each step.
 
         output:
-            generated_words -- array of generated words,
-                shape (batch_size, *)
+            clean_reports -- list of lists of generated words,
+                shape (batch_size, n_words_per_report)
             ground_truth -- unused
         """
-        generated_words, _ = output
+        clean_reports, _ = output
 
-        for word in generated_words.view(-1):
-            word = int(word.item())
-            self.words_seen[word] += 1
+        for report in clean_reports:
+            for word in report:
+                self.words_seen[word] += 1
 
     @sync_all_reduce('words_seen')
     def compute(self):

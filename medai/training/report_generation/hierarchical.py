@@ -1,8 +1,7 @@
 import torch
 from torch import nn
-from torch.nn.utils.rnn import pad_sequence
 
-from medai.utils.nlp import PAD_IDX, END_OF_SENTENCE_IDX
+from medai.utils.nlp import PAD_IDX, END_OF_SENTENCE_IDX, END_IDX
 from medai.losses.out_of_target import OutOfTargetSumLoss
 
 
@@ -16,7 +15,7 @@ def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
         stops_prediction -- tensor of shape (batch_size, n_max_sentences)
 
     Returns:
-        padded tensor of shape batch_size, n_max_words
+        list of lists of shape batch_size, n_words_per_report
     """
     texts = []
 
@@ -63,12 +62,16 @@ def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
         # Two cumsums are needed so there are no 1s right after the first dot
         # REVIEW: is there are more efficient and elegant way to do this? Avoid for loops!
 
+        # Keep only words before a dot
         report = report[dot_positions <= 1]
-        # shape: n_total_words
+        # shape: n_words_before_dot
 
-        texts.append(report)
+        report = report[(report != END_IDX) & (report != PAD_IDX)]
+        # shape: n_clean_words
 
-    return pad_sequence(texts, batch_first=True)
+        texts.append(report.tolist())
+
+    return texts
 
 
 def _flatten_gt_reports(reports):
@@ -78,14 +81,14 @@ def _flatten_gt_reports(reports):
         reports -- tensor of shape (batch_size, n_max_sentences,
             n_max_words_per_sentence)
     Returns:
-        flatten_reports, tensor of shape (batch_size, n_max_words)
+        list of lists of shape (batch_size, n_words_per_report)
     """
     texts = [
-        report[(report != PAD_IDX).nonzero(as_tuple=True)]
+        report[(report != PAD_IDX).nonzero(as_tuple=True)].tolist()
         for report in reports
     ]
 
-    return pad_sequence(texts, batch_first=True)
+    return texts
 
 
 def get_step_fn_hierarchical(model, optimizer=None, training=True,
@@ -97,7 +100,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
     stop_loss_fn = nn.BCELoss()
     att_loss_fn = OutOfTargetSumLoss()
 
-    assert not (free and training), 'Cant set training=True and free=True'
+    assert not (free and training), 'Cannot set training=True and free=True'
 
     def step_fn(unused_engine, data_batch):
         # Images
@@ -168,19 +171,16 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
 
         generated_words = generated_words.detach()
         stop_prediction = stop_prediction.detach()
-
-        flat_reports_gen = _flatten_gen_reports(generated_words, stop_prediction)
-        flat_reports = _flatten_gt_reports(reports)
+        if gen_masks is not None:
+            gen_masks = gen_masks.detach()
 
         return {
             'loss': batch_loss,
             'word_loss': word_loss,
             'stop_loss': stop_loss,
             'att_loss': att_loss,
-            'words_scores': generated_words,
-            # 'reports': reports,
-            'flat_reports_gen': flat_reports_gen, # shape: batch_size, n_words
-            'flat_reports': flat_reports, # shape: batch_size, n_words
+            'flat_clean_reports_gen': _flatten_gen_reports(generated_words, stop_prediction),
+            'flat_clean_reports_gt': _flatten_gt_reports(reports),
             'gt_masks': gt_masks,
             'gen_masks': gen_masks,
             'gt_stops': stop_ground_truth,

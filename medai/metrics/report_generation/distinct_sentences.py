@@ -9,10 +9,10 @@ class DistinctSentences(Metric):
     """Counts amount of different sentences generated.
 
     Note:
-        The use of sentence_iterator() is not very efficient for the hierarchical-decoder:
+        The use of sentence_iterator is not very efficient for the hierarchical-decoder:
             - sentences were already separated in the model output
             - sentences were flattened into a flat report, to comply with flat-decoder
-            - the flat report is split with sentence_iterator() again
+            - the flat report is split with sentence_iterator again
     """
     @reinit__is_reduced
     def reset(self):
@@ -25,13 +25,13 @@ class DistinctSentences(Metric):
         """Update on each step.
 
         output:
-            reports_gen -- array of generated words,
-                shape (batch_size, n_words)
+            clean_reports -- list of lists of generated words,
+                shape (batch_size, n_words_per_report)
             ground_truth -- unused
         """
-        reports_gen, _ = output
+        clean_reports, _ = output
 
-        for report in reports_gen:
+        for report in clean_reports:
             for sentence in sentence_iterator(report):
                 sentence = ' '.join(str(word) for word in sentence)
                 self.sentences_seen[sentence] += 1

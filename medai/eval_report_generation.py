@@ -27,6 +27,8 @@ from medai.utils import (
     timeit_main,
     RunId,
 )
+from medai.utils.nlp import attach_unclean_report_checker
+
 
 LOGGER = logging.getLogger('medai.rg.eval')
 
@@ -41,6 +43,7 @@ def _evaluate_model_in_dataloader(
         medical_correctness=True,
         att_vs_masks=False,
         free=False,
+        check_unclean=True,
         device='cuda'):
     """Evaluate a report-generation model on a dataloader."""
     dataset = dataloader.dataset
@@ -60,6 +63,7 @@ def _evaluate_model_in_dataloader(
                                 supervise_attention=supervise_attention,
                                 free=free,
                                 device=device))
+    attach_unclean_report_checker(engine, check=check_unclean)
     attach_losses_rg(engine, hierarchical=hierarchical, supervise_attention=supervise_attention)
     attach_metrics_report_generation(engine,
                                      free=free,
@@ -91,6 +95,7 @@ def evaluate_model_and_save(
         att_vs_masks=False,
         n_epochs=1,
         free_values=[False, True],
+        check_unclean=True,
         ):
     """Evaluates a model in ."""
     evaluate_kwargs = {
@@ -100,6 +105,7 @@ def evaluate_model_and_save(
         'att_vs_masks': att_vs_masks,
         'supervise_attention': supervise_attention,
         'n_epochs': n_epochs,
+        'check_unclean': check_unclean,
     }
 
     for free_value in free_values:
@@ -137,6 +143,7 @@ def evaluate_run(run_id,
                  medical_correctness=True,
                  max_samples=None,
                  override=False,
+                 check_unclean=True,
                  ):
     """Evaluates a saved run."""
     # Check if overriding
@@ -213,6 +220,7 @@ def evaluate_run(run_id,
         att_vs_masks=supervise_attention,
         n_epochs=n_epochs,
         free_values=free_values,
+        check_unclean=check_unclean,
     )
 
 
@@ -241,6 +249,9 @@ def parse_args():
                         help='Whether to override previous results')
     parser.add_argument('--no-med', action='store_true',
                         help='If present, do not use medical-correctness metrics')
+    parser.add_argument('--skip-check-unclean', action='store_true',
+                        help='If present, do not check for unclean reports in the outputs')
+
     parsers.add_args_free_values(parser)
     parsers.add_args_hw(parser, num_workers=4)
 
@@ -281,6 +292,7 @@ if __name__ == '__main__':
                  max_samples=ARGS.max_samples,
                  override=ARGS.override,
                  batch_size=ARGS.batch_size,
+                 check_unclean=not ARGS.skip_check_unclean,
                 #  frontal_only=ARGS.frontal_only,
                 #  image_size=ARGS.image_size,
                 #  norm_by_sample=ARGS.norm_by_sample,

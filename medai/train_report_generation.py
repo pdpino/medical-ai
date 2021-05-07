@@ -54,6 +54,7 @@ from medai.utils.handlers import (
     attach_early_stopping,
     attach_lr_scheduler_handler,
 )
+from medai.utils.nlp import attach_unclean_report_checker
 
 
 LOGGER = logging.getLogger('medai.rg.train')
@@ -89,6 +90,7 @@ def train_model(run_id,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
                 print_metrics=None,
+                check_unclean=True,
                 device='cuda',
                ):
     # Prepare run stuff
@@ -118,6 +120,7 @@ def train_model(run_id,
         supervise_attention=supervise_attention,
         device=device,
     )
+    attach_unclean_report_checker(validator, check=check_unclean)
     attach_metrics_report_generation(validator, device=device)
 
     # Create trainer engine
@@ -136,6 +139,7 @@ def train_model(run_id,
         'max_epochs': initial_epoch + n_epochs,
         'epoch_length': len(train_dataloader),
     })
+    attach_unclean_report_checker(trainer, check=check_unclean)
     attach_losses_rg(
         trainer,
         hierarchical=hierarchical,
@@ -334,7 +338,9 @@ def train_from_scratch(run_name,
                        multiple_gpu=False,
                        num_workers=2,
                        device='cuda',
+                       save_model=True,
                        seed=None,
+                       check_unclean=True,
                        print_metrics=None,
                        ):
     """Train a model from scratch."""
@@ -423,6 +429,8 @@ def train_from_scratch(run_name,
             raise Exception('Attention supervision is only available for hierarchical decoders')
         if not frontal_only:
             raise Exception('Attention supervision is only available with frontal_only images')
+        if 'h-lstm-att' not in decoder_name:
+            raise Exception('Attention supervision is only available for h-lstm-att decoders')
 
 
     # Load data
@@ -568,6 +576,8 @@ def train_from_scratch(run_name,
                 tb_kwargs=tb_kwargs,
                 device=device,
                 print_metrics=print_metrics,
+                check_unclean=check_unclean,
+                save_model=save_model,
                 **other_train_kwargs,
                 )
 
@@ -593,6 +603,10 @@ def parse_args():
                         help='Set a seed (initial run only)')
     parser.add_argument('--print-metrics', type=str, nargs='*', default=None,
                         help='Additional metrics to print to stdout')
+    parser.add_argument('--check-unclean', action='store_true',
+                        help='If present, check for unclean reports in the outputs')
+    parser.add_argument('--dont-save', action='store_true',
+                        help='If present, do not save model checkpoints to disk')
 
     decoder_group = parser.add_argument_group('Decoder')
     decoder_group.add_argument('-dec', '--decoder', type=str,
@@ -783,5 +797,7 @@ if __name__ == '__main__':
                            num_workers=ARGS.num_workers,
                            device=DEVICE,
                            seed=ARGS.seed,
+                           save_model=not ARGS.dont_save,
+                           check_unclean=ARGS.check_unclean,
                            print_metrics=ARGS.print_metrics,
                            )

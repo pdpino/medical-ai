@@ -3,6 +3,7 @@ from collections import Counter
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
+from ignite.engine import Events
 import numpy as np
 
 # Common tokens
@@ -136,8 +137,8 @@ class ReportReader:
         ]
 
 
-def trim_rubbish(report):
-    """Trims padding and END token of a report.
+def remove_garbage_tokens(report):
+    """Removes PAD and END tokens of a report.
 
     Receives a report list/array/tensor of word indexes.
 
@@ -152,27 +153,22 @@ def trim_rubbish(report):
     if report is None or len(report) == 0:
         return []
 
-    report = report[(report != PAD_IDX).nonzero(as_tuple=True)]
-
-    if len(report) > 0 and report[-1] == END_IDX:
-        report = report[:-1]
+    report = report[(report != PAD_IDX) & (report != END_IDX)]
 
     return report.tolist()
 
 
 def indexes_to_strings(candidate, ground_truth):
-    """Receives two word-indexes tensors, and returns candidate and gt strings.
+    """Receives two word-indexes lists and returns them as space-joined strings.
 
     Args:
-        candidate -- torch.Tensor of shape n_gen_words
-        ground_truth -- torch.Tensor of shape n_gt_words
+        candidate -- list of shape n_gen_words
+        ground_truth -- list of shape n_gt_words
     Returns:
-        candidate_str, ground_truth_strs
-        - candidate_str: string of concatenated indexes
-        - ground_truth_strs: list of strings of concatenated indexes
+        (candidate_str, ground_truth_str), both are strings of concatenated indexes
     """
-    candidate = trim_rubbish(candidate)
-    ground_truth = trim_rubbish(ground_truth)
+    assert isinstance(candidate, list), f'Gen report is not a list, got {type(candidate)}'
+    assert isinstance(ground_truth, list), f'GT report is not a list, got {type(ground_truth)}'
 
     # Join as string
     candidate = ' '.join(str(val) for val in candidate)
@@ -185,7 +181,7 @@ def sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
     """Splits a flat_report into sentences, iterating on the fly.
 
     Args:
-        flat_report: tensor of shape (n_words)
+        flat_report: tensor or list of shape (n_words)
 
     Yields:
         Sentence as list of word indexes
@@ -195,7 +191,12 @@ def sentence_iterator(flat_report, end_idx=END_OF_SENTENCE_IDX):
 
     sentence_so_far = []
     for word in flat_report:
-        if word in (PAD_IDX, END_IDX):
+        if word in (END_IDX,):
+            LOGGER.error('Found END_IDX in clean report')
+            break
+
+        if word in (PAD_IDX,):
+            LOGGER.error('Found PAD_IDX in clean report')
             continue
 
         sentence_so_far.append(word)
@@ -247,3 +248,72 @@ def get_sentences_appearances(reports):
             sentences_counter[sentence] += 1
 
     return sentences_counter
+
+
+def attach_unclean_report_checker(engine, check=True, terminate=True):
+    """Checks every iteration if the reports outputed are clean."""
+    if not check:
+        LOGGER.info('NOT attaching unclean-report-checker')
+        return
+
+    LOGGER.info('Attaching unclean-report-checker')
+
+    _UNALLOWED_TOKENS = set([END_IDX, PAD_IDX])
+
+    @engine.on(Events.ITERATION_COMPLETED)
+    def _check_unallowed_tokens(engine):
+        output = engine.state.output
+        filenames = engine.state.batch.report_fnames
+        reports_gt = output['flat_clean_reports_gt']
+        reports_gen = output['flat_clean_reports_gen']
+
+        if not isinstance(reports_gt, list):
+            LOGGER.error('Clean GT reports are not list, got %s', type(reports_gt))
+        if not isinstance(reports_gen, list):
+            LOGGER.error('Clean Gen reports are not list, got %s', type(reports_gen))
+
+        errors = []
+        type_errors = set()
+
+        for report_gen, report_gt, fname in zip(reports_gen, reports_gt, filenames):
+            if not isinstance(report_gen, list):
+                type_errors.add(('gen-not-list', type(report_gen)))
+            if not isinstance(report_gt, list):
+                type_errors.add(('gt-not-list', type(report_gt)))
+
+            if isinstance(report_gen, torch.Tensor):
+                report_gen = report_gen.tolist()
+            if isinstance(report_gt, torch.Tensor):
+                report_gt = report_gt.tolist()
+
+            tokens_gen = set(report_gen)
+            tokens_gt = set(report_gt)
+
+            gen_unallowed = [
+                unallowed_token
+                for unallowed_token in _UNALLOWED_TOKENS
+                if unallowed_token in tokens_gen
+            ]
+
+            gt_unallowed = [
+                unallowed_token
+                for unallowed_token in _UNALLOWED_TOKENS
+                if unallowed_token in tokens_gt
+            ]
+
+            if gt_unallowed:
+                errors.append((fname, 'gt', gt_unallowed))
+            if gen_unallowed:
+                errors.append((fname, 'gen', gen_unallowed))
+
+        if type_errors:
+            LOGGER.error('Found type errors: %s', type_errors)
+
+        if errors:
+            LOGGER.error(
+                'Found unallowed tokens in clean reports: %s',
+                errors,
+            )
+
+            if terminate:
+                engine.terminate()

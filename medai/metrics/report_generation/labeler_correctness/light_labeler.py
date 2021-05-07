@@ -32,13 +32,14 @@ class CacheHitCounter:
         return self._misses, self._unique_misses, self._total
 
 
-_IGNORE_TOKENS = ignore=('END', ',', '.', 'xxxx', '&lt', '/', '(', ')', 'UNK', '-')
+_IGNORE_TOKENS = ('END', 'PAD', '.', 'xxxx', '&lt', '/', '(', ')', 'UNK', '-') # ','
 def clean_sentence(sentence):
     sentence = [
         token
         for token in sentence
         if token not in _IGNORE_TOKENS
     ]
+    # Remove consecutive equal tokens
     return [
         token
         for i, token in enumerate(sentence)
@@ -131,17 +132,7 @@ class LightLabeler(ABC):
 
     def _split_sentences_and_label(self, reports):
         """Split sentences, label them and apply union."""
-        # Version 1: TODO: which is faster? v1 or v2?
-        # (v1 is not tested)
-        # splitted_reports = [
-        #     [
-        #         self._report_reader.idx_to_text(sentence)
-        #         for sentence in split_sentences_and_pad(report, pad=False)
-        #     ]
-        #     for report in reports
-        # ]
-
-        # Version 2
+        # Split reports into sentences
         splitted_reports = [
             [
                 self._report_reader.idx_to_text(clean_sentence(sentence))

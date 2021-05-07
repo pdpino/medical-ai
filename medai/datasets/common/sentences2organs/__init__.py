@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 
 from medai.datasets.common.constants import JSRT_ORGANS
-from medai.utils.nlp import ReportReader, trim_rubbish
+from medai.utils.nlp import ReportReader, remove_garbage_tokens
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class _SentenceToOrgans:
             self._sentence_to_organ_mapping[sentence_hash] = organs
 
     def _sentence_to_hash(self, sentence):
-        sentence = trim_rubbish(sentence)
+        sentence = remove_garbage_tokens(sentence)
         return ','.join(str(word_idx) for word_idx in sentence)
 
     def get_organs(self, sentence):
@@ -42,8 +42,6 @@ class _SentenceToOrgans:
         Args:
             sentence -- tensor of word indices, shape n_words
         """
-        sentence = sentence.tolist()
-
         sentence_hash = self._sentence_to_hash(sentence)
 
         if sentence_hash not in self._sentence_to_organ_mapping:

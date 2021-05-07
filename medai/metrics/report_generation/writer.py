@@ -4,7 +4,7 @@ from ignite.engine import Events
 
 from medai.utils.csv import CSVWriter
 from medai.utils.files import get_results_folder
-from medai.utils.nlp import ReportReader, trim_rubbish
+from medai.utils.nlp import ReportReader
 
 
 LOGGER = logging.getLogger(__name__)
@@ -46,29 +46,32 @@ def attach_report_writer(engine, run_id, vocab, assert_n_samples=None, free=Fals
     def _save_text(engine):
         output = engine.state.output
         filenames = engine.state.batch.report_fnames
-        gt_reports = output['flat_reports']
-        gen_reports = output['flat_reports_gen']
+        gt_reports = output['flat_clean_reports_gt']
+        gen_reports = output['flat_clean_reports_gen']
 
         epoch = engine.state.epoch
         dataset_type = engine.state.dataloader.dataset.dataset_type
 
         # Save result
-        for report, generated, filename in zip(
+        for report_idxs, generated_idxs, filename in zip(
             gt_reports,
             gen_reports,
             filenames,
-        ):
-            # Remove padding and END token
-            report = trim_rubbish(report)
-            generated = trim_rubbish(generated)
+            ):
+            # Convert to text
+            report = report_reader.idx_to_text(report_idxs)
+            generated = report_reader.idx_to_text(generated_idxs)
 
-            # Pass to text
-            report = report_reader.idx_to_text(report)
-            generated = report_reader.idx_to_text(generated)
-
-            # HACK: If text is empty, may be loaded as NaN and produce errors
+            # HOTFIX: If text is empty, may be loaded as NaN and produce errors
             if generated == '':
                 generated = '--'
+            if report == '':
+                LOGGER.warning(
+                    'Empty GT report (%s): %s',
+                    filename,
+                    report_idxs,
+                )
+                report = '--'
 
             # Add quotes to avoid issues with commas
             report = f'"{report}"'

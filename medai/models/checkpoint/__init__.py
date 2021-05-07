@@ -170,10 +170,11 @@ def load_compiled_model(run_id, **kwargs):
         'cls-seg': load_compiled_model_cls_seg,
         'det': load_compiled_model_detection_seg,
         'seg': load_compiled_model_segmentation,
+        'rg': load_compiled_model_report_generation,
     }
 
     if run_id.task not in _load_fns:
-        raise Exception('Task not found:', run_id.task)
+        raise Exception(f'Task not found in loaders: {run_id.task}')
     load_fn = _load_fns[run_id.task]
     return load_fn(run_id, **kwargs)
 
@@ -257,6 +258,7 @@ def attach_checkpoint_saver(run_id,
                             ):
     """Attach a Checkpoint handler to a validator to persist to disk a CompiledModel."""
     if dryrun:
+        LOGGER.warning('Checkpoint dry run: not saving model to disk')
         return
 
     if metric is not None:

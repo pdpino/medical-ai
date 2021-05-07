@@ -2,11 +2,10 @@ def get_flat_reports(outputs):
     """Transforms the output to arrays of words indexes.
 
     Args:
-        outputs: dict with at least:
-            ['flat_reports']: shape: batch_size, n_words
-            ['flat_reports_gen']: shape: batch_size, n_words
+        outputs: dict with keys 'flat_clean_reports_gt' and 'flat_clean_reports_gen'.
+            Both are lists of lists with shape (batch_size, n_words_per_report)
     """
-    flat_reports = outputs['flat_reports']
-    flat_reports_gen = outputs['flat_reports_gen']
+    gen = outputs['flat_clean_reports_gen']
+    gt = outputs['flat_clean_reports_gt']
 
-    return flat_reports_gen, flat_reports
+    return gen, gt
