@@ -54,10 +54,10 @@ class ImageNetClsSegModel(nn.Module):
         # shape: batch_size, n_features, f-height, f-width
 
         classification = self.classifier(x)
-        # shape: batch_size, n_diseases
+        # shape: batch_size, n_cl_diseases
 
         segmentation = self.segmentator(x)
-        # shape: batch_size, n_diseases, height, width
+        # shape: batch_size, n_seg_labels, height, width
 
         if _ASSERT_IN_OUT_IMAGE_SIZE:
             out_size = segmentation.size()[-2:]
