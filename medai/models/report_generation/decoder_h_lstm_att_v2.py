@@ -4,6 +4,7 @@
 from itertools import count
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from medai.models.report_generation.att_2layer import AttentionTwoLayers
 from medai.models.report_generation.att_no_att import NoAttention
@@ -12,9 +13,12 @@ from medai.models.report_generation.word_embedding import create_word_embedding
 
 
 class HierarchicalLSTMAttDecoderV2(nn.Module):
+    implemented_dropout = True
+
     def __init__(self, vocab, embedding_size, hidden_size,
                  features_size, teacher_forcing=True, stop_threshold=0.5,
                  embedding_kwargs={}, return_topics=False,
+                 dropout_out=0, dropout_recursive=0,
                  attention=True, double_bias=False, **unused_kwargs):
         super().__init__()
 
@@ -52,6 +56,9 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         )
         self.word_lstm = nn.LSTMCell(embedding_size, hidden_size)
         self.word_fc = nn.Linear(hidden_size, len(vocab))
+
+        self.dropout_out = dropout_out
+        self.dropout_recursive = dropout_recursive
 
     def forward(self, features, reports=None, free=False, max_sentences=100, max_words=1000):
         # features shape: batch_size, features_size, height, width
@@ -185,8 +192,13 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
             h_state_t, c_state_t = self.word_lstm(input_t, (h_state_t, c_state_t))
             # shapes: batch_size, hidden_size
 
+            # Pass thru out-dropout, if any
+            out_h_t = h_state_t
+            if self.dropout_out:
+                out_h_t = F.dropout(out_h_t, self.dropout_out, training=self.training)
+
             # Predict words
-            prediction_t = self.word_fc(h_state_t) # shape: batch_size, vocab_size
+            prediction_t = self.word_fc(out_h_t) # shape: batch_size, vocab_size
             words_out.append(prediction_t)
 
             # Decide if stop
@@ -204,6 +216,11 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
             else:
                 _, next_words_indices = prediction_t.max(dim=1)
                 # shape: batch_size
+
+            # Apply recursive dropout
+            if self.dropout_recursive:
+                h_state_t = F.dropout(h_state_t, self.dropout_recursive, training=self.training)
+                c_state_t = F.dropout(c_state_t, self.dropout_recursive, training=self.training)
 
         words_out = torch.stack(words_out, dim=1)
         # shape: batch_size, max_n_words, vocab_size
