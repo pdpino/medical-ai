@@ -103,6 +103,8 @@ def add_args_lr_sch(parser, lr=0.0001, patience=5, factor=0.5, cooldown=0, metri
                           help='Factor to multiply the LR on each update')
     lr_group.add_argument('--lr-cooldown', type=int, default=cooldown,
                           help='Cooldown for lr-scheduler')
+    lr_group.add_argument('--lr-min', type=float, default=0,
+                          help='Min LR to reach if using scheduler')
     lr_group.add_argument('-wd', '--weight-decay', type=float, default=0,
                           help='Weight decay passed to the optimizer')
 
@@ -116,6 +118,7 @@ def build_args_lr_sch_(args):
         'patience': args.lr_patience,
         'cooldown': args.lr_cooldown,
         'verbose': True,
+        'min_lr': args.lr_min,
     }
 
 

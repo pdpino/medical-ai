@@ -95,7 +95,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
                              free=False, device='cuda',
                              supervise_attention=False,
                              supervise_sentences=False,
-                             word_lambda=1, stop_lambda=1, att_lambda=1, sentence_lambda=1,
+                             lambda_word=1, lambda_stop=1, lambda_att=1, lambda_sent=1,
                              max_words=50, max_sentences=20, **unused_kwargs):
     """Creates a step function for an Engine, considering a hierarchical dataloader."""
     word_loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
@@ -150,11 +150,11 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
             stop_loss = stop_loss_fn(stop_prediction, stop_ground_truth)
 
             # Calculate full loss
-            total_loss = word_lambda * word_loss + stop_lambda * stop_loss
+            total_loss = lambda_word * word_loss + lambda_stop * stop_loss
 
             if supervise_attention:
                 att_loss = att_loss_fn(gen_masks, gt_masks, stop_ground_truth)
-                total_loss += att_lambda * att_loss
+                total_loss += lambda_att * att_loss
             else:
                 att_loss = -1
 
@@ -168,7 +168,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
                 sentence_loss = sentence_loss[(stop_ground_truth == 0)].mean()
                 # shape: 1
 
-                total_loss += sentence_lambda * sentence_loss
+                total_loss += lambda_sent * sentence_loss
             else:
                 sentence_loss = -1
 

@@ -101,6 +101,10 @@ def train_model(run_id,
                 early_stopping=True,
                 early_stopping_kwargs={},
                 lr_sch_metric='loss',
+                lambda_word=1,
+                lambda_stop=1,
+                lambda_att=1,
+                lambda_sent=1,
                 print_metrics=None,
                 check_unclean=True,
                 device='cuda',
@@ -121,29 +125,30 @@ def train_model(run_id,
     else:
         get_step_fn = get_step_fn_flat
 
+    step_kwargs = {
+        'supervise_attention': supervise_attention,
+        'supervise_sentences': supervise_sentences,
+        'lambda_word': lambda_word,
+        'lambda_stop': lambda_stop,
+        'lambda_att': lambda_att,
+        'lambda_sent': lambda_sent,
+        'device': device,
+    }
+    loss_attacher_kwargs = {
+        'hierarchical': hierarchical,
+        'supervise_attention': supervise_attention,
+        'supervise_sentences': supervise_sentences,
+        'device': device,
+    }
+
     # Create validator engine
-    validator = Engine(get_step_fn(model,
-                                   training=False,
-                                   supervise_attention=supervise_attention,
-                                   supervise_sentences=supervise_sentences,
-                                   device=device))
-    attach_losses_rg(
-        validator,
-        hierarchical=hierarchical,
-        supervise_attention=supervise_attention,
-        supervise_sentences=supervise_sentences,
-        device=device,
-    )
+    validator = Engine(get_step_fn(model, training=False, **step_kwargs))
+    attach_losses_rg(validator, **loss_attacher_kwargs)
     attach_unclean_report_checker(validator, check=check_unclean)
     attach_metrics_report_generation(validator, device=device)
 
     # Create trainer engine
-    trainer = Engine(get_step_fn(model,
-                                 optimizer=optimizer,
-                                 training=True,
-                                 supervise_attention=supervise_attention,
-                                 supervise_sentences=supervise_sentences,
-                                 device=device))
+    trainer = Engine(get_step_fn(model, optimizer=optimizer, training=True, **step_kwargs))
     # Set state dict
     # Since the state is explictly set here:
     #  - n_epochs must not be passed to `trainer.run()`, or this state will be overriden
@@ -155,13 +160,7 @@ def train_model(run_id,
         'epoch_length': len(train_dataloader),
     })
     attach_unclean_report_checker(trainer, check=check_unclean)
-    attach_losses_rg(
-        trainer,
-        hierarchical=hierarchical,
-        supervise_attention=supervise_attention,
-        supervise_sentences=supervise_sentences,
-        device=device,
-    )
+    attach_losses_rg(trainer, **loss_attacher_kwargs)
     attach_metrics_report_generation(trainer, device=device)
 
     # Attach medical correctness metrics
@@ -198,7 +197,8 @@ def train_model(run_id,
 
     # Attach checkpoint
     # FIXME: for now, only save last checkpoints (metric is too unstable!)
-    checkpoint_metric = _CORRECTNESS_TARGET_METRIC if medical_correctness and False else None
+    # checkpoint_metric = _CORRECTNESS_TARGET_METRIC if medical_correctness else None
+    checkpoint_metric = None
     attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
@@ -240,6 +240,7 @@ def resume_training(run_id,
                     early_stopping=None,
                     print_metrics=None,
                     multiple_gpu=False,
+                    check_unclean=True,
                     device='cuda',
                     ):
     """Resume training."""
@@ -310,6 +311,7 @@ def resume_training(run_id,
                 tb_kwargs=tb_kwargs,
                 print_metrics=print_metrics,
                 device=device,
+                check_unclean=check_unclean,
                 **other_train_kwargs,
                 )
 
@@ -349,6 +351,10 @@ def train_from_scratch(run_name,
                        early_stopping_kwargs={},
                        lr_sch_metric='loss',
                        lr_sch_kwargs={},
+                       lambda_word=1,
+                       lambda_stop=1,
+                       lambda_att=1,
+                       lambda_sent=1,
                        augment=False,
                        augment_mode='single',
                        augment_label=None,
@@ -367,12 +373,24 @@ def train_from_scratch(run_name,
                        print_metrics=None,
                        ):
     """Train a model from scratch."""
+    # Decide hierarchical
+    hierarchical = is_decoder_hierarchical(decoder_name)
+
     # Create run name
     run_name = f'{run_name}_{dataset_name}_{decoder_name}'
+    if lambda_word != 1:
+        run_name += f'_word-{lambda_word}'
+    if hierarchical:
+        if lambda_stop != 1:
+            run_name += f'_stop-{lambda_stop}'
     if supervise_attention:
         run_name += '_satt'
+        if lambda_att != 1:
+            run_name += f'-{lambda_att}'
     if supervise_sentences:
         run_name += '_ssent'
+        if lambda_sent != 1:
+            run_name += f'-{lambda_sent}'
     if dropout_recursive != 0:
         run_name += f'_dropr{dropout_recursive}'
     if dropout_out != 0:
@@ -446,9 +464,6 @@ def train_from_scratch(run_name,
     run_id = RunId(run_name, debug, 'rg', experiment)
 
     set_seed(seed)
-
-    # Decide hierarchical
-    hierarchical = is_decoder_hierarchical(decoder_name)
 
     if supervise_attention:
         if not hierarchical:
@@ -559,8 +574,8 @@ def train_from_scratch(run_name,
 
     # Create lr_scheduler
     if lr_sch_metric:
+        LOGGER.info('Using ReduceLROnPlateau metric=%s, %s', lr_sch_metric, lr_sch_kwargs)
         lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs)
-        LOGGER.info('Using ReduceLROnPlateau (with %s)', lr_sch_metric)
     else:
         LOGGER.warning('Not using a LR scheduler')
         lr_scheduler = None
@@ -575,6 +590,10 @@ def train_from_scratch(run_name,
         'medical_correctness': medical_correctness,
         'med_kwargs': med_kwargs,
         'att_vs_masks': enable_masks,
+        'lambda_word': lambda_word,
+        'lambda_stop': lambda_stop,
+        'lambda_att': lambda_att,
+        'lambda_sent': lambda_sent,
     }
 
     # Save metadata
@@ -640,6 +659,14 @@ def parse_args():
                         help='If present, check for unclean reports in the outputs')
     parser.add_argument('--dont-save', action='store_true',
                         help='If present, do not save model checkpoints to disk')
+    parser.add_argument('--lambda-word', type=float, default=1,
+                        help='Lambda for word loss')
+    parser.add_argument('--lambda-stop', type=float, default=1,
+                        help='Lambda for stop loss')
+    parser.add_argument('--lambda-att', type=float, default=1,
+                        help='Lambda for att loss')
+    parser.add_argument('--lambda-sent', type=float, default=1,
+                        help='Lambda for sent loss')
 
     decoder_group = parser.add_argument_group('Decoder')
     decoder_group.add_argument('-dec', '--decoder', type=str,
@@ -755,8 +782,15 @@ def parse_args():
         args.custom_lr = {
             'word_embeddings': args.custom_lr_word_embedding,
         }
+        args.lr_sch_kwargs.update({
+            'min_lr': [
+                args.custom_lr_word_embedding, # Do not reduce the customly set LR
+                args.lr_sch_kwargs['min_lr'],
+            ],
+        })
     else:
         args.custom_lr = None
+
 
 
     return args
@@ -784,6 +818,7 @@ if __name__ == '__main__':
                         print_metrics=ARGS.print_metrics,
                         med_kwargs=ARGS.med_kwargs,
                         early_stopping=ARGS.early_stopping,
+                        check_unclean=ARGS.check_unclean,
                         )
     else:
         train_from_scratch(get_timestamp(),
@@ -820,6 +855,10 @@ if __name__ == '__main__':
                            early_stopping_kwargs=ARGS.early_stopping_kwargs,
                            lr_sch_metric=ARGS.lr_metric,
                            lr_sch_kwargs=ARGS.lr_sch_kwargs,
+                           lambda_word=ARGS.lambda_word,
+                           lambda_stop=ARGS.lambda_stop,
+                           lambda_att=ARGS.lambda_att,
+                           lambda_sent=ARGS.lambda_sent,
                            augment=ARGS.augment,
                            augment_mode=ARGS.augment_mode,
                            augment_label=ARGS.augment_label,
