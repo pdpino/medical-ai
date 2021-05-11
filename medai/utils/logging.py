@@ -34,7 +34,7 @@ class CustomFormatter(logging.Formatter):
         datefmt=datefmt,
     )
     medai_formatter = logging.Formatter(
-        '%(levelname)s(%(asctime)s) %(message)s',
+        '(%(asctime)s) %(message)s',
         datefmt=datefmt,
     )
 

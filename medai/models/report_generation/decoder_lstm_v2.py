@@ -85,8 +85,8 @@ class LSTMDecoderV2(nn.Module):
             # pylint: disable=not-callable
             should_stop = torch.tensor(False, device=device).repeat(batch_size)
         else:
-            assert reports is not None, 'Cant pass free=False and reports=None'
-            actual_max_len = reports.size()[-1]
+            assert reports is not None, 'Cannot pass free=False and reports=None'
+            actual_max_len = reports.size(-1)
             words_iterator = range(actual_max_len)
             should_stop = None
 

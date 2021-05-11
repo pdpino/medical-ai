@@ -1,5 +1,5 @@
 import logging
-from functools import partial
+import functools
 from medai.models.report_generation.decoder_lstm import LSTMDecoder
 from medai.models.report_generation.decoder_lstm_v2 import LSTMDecoderV2
 from medai.models.report_generation.decoder_lstm_att import LSTMAttDecoder
@@ -7,6 +7,7 @@ from medai.models.report_generation.decoder_lstm_att_v2 import LSTMAttDecoderV2
 from medai.models.report_generation.decoder_lstm_att_v3 import LSTMAttDecoderV3
 from medai.models.report_generation.decoder_h_lstm_att import HierarchicalLSTMAttDecoder
 from medai.models.report_generation.decoder_h_lstm_att_v2 import HierarchicalLSTMAttDecoderV2
+from medai.utils import partialclass
 
 LOGGER = logging.getLogger(__name__)
 
@@ -16,10 +17,10 @@ _MODELS_DEF = {
     'lstm-att': LSTMAttDecoder,
     'lstm-att-v2': LSTMAttDecoderV2,
     'lstm-att-v3': LSTMAttDecoderV3,
-    'h-lstm': partial(HierarchicalLSTMAttDecoder, attention=False),
-    'h-lstm-att': partial(HierarchicalLSTMAttDecoder, attention=True),
-    'h-lstm-v2': partial(HierarchicalLSTMAttDecoderV2, attention=False),
-    'h-lstm-att-v2': partial(HierarchicalLSTMAttDecoderV2, attention=True),
+    'h-lstm': partialclass(HierarchicalLSTMAttDecoder, attention=False),
+    'h-lstm-att': partialclass(HierarchicalLSTMAttDecoder, attention=True),
+    'h-lstm-v2': partialclass(HierarchicalLSTMAttDecoderV2, attention=False),
+    'h-lstm-att-v2': partialclass(HierarchicalLSTMAttDecoderV2, attention=True),
 }
 
 AVAILABLE_DECODERS = list(_MODELS_DEF)
@@ -80,6 +81,7 @@ def create_decoder(decoder_name, **kwargs):
 
     ModelClass = _MODELS_DEF[decoder_name]
 
+    # Check if dropout is implemented
     if not getattr(ModelClass, 'implemented_dropout', False):
         ignored_options = [
             k

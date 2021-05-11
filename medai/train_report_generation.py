@@ -62,8 +62,19 @@ LOGGER = logging.getLogger('medai.rg.train')
 
 _CORRECTNESS_TARGET_METRIC = 'chex_f1_woNF'
 
-def _get_print_metrics(additional_metrics):
-    print_metrics = ['loss', 'bleu', 'ciderD', _CORRECTNESS_TARGET_METRIC]
+def _get_print_metrics(additional_metrics,
+                       hierarchical=False,
+                       supervise_attention=False, supervise_sentences=False):
+    if hierarchical:
+        print_metrics = ['word_loss', 'stop_loss']
+    else:
+        print_metrics = ['loss']
+    if supervise_attention:
+        print_metrics.append('att_loss')
+    if supervise_sentences:
+        print_metrics.append('sentence_loss')
+
+    print_metrics += ['bleu', _CORRECTNESS_TARGET_METRIC]
 
     for m in (additional_metrics or []):
         if m not in print_metrics:
@@ -79,6 +90,7 @@ def train_model(run_id,
                 val_dataloader,
                 n_epochs=1,
                 supervise_attention=False,
+                supervise_sentences=False,
                 hierarchical=False,
                 save_model=True,
                 dryrun=False,
@@ -113,11 +125,13 @@ def train_model(run_id,
     validator = Engine(get_step_fn(model,
                                    training=False,
                                    supervise_attention=supervise_attention,
+                                   supervise_sentences=supervise_sentences,
                                    device=device))
     attach_losses_rg(
         validator,
         hierarchical=hierarchical,
         supervise_attention=supervise_attention,
+        supervise_sentences=supervise_sentences,
         device=device,
     )
     attach_unclean_report_checker(validator, check=check_unclean)
@@ -128,6 +142,7 @@ def train_model(run_id,
                                  optimizer=optimizer,
                                  training=True,
                                  supervise_attention=supervise_attention,
+                                 supervise_sentences=supervise_sentences,
                                  device=device))
     # Set state dict
     # Since the state is explictly set here:
@@ -144,6 +159,7 @@ def train_model(run_id,
         trainer,
         hierarchical=hierarchical,
         supervise_attention=supervise_attention,
+        supervise_sentences=supervise_sentences,
         device=device,
     )
     attach_metrics_report_generation(trainer, device=device)
@@ -164,15 +180,21 @@ def train_model(run_id,
     timer = Timer(average=True)
     timer.attach(trainer, start=Events.EPOCH_STARTED, step=Events.EPOCH_COMPLETED)
 
-    attach_log_metrics(trainer,
-                       validator,
-                       compiled_model,
-                       val_dataloader,
-                       tb_writer,
-                       timer,
-                       logger=LOGGER,
-                       print_metrics=_get_print_metrics(print_metrics),
-                       )
+    attach_log_metrics(
+        trainer,
+        validator,
+        compiled_model,
+        val_dataloader,
+        tb_writer,
+        timer,
+        logger=LOGGER,
+        print_metrics=_get_print_metrics(
+            print_metrics,
+            hierarchical=hierarchical,
+            supervise_attention=supervise_attention,
+            supervise_sentences=supervise_sentences,
+        ),
+    )
 
     # Attach checkpoint
     # FIXME: for now, only save last checkpoints (metric is too unstable!)
@@ -300,6 +322,7 @@ def train_from_scratch(run_name,
                        dropout_out=0,
                        att_double_bias=False,
                        supervise_attention=False,
+                       supervise_sentences=False,
                        batch_size=15,
                        sort_samples=True,
                        shuffle=False,
@@ -348,6 +371,8 @@ def train_from_scratch(run_name,
     run_name = f'{run_name}_{dataset_name}_{decoder_name}'
     if supervise_attention:
         run_name += '_satt'
+    if supervise_sentences:
+        run_name += '_ssent'
     if dropout_recursive != 0:
         run_name += f'_dropr{dropout_recursive}'
     if dropout_out != 0:
@@ -359,10 +384,13 @@ def train_from_scratch(run_name,
         options = []
         _pretrained = embedding_kwargs.get('pretrained')
         if _pretrained is not None:
-            options.append(_pretrained)
+            if _pretrained != 'radglove':
+                options.append(_pretrained)
             _freeze = embedding_kwargs.get('freeze')
             if _freeze:
                 options.append('frz')
+        else:
+            options.append('rand')
         if embedding_kwargs.get('scale_grad_by_freq'):
             options.append('scale')
         if embedding_kwargs.get('batch_normalization'):
@@ -378,9 +406,7 @@ def train_from_scratch(run_name,
         run_name += f'_precnn-{cnn_run_id.short_clean_name}'
     else:
         run_name += f'_{cnn_model_name}'
-    if norm_by_sample:
-        run_name += '_normS'
-    else:
+    if not norm_by_sample:
         run_name += '_normD'
     if image_size != 256:
         run_name += f'_size{image_size}'
@@ -432,6 +458,11 @@ def train_from_scratch(run_name,
         if 'h-lstm-att' not in decoder_name:
             raise Exception('Attention supervision is only available for h-lstm-att decoders')
 
+    if supervise_sentences:
+        # TODO: move this to a more appropiate place?
+        if hidden_size != 100:
+            raise Exception('Hidden size must be 100 if supervise_sentences=True')
+
 
     # Load data
     image_size = (image_size, image_size)
@@ -448,6 +479,7 @@ def train_from_scratch(run_name,
         'frontal_only': frontal_only,
         'vocab_greater': vocab_greater,
         'reports_version': LATEST_REPORTS_VERSION,
+        'sentence_embeddings': supervise_sentences,
     }
     dataset_train_kwargs = {
         'sort_samples': sort_samples,
@@ -539,6 +571,7 @@ def train_from_scratch(run_name,
         'early_stopping_kwargs': early_stopping_kwargs,
         'lr_sch_metric': lr_sch_metric,
         'supervise_attention': supervise_attention,
+        'supervise_sentences': supervise_sentences,
         'medical_correctness': medical_correctness,
         'med_kwargs': med_kwargs,
         'att_vs_masks': enable_masks,
@@ -613,6 +646,8 @@ def parse_args():
                                choices=AVAILABLE_DECODERS, help='Choose Decoder')
     decoder_group.add_argument('--supervise-att', action='store_true',
                                help='If present, supervise the attention')
+    decoder_group.add_argument('--supervise-sent', action='store_true',
+                               help='If present, supervise the sentence embeddings')
     decoder_group.add_argument('-emb', '--embedding-size', type=int, default=100,
                                help='Embedding size of the decoder')
     decoder_group.add_argument('-hs', '--hidden-size', type=int, default=100,
@@ -755,6 +790,7 @@ if __name__ == '__main__':
                            dataset_name=ARGS.dataset,
                            decoder_name=ARGS.decoder,
                            supervise_attention=ARGS.supervise_att,
+                           supervise_sentences=ARGS.supervise_sent,
                            dropout_recursive=ARGS.dropout_recursive,
                            dropout_out=ARGS.dropout_out,
                            att_double_bias=ARGS.att_double_bias,

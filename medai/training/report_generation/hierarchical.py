@@ -94,11 +94,14 @@ def _flatten_gt_reports(reports):
 def get_step_fn_hierarchical(model, optimizer=None, training=True,
                              free=False, device='cuda',
                              supervise_attention=False,
+                             supervise_sentences=False,
+                             word_lambda=1, stop_lambda=1, att_lambda=1, sentence_lambda=1,
                              max_words=50, max_sentences=20, **unused_kwargs):
     """Creates a step function for an Engine, considering a hierarchical dataloader."""
     word_loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
     stop_loss_fn = nn.BCELoss()
     att_loss_fn = OutOfTargetSumLoss()
+    sentence_loss_fn = nn.MSELoss(reduction='none')
 
     assert not (free and training), 'Cannot set training=True and free=True'
 
@@ -141,19 +144,33 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
             # TODO: pad output arrays to be able to calculate loss anyway
 
             # Calculate word loss
-            vocab_size = generated_words.size()[-1]
-            word_loss = word_loss_fn(generated_words.view(-1, vocab_size), reports.view(-1))
+            word_loss = word_loss_fn(generated_words.permute(0, 3, 1, 2), reports)
 
             # Calculate stop loss
             stop_loss = stop_loss_fn(stop_prediction, stop_ground_truth)
 
             # Calculate full loss
+            total_loss = word_lambda * word_loss + stop_lambda * stop_loss
+
             if supervise_attention:
                 att_loss = att_loss_fn(gen_masks, gt_masks, stop_ground_truth)
-                total_loss = word_loss + stop_loss + att_loss
+                total_loss += att_lambda * att_loss
             else:
                 att_loss = -1
-                total_loss = word_loss + stop_loss
+
+            if supervise_sentences:
+                sentence_loss = sentence_loss_fn(
+                    output_tuple[3], # shape: bs, n_sentences, emb_size
+                    data_batch.sentence_embeddings.to(device), # shape: bs, n_sentences, emb_size
+                ) # shape: bs, n_sentences, emb_size
+
+                # Use only GT sentences
+                sentence_loss = sentence_loss[(stop_ground_truth == 0)].mean()
+                # shape: 1
+
+                total_loss += sentence_lambda * sentence_loss
+            else:
+                sentence_loss = -1
 
             batch_loss = total_loss.item()
             word_loss = word_loss.item()
@@ -164,6 +181,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
             word_loss = -1
             stop_loss = -1
             att_loss = -1
+            sentence_loss = -1
 
         if training:
             total_loss.backward()
@@ -179,6 +197,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
             'word_loss': word_loss,
             'stop_loss': stop_loss,
             'att_loss': att_loss,
+            'sentence_loss': sentence_loss,
             'flat_clean_reports_gen': _flatten_gen_reports(generated_words, stop_prediction),
             'flat_clean_reports_gt': _flatten_gt_reports(reports),
             'gt_masks': gt_masks,

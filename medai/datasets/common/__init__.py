@@ -14,9 +14,8 @@ BatchItem = namedtuple('BatchItem', [
     'original_size',
 ])
 
-# NOTE: in practice, BatchItems is only used in RG (not other tasks)
 # TODO: use only BatchItem everywhere, and always use plural (images, reports, etc)
-BatchItems = namedtuple('BatchItems', [
+BatchRGItems = namedtuple('BatchRGItems', [
     'images',
     'labels',
     'reports',
@@ -24,10 +23,11 @@ BatchItems = namedtuple('BatchItems', [
     'image_fnames',
     'stops', # Stop signals for hierarchical decoders
     'masks',
+    'sentence_embeddings',
 ])
 
 BatchItem.__new__.__defaults__ = (-1,) * len(BatchItem._fields)
-BatchItems.__new__.__defaults__ = (None,) * len(BatchItems._fields)
+BatchRGItems.__new__.__defaults__ = (None,) * len(BatchRGItems._fields)
 
 # Organ masks
 UP_TO_DATE_MASKS_VERSION = 'v2'

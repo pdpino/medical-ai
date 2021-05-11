@@ -1,4 +1,5 @@
 from datetime import datetime
+import functools
 import numbers
 import time
 import os
@@ -154,7 +155,7 @@ def timeit_main(logger):
 
             total_time = time.time() - start_time
             logger.info('Total time: %s', duration_to_str(total_time))
-            logger.info('=' * 50)
+            logger.info('=' * 110)
 
             return result
 
@@ -173,3 +174,13 @@ def pred_and_label_to_valoration(presence, gt):
     else:
         result = 'FN'
     return result
+
+
+def partialclass(cls, *args, **kwargs):
+    """Partial method for classes.
+
+    If only functools.partial is used, class attributes cannot be accessed
+    """
+    class NewCls(cls):
+        __init__ = functools.partialmethod(cls.__init__, *args, **kwargs)
+    return NewCls

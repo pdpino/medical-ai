@@ -235,6 +235,7 @@ def prepare_data_report_generation(dataset_name=None,
                                    masks=False,
                                    norm_by_sample=False,
                                    reports_version=LATEST_REPORTS_VERSION,
+                                   sentence_embeddings=False,
                                    **kwargs,
                                    ):
 
@@ -244,6 +245,8 @@ def prepare_data_report_generation(dataset_name=None,
         'normS': norm_by_sample,
         'reports': reports_version,
         'hierarchical': hierarchical,
+        'masks': hierarchical and masks,
+        'sent-emb': hierarchical and sentence_embeddings,
     }
     _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
     LOGGER.info('Loading %s/%s rg-dataset, %s', dataset_name, dataset_type, _info_str)
@@ -285,11 +288,17 @@ def prepare_data_report_generation(dataset_name=None,
 
     create_dataloader_fn = get_dataloader_constructor(hierarchical)
 
+    extra_dataloader_kwargs = {}
+    if hierarchical:
+        extra_dataloader_kwargs.update({
+            'include_masks': masks,
+            'include_sentence_emb': sentence_embeddings,
+        })
     dataloader = create_dataloader_fn(dataset,
-                                      include_masks=masks,
                                       batch_size=batch_size,
                                       shuffle=shuffle,
                                       num_workers=num_workers,
+                                      **extra_dataloader_kwargs,
                                       )
 
     return dataloader

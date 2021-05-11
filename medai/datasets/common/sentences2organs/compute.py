@@ -262,6 +262,7 @@ def save_sentences_with_organs(dataset_dir, sentences, show=False, ignore_all_on
 
     return df_organs, errors
 
+MAIN_ORGANS = ['heart', 'lungs', 'thorax', 'neutral', 'all']
 
 def get_main_organ(one_hot, sentence, warnings=None):
     """Given a one-hot array indicating organs, return the main organ indicated."""

@@ -17,7 +17,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
 
     def __init__(self, vocab, embedding_size, hidden_size,
                  features_size, teacher_forcing=True, stop_threshold=0.5,
-                 embedding_kwargs={}, return_topics=False,
+                 embedding_kwargs={}, return_topics=True,
                  dropout_out=0, dropout_recursive=0,
                  attention=True, double_bias=False, **unused_kwargs):
         super().__init__()
@@ -26,7 +26,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         self.teacher_forcing = teacher_forcing
         self.start_idx = torch.tensor(START_IDX) # pylint: disable=not-callable
         self.stop_threshold = stop_threshold
-        self.return_topics = return_topics # debug and analysis option
+        self.return_topics = return_topics
 
         # Attention input
         self._use_attention = attention

@@ -87,12 +87,11 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
         output_tuple = model(images, reports, free=free, max_words=max_words)
 
         generated_words = output_tuple[0]
-        _, _, vocab_size = generated_words.size()
         # shape: batch_size, n_words, vocab_size
 
         if not free:
             # Compute word classification loss
-            loss = loss_fn(generated_words.view(-1, vocab_size), reports.view(-1))
+            loss = loss_fn(generated_words.permute(0, 2, 1), reports)
 
             batch_loss = loss.item()
         else:
