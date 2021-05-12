@@ -26,9 +26,122 @@ _SPATIAL_TRANSFORMS = set([
 _SHOULD_APPLY_TO_TENSOR = ('noise-gaussian', )
 _TRANSFORM_METHOD_NAME = 'transform' # Transform method name in each dataset
 
-AVAILABLE_AUG_MODES = ('single', 'double')
+AVAILABLE_AUG_MODES = ('single', 'double', 'touch')
 
 LOGGER = logging.getLogger(__name__)
+
+
+class ImageTransforms:
+    """Handle image transformations.
+
+    Augmentation arguments. If None, do not augment with that method; if not None:
+        Spatial transforms:
+            crop -- minimum relative size of the crop
+            translate -- maximum fraction of translation (both vertical and horizontal)
+            rotation -- maximum amount of degrees to rotate
+            shear -- shear angles (x, y), provided to RandomAffineMany as shear=(-x, x, -y, y)
+        Color transforms:
+            contrast -- value provided to ColorJitter
+            brightness -- value provided to ColorJitter
+            noise_gaussian -- Amplifier value to add the gaussian noise
+    """
+    def __init__(self, image_size,
+                 crop=0.8, translate=0.1, rotation=15, contrast=0.8, brightness=0.8,
+                 shear=(10, 10), noise_gaussian=0.1):
+        self._transform_fns = dict()
+
+        if crop is not None:
+            self._transform_fns['crop'] = RandomResizedCropMany(
+                image_size,
+                scale=(crop, 1),
+            )
+
+        if translate is not None:
+            self._transform_fns['translate'] = RandomAffineMany(
+                degrees=0,
+                translate=(translate, translate),
+            )
+
+        if shear is not None:
+            shear_x, shear_y = shear
+            self._transform_fns['shear'] = RandomAffineMany(
+                degrees=0,
+                shear=(-shear_x, shear_x, -shear_y, shear_y),
+            )
+
+        if rotation is not None:
+            self._transform_fns['rotation'] = RandomRotationMany(rotation)
+
+        if contrast is not None:
+            contrast_down_max = 0.9
+            self._transform_fns['contrast-down'] = ColorJitterMany(
+                contrast=(contrast_down_max - contrast, contrast_down_max),
+            )
+            contrast_up_min = 1.1
+            self._transform_fns['contrast-up'] = ColorJitterMany(
+                contrast=(contrast_up_min, contrast_up_min + contrast),
+            )
+
+        if brightness is not None:
+            brightness_down_max = 0.9
+            self._transform_fns['brightness-down'] = ColorJitterMany(
+                brightness=(brightness_down_max - brightness, brightness_down_max),
+            )
+
+            brightness_up_min = 1.1
+            self._transform_fns['brightness-up'] = ColorJitterMany(
+                brightness=(brightness_up_min, brightness_up_min + brightness),
+            )
+
+        if noise_gaussian is not None:
+            self._transform_fns['noise-gaussian'] = GaussianNoiseMany(amplifier=noise_gaussian)
+
+        self._spatial_transforms = [
+            method_name
+            for method_name in self._transform_fns
+            if method_name in _SPATIAL_TRANSFORMS
+        ]
+
+        self._color_transforms = [
+            method_name
+            for method_name in self._transform_fns
+            if method_name not in _SPATIAL_TRANSFORMS
+        ]
+
+        # Used if "random-" values provided
+        # If none is returned, the original image is used
+        self._color_transforms_with_original = list(self._color_transforms) + [None]
+        self._spatial_transforms_with_original = list(self._spatial_transforms) + [None]
+
+    def __len__(self):
+        return len(self._transform_fns)
+
+    def __iter__(self):
+        return iter(self._transform_fns)
+
+    def resolve_aug_method(self, method_name):
+        if method_name == 'random-color':
+            return random.choice(self._color_transforms_with_original)
+        if method_name == 'random-spatial':
+            return random.choice(self._spatial_transforms_with_original)
+
+        return method_name
+
+    def get_transform_fn(self, method_name):
+        assert isinstance(method_name, str)
+
+        if method_name not in self._transform_fns:
+            raise Exception('Internal error: aug method not found')
+        return self._transform_fns[method_name]
+
+    @property
+    def spatial_transforms(self):
+        return self._spatial_transforms
+
+    @property
+    def color_transforms(self):
+        return self._color_transforms
+
 
 class Augmentator(Dataset):
     """Augmentates a classification dataset.
@@ -36,12 +149,7 @@ class Augmentator(Dataset):
     Applies a set of randomized augmentation methods
     """
     def __init__(self, dataset, label=None, force_class=None, times=1, seg_mask=False,
-                 dont_shuffle=False,
-                 mode='single',
-                 crop=0.8, translate=0.1, rotation=15, contrast=0.8, brightness=0.8,
-                 shear=(10, 10),
-                 noise_gaussian=0.1,
-                 ):
+                 dont_shuffle=False, mode='single', **kwargs):
         """Init class.
 
         Args
@@ -56,14 +164,7 @@ class Augmentator(Dataset):
                 (by default, only augment the `image` field)
             dont_shuffle -- do not shuffle augmented samples (used for debugging)
 
-        Augmentation arguments. If None, do not augment with that method; if not None:
-            crop -- minimum relative size of the crop
-            translate -- maximum fraction of translation (both vertical and horizontal)
-            rotation -- maximum amount of degrees to rotate
-            contrast -- value provided to ColorJitter
-            brightness -- value provided to ColorJitter
-            shear -- shear angles (x, y), provided to RandomAffineMany as shear=(-x, x, -y, y)
-            noise_gaussian -- Amplifier value to add the gaussian noise
+        See image-augmentation arguments in the ImageTransforms class
         """
         super().__init__()
 
@@ -91,52 +192,7 @@ class Augmentator(Dataset):
 
 
         # Define augmentation methods
-        self._aug_fns = dict()
-        if crop is not None:
-            self._aug_fns['crop'] = RandomResizedCropMany(
-                dataset.image_size,
-                scale=(crop, 1),
-            )
-
-        if translate is not None:
-            self._aug_fns['translate'] = RandomAffineMany(
-                degrees=0,
-                translate=(translate, translate),
-            )
-
-        if shear is not None:
-            shear_x, shear_y = shear
-            self._aug_fns['shear'] = RandomAffineMany(
-                degrees=0,
-                shear=(-shear_x, shear_x, -shear_y, shear_y),
-            )
-
-        if rotation is not None:
-            self._aug_fns['rotation'] = RandomRotationMany(rotation)
-
-        if contrast is not None:
-            contrast_down_max = 0.9
-            self._aug_fns['contrast-down'] = ColorJitterMany(
-                contrast=(contrast_down_max - contrast, contrast_down_max),
-            )
-            contrast_up_min = 1.1
-            self._aug_fns['contrast-up'] = ColorJitterMany(
-                contrast=(contrast_up_min, contrast_up_min + contrast),
-            )
-
-        if brightness is not None:
-            brightness_down_max = 0.9
-            self._aug_fns['brightness-down'] = ColorJitterMany(
-                brightness=(brightness_down_max - brightness, brightness_down_max),
-            )
-
-            brightness_up_min = 1.1
-            self._aug_fns['brightness-up'] = ColorJitterMany(
-                brightness=(brightness_up_min, brightness_up_min + brightness),
-            )
-
-        if noise_gaussian is not None:
-            self._aug_fns['noise-gaussian'] = GaussianNoiseMany(amplifier=noise_gaussian)
+        self._image_transforms = ImageTransforms(dataset.image_size, **kwargs)
 
         # Create new indices array
         self.mode = mode
@@ -145,6 +201,8 @@ class Augmentator(Dataset):
             self.indices = self._build_indices_single(samples_idxs, times)
         elif mode == 'double':
             self.indices = self._build_indices_double(samples_idxs, times)
+        elif mode == 'touch':
+            self.indices = self._build_indices_touch(samples_idxs, times)
 
         if not dont_shuffle:
             random.shuffle(self.indices)
@@ -165,7 +223,7 @@ class Augmentator(Dataset):
         stats_str = ' '.join(f'{k}={v}' for k, v in stats.items())
         LOGGER.info('\tAugmenting %s: %s', _samples_info, stats_str)
 
-        self.monkey_patch_transform()
+        self._monkey_patch_transform()
 
     def __getattr__(self, name):
         return getattr(self.dataset, name)
@@ -208,6 +266,10 @@ class Augmentator(Dataset):
         inner_idx, aug_spatial, aug_color = self.indices[idx]
         item = self.dataset[inner_idx]
 
+        # If random methods, this resolves to an specific method.
+        aug_spatial = self._image_transforms.resolve_aug_method(aug_spatial)
+        aug_color = self._image_transforms.resolve_aug_method(aug_color)
+
         # Grab transforms
         pre_transform, post_transform = self.pre_post_transforms
 
@@ -223,13 +285,13 @@ class Augmentator(Dataset):
 
         # Augment PIL image with color
         if aug_color is not None and aug_color not in _SHOULD_APPLY_TO_TENSOR:
-            aug_instance = self._aug_fns[aug_color]
-            fields['image'] = aug_instance(fields['image'])
+            aug_fn = self._image_transforms.get_transform_fn(aug_color)
+            fields['image'] = aug_fn(fields['image'])
 
         # Augment PIL image and masks with spatial transforms
         if aug_spatial is not None:
-            aug_instance = self._aug_fns[aug_spatial]
-            fields = aug_instance(fields)
+            aug_fn = self._image_transforms.get_transform_fn(aug_spatial)
+            fields = aug_fn(fields)
 
         # Apply post transformation to image
         fields['image'] = post_transform(fields['image'])
@@ -240,13 +302,12 @@ class Augmentator(Dataset):
 
         # Augment Tensor image with color, if it should be applied to tensor
         if aug_color in _SHOULD_APPLY_TO_TENSOR:
-            aug_instance = self._aug_fns[aug_color]
-            fields['image'] = aug_instance(fields['image'])
+            aug_fn = self._image_transforms.get_transform_fn(aug_color)
+            fields['image'] = aug_fn(fields['image'])
 
         return item._replace(**fields)
 
-
-    def monkey_patch_transform(self):
+    def _monkey_patch_transform(self):
         """Monkey patches the dataset.transform() function."""
         if not hasattr(self.dataset, _TRANSFORM_METHOD_NAME):
             raise Exception(f'Dataset does not have a method called {_TRANSFORM_METHOD_NAME}')
@@ -269,7 +330,6 @@ class Augmentator(Dataset):
         # Monkey-patch with identity
         setattr(self.dataset, _TRANSFORM_METHOD_NAME, lambda x: x)
 
-
     def _build_indices_single(self, samples_idxs, times):
         """Creates an indices array using single-augmentation.
 
@@ -282,7 +342,7 @@ class Augmentator(Dataset):
             if not should_augment:
                 continue
 
-            for aug_method in self._aug_fns:
+            for aug_method in self._image_transforms:
                 is_spatial = aug_method in _SPATIAL_TRANSFORMS
                 aug_spatial = aug_method if is_spatial else None
                 aug_color = aug_method if not is_spatial else None
@@ -298,16 +358,8 @@ class Augmentator(Dataset):
         Double-augmentation: each sample gets augmented with a spatial and color transform
         at the same time.
         """
-        spatial_transforms = CircularShuffledList(
-            aug_method
-            for aug_method in self._aug_fns
-            if aug_method in _SPATIAL_TRANSFORMS
-        )
-        color_transforms = CircularShuffledList(
-            aug_method
-            for aug_method in self._aug_fns
-            if aug_method not in _SPATIAL_TRANSFORMS
-        )
+        spatial_transforms = CircularShuffledList(self._image_transforms.spatial_transforms)
+        color_transforms = CircularShuffledList(self._image_transforms.color_transforms)
 
         n_transforms = max(len(spatial_transforms), len(color_transforms))
 
@@ -322,6 +374,24 @@ class Augmentator(Dataset):
                 aug_method_spatial = next(spatial_transforms)
                 aug_method_color = next(color_transforms)
                 indices.append((idx, aug_method_spatial, aug_method_color))
+
+        return indices
+
+    def _build_indices_touch(self, samples_idxs, times):
+        """Creates an indices array using touch-times-augmentation.
+
+        Touch-augmentation: each sample gets touched with a spatial and color transform
+        at the same time. If times == 1, the amount of samples do not increase, but images
+        are modified randomly on each iteration.
+        """
+        indices = []
+        for idx, should_augment in samples_idxs:
+            if not should_augment:
+                indices.append((idx, None, None))
+                continue
+
+            for _ in range(times):
+                indices.append((idx, 'random-spatial', 'random-color'))
 
         return indices
 
@@ -365,6 +435,8 @@ class Augmentator(Dataset):
                 'contrast': 'c',
                 'noise-gaussian': 'gauss',
                 'translate': 'trans',
+                'random-color': 'rnd-c',
+                'random-spatial': 'rnd-s',
             }
             pretty_methods = []
             for method in methods:
@@ -379,30 +451,28 @@ class Augmentator(Dataset):
 
 
         should_plot_masks = self.augment_masks and n_masks >= 1
+        should_plot_original = 1
 
         # Amounts
         if self.mode == 'single':
-            n_aug_methods = len(self._aug_fns)
-        else:
-            n_color_methods = len([m for m in self._aug_fns if m not in _SPATIAL_TRANSFORMS])
-            n_spatial_methods = len([m for m in self._aug_fns if m in _SPATIAL_TRANSFORMS])
+            n_aug_methods = len(self._image_transforms)
+        elif self.mode == 'double':
+            n_color_methods = len(self._image_transforms.color_transforms)
+            n_spatial_methods = len(self._image_transforms.spatial_transforms)
             n_aug_methods = max(n_color_methods, n_spatial_methods)
+        elif self.mode == 'touch':
+            n_aug_methods = 1
+            should_plot_original = 0
 
         n_aug_methods *= self.n_times
 
-        n_cols = n_aug_methods + 1
+        n_cols = n_aug_methods + should_plot_original
         n_rows = 1 + n_masks if should_plot_masks else 1
 
         # Augmented sample idx
-        base_idx = sample_idx * (n_aug_methods + 1)
+        base_idx = sample_idx * (n_aug_methods + should_plot_original)
 
         plt.figure(figsize=(n_cols*5, n_rows*5))
-
-        item = self[base_idx]
-        plt.subplot(n_rows, n_cols, 1)
-        plt.title('original', fontsize=title_fontsize)
-        plt.imshow(item.image[0], cmap='gray')
-        plt.axis('off')
 
         def _plot_mask(mask, plot_index):
             plt.subplot(n_rows, n_cols, plot_index)
@@ -419,21 +489,28 @@ class Augmentator(Dataset):
                 for i, mask in enumerate(item.masks):
                     _plot_mask(mask, base_plot_index + i*n_cols)
 
-        if should_plot_masks:
-            _plot_item_masks(item, n_cols + 1)
+        if should_plot_original:
+            item = self[base_idx]
+            plt.subplot(n_rows, n_cols, 1)
+            plt.title('original', fontsize=title_fontsize)
+            plt.imshow(item.image[0], cmap='gray')
+            plt.axis('off')
+
+            if should_plot_masks:
+                _plot_item_masks(item, n_cols + 1)
 
         for i in range(n_aug_methods):
             # Move idx to the right
-            augmented_idx = base_idx + 1 + i
+            augmented_idx = base_idx + should_plot_original + i
 
             # Get method(s)
             method = self.indices[augmented_idx][1:]
 
             item = self[augmented_idx]
-            plt.subplot(n_rows, n_cols, i + 2)
+            plt.subplot(n_rows, n_cols, i + 1 + should_plot_original)
             plt.title(_prettify_method_name(method), fontsize=title_fontsize)
             plt.imshow(item.image[0], cmap='gray')
             plt.axis('off')
 
             if should_plot_masks:
-                _plot_item_masks(item, n_cols + i + 2)
+                _plot_item_masks(item, n_cols + i + 1 + should_plot_original)

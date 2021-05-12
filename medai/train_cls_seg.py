@@ -12,6 +12,7 @@ from medai.training.common import TrainingProcess
 from medai.training.detection.cls_seg import get_step_fn_cls_seg
 from medai.utils import parsers, RunId
 
+
 class TrainingClsSeg(TrainingProcess):
     LOGGER_NAME = 'medai.cls-seg.train'
     base_print_metrics = ['cl_loss', 'seg_loss', 'roc_auc', 'pr_auc', 'iou'] # iobb
@@ -172,9 +173,15 @@ class TrainingClsSeg(TrainingProcess):
             # self.model.classifier.load_state_dict(prev_layers.state_dict())
 
         if self.args.pretrained_seg:
-            raise NotImplementedError('--pretrained-seg not tested yet')
-            # self.model.segmentator.load_state_dict(pretrained_model.segmentator.state_dict())
+            self.model.segmentator.load_state_dict(pretrained_model.segmentator.state_dict())
 
+    def _fill_hparams(self):
+        if self.args.pretrained_run_id:
+            self.metadata['hparams'].update({
+                'pretrained': self.args.pretrained_run_id.to_dict(),
+                'pretrained-seg': self.args.pretrained_seg,
+                'pretrained-cls': self.args.pretrained_cls,
+            })
 
     def _fill_other_train_kwargs(self):
         d = dict()

@@ -80,8 +80,12 @@ def load_metadata(run_id):
     return _load_meta(folder, run_id)
 
 
-def save_metadata(data, run_id):
+def save_metadata(data, run_id, dryrun=False):
     """Saves run metadata to file."""
+    if dryrun:
+        LOGGER.warning('Not saving metadata (dryrun)')
+        return
+
     folder = get_checkpoint_folder(run_id,
                                    save_mode=True)
 

@@ -111,6 +111,8 @@ class TrainingProcess(abc.ABC):
                             help='Batch size')
         parser.add_argument('--shuffle', action='store_true', default=None,
                             help='Whether to shuffle or not the samples when training')
+        parser.add_argument('--dont-save', action='store_true',
+                            help='If present, do not save model checkpoints to disk')
 
         parsers.add_args_images(parser, image_format=self.default_image_format)
         parsers.add_args_lr_sch(
@@ -178,7 +180,7 @@ class TrainingProcess(abc.ABC):
 
         total_time = time.time() - start_time
         self.logger.info('Total time: %s', duration_to_str(total_time))
-        self.logger.info('=' * 50)
+        self.logger.info('=' * 110)
 
     def _fill_run_name_sampling(self, run_name):
         if self.args.oversample:
@@ -456,6 +458,9 @@ class TrainingProcess(abc.ABC):
     def _fill_metadata(self):
         """Fill self.metadata with more key-value pairs."""
 
+    def _fill_hparams(self):
+        """Save more hyper-parameters used, that are not necessarily needed in train_model()."""
+
     def _prepare_and_save_metadata(self):
         """Create self.metadata."""
         self.metadata = {
@@ -463,7 +468,7 @@ class TrainingProcess(abc.ABC):
             'opt_kwargs': self.opt_kwargs,
             'lr_sch_kwargs': self.args.lr_sch_kwargs if self.lr_scheduler is not None else None,
             'hparams': {
-                'batch_size': self.args.batch_size,
+                # 'batch_size': self.args.batch_size, # Not needed, is in dataset_kwargs
             },
             'other_train_kwargs': self.other_train_kwargs,
             'dataset_kwargs': self.dataset_kwargs,
@@ -472,8 +477,9 @@ class TrainingProcess(abc.ABC):
         }
 
         self._fill_metadata()
+        self._fill_hparams()
 
-        save_metadata(self.metadata, self.run_id)
+        save_metadata(self.metadata, self.run_id, dryrun=self.args.dont_save)
 
     def train_model(self, early_stopping=True,
                     early_stopping_kwargs={},
@@ -512,7 +518,7 @@ class TrainingProcess(abc.ABC):
             self.trainer,
             self.validator,
             metric=self.checkpoint_metric,
-            dryrun=self.args.dryrun,
+            dryrun=self.args.dryrun or self.args.dont_save,
         )
 
         if early_stopping:

@@ -613,7 +613,7 @@ def train_from_scratch(run_name,
         'other_train_kwargs': other_train_kwargs,
         'seed': seed,
     }
-    save_metadata(metadata, run_id)
+    save_metadata(metadata, run_id, dryrun=not save_model)
 
     # Compiled model
     compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
