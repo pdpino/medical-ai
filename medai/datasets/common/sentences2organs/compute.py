@@ -248,6 +248,8 @@ def save_sentences_with_organs(dataset_dir, sentences, show=False, ignore_all_on
     df_organs = pd.DataFrame(organs, columns=organ_names)
     df_organs['sentence'] = sentences
 
+    # REVIEW: add main_organ column??
+
     if ignore_all_ones:
         df_organs = df_organs.loc[(df_organs[ORGAN_BACKGROUND] == 0) | \
             (df_organs[ORGAN_HEART] == 0) | \
@@ -261,6 +263,7 @@ def save_sentences_with_organs(dataset_dir, sentences, show=False, ignore_all_on
     print(f'Sentence-2-organs saved to {fpath}')
 
     return df_organs, errors
+
 
 MAIN_ORGANS = ['heart', 'lungs', 'thorax', 'neutral', 'all']
 

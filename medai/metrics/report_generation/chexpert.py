@@ -69,7 +69,7 @@ def _get_custom_env():
 
     return custom_env
 
-
+# TODO: make this public?? is used outside of here
 def _concat_df_matrix(df, results, suffix=None):
     """Concats a DF with a matrix."""
     labels = labels_with_suffix(suffix)

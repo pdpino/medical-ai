@@ -33,4 +33,4 @@ BatchRGItems.__new__.__defaults__ = (None,) * len(BatchRGItems._fields)
 UP_TO_DATE_MASKS_VERSION = 'v2'
 
 # Reports versions
-LATEST_REPORTS_VERSION = 'v3'
+LATEST_REPORTS_VERSION = 'v4'

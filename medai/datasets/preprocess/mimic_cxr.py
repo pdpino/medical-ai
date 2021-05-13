@@ -134,12 +134,12 @@ def preprocess_mimic_cxr(version, greater_values=[0, 5, 10], override=False):
     return reports_dict, token_appearances, errors
 
 
-def compute_sentence_to_organs(version, studies=None, **kwargs):
+def create_sentences_with_organs(version, studies=None, **kwargs):
     """Computes sentence-to-organs mapping and save it as CSV."""
     reports = load_clean_reports(REPORTS_DIR, version)
     sentence_counter = get_sentences_appearances(
         r['clean_text']
-        for study_id, r in reports
+        for study_id, r in reports.items()
         if studies is None or study_id in studies
     )
 

@@ -239,6 +239,7 @@ def split_sentences_text(report, end_token=END_OF_SENTENCE_TOKEN):
 
     return [' '.join(s) for s in sentences]
 
+
 def get_sentences_appearances(reports):
     """Receives an iterator of reports, and returns all sentences."""
 

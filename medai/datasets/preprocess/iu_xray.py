@@ -8,19 +8,48 @@ import os
 import json
 from collections import defaultdict, Counter
 
+from medai.datasets.common.sentences2organs.compute import save_sentences_with_organs
 from medai.datasets.preprocess.tokenize import text_to_tokens
-from medai.datasets.preprocess.common import assert_reports_not_exist, save_clean_reports
+from medai.datasets.preprocess.common import (
+    assert_reports_not_exist,
+    save_clean_reports,
+    split_sentences_and_save_csv,
+    load_sentences_metadata,
+)
 from medai.datasets.iu_xray import DATASET_DIR
 from medai.datasets.vocab import save_vocabs
+from medai.metrics.report_generation.chexpert import _concat_df_matrix, apply_labeler_to_column
+
+
+_REPLACEMENTS_BY_REPORT = {
+    # Hardcode some fixes
+    '3368.xml': {
+        'findings': [('Pression:', '')],
+    },
+    '1448.xml': {
+        'findings': [('02/010/XXXX', 'xxxx')]
+    },
+    '793.xml': {
+        'findings': [('31 17 XXXX', 'xxxx')],
+    },
+}
 
 
 IGNORE_TOKENS = set(['p.m.', 'pm', 'am'])
 REPORTS_DIR = os.path.join(DATASET_DIR, 'reports')
 
-def load_raw_reports():
+def load_raw_reports(first_clean=True):
     reports_fname = os.path.join(REPORTS_DIR, 'reports.json')
     with open(reports_fname, 'r') as f:
         reports_dict = json.load(f)
+
+    if first_clean:
+        for filename, replacements in _REPLACEMENTS_BY_REPORT.items():
+            for text_type, to_replace in replacements.items():
+                for target, replace_with in to_replace:
+                    text = reports_dict[filename][text_type]
+                    reports_dict[filename][text_type] = text.replace(target, replace_with)
+
 
     return reports_dict
 
@@ -79,7 +108,7 @@ def load_info():
     return info
 
 
-def add_image_info(reports_dict):
+def _add_image_info(reports_dict):
     info = load_info()
 
     wrong_images = set(info['marks']['wrong'])
@@ -112,10 +141,40 @@ def preprocess_iu_x_ray(version, greater_values=[0, 5, 10], override=False):
 
     reports_dict, token_appearances, errors = clean_reports(reports_dict)
 
-    reports_dict = add_image_info(reports_dict)
+    reports_dict = _add_image_info(reports_dict)
 
     save_clean_reports(REPORTS_DIR, reports_dict, version)
 
     save_vocabs('iu_xray', reports_dict, token_appearances, greater_values)
 
+    split_sentences_and_save_csv(REPORTS_DIR, reports_dict)
+
     return reports_dict, token_appearances, errors
+
+
+def create_sentences_with_chexpert_labels():
+    df_sentences = load_sentences_metadata(REPORTS_DIR)
+
+    labels = apply_labeler_to_column(df_sentences, 'sentence',
+                                     fill_empty=-2, fill_uncertain=-1,
+                                     caller_id='iu-preprocess-chexpert')
+
+    if labels.shape != (len(df_sentences), 14):
+        raise Exception(f'Chexpert labels shape failed: {labels.shape} vs {len(df_sentences)}')
+
+    df_sentences = _concat_df_matrix(df_sentences, labels)
+
+    out_fpath = os.path.join(REPORTS_DIR, 'sentences_with_chexpert_labels.csv')
+    df_sentences.to_csv(out_fpath, index=False)
+    print(f'Saved to {out_fpath}')
+
+    return df_sentences
+
+
+def create_sentences_with_organs(show=True, ignore_all_ones=True):
+    df_sentences = load_sentences_metadata(REPORTS_DIR)
+    sentences = list(df_sentences['sentence'])
+
+    return save_sentences_with_organs(
+        DATASET_DIR, sentences,show=show, ignore_all_ones=ignore_all_ones,
+    )

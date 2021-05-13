@@ -29,6 +29,14 @@ def remove_initial_punctuation(tokens):
     )
     return tokens[first_word_token:]
 
+GARBAGE = set(['xxxx'])
+def remove_repeated_garbage(tokens):
+    return [
+        token
+        for i, token in enumerate(tokens)
+        if i == 0 or token not in GARBAGE or token != tokens[i-1]
+    ]
+
 
 _TYPOS = {
     'telehpone': 'telephone',
@@ -58,6 +66,8 @@ _TYPOS = {
     'howeve': 'however',
     'consolidatio': 'consolidation',
     'betweeen': 'between',
+    'vasculaturity': 'vascularity',
+    'histoplasmoma': 'histoplasmosis',
 }
 
 _ENDS_WITH_PUNCTUATION = re.compile(r'([A-Za-z]+)[\-_\.]+\Z')
@@ -83,25 +93,26 @@ def _text_to_tokens(text):
     text = text.lower()
     # Remove html tags
     text = re.sub(r'(\[)?&amp;[gl]t;(\])?', ' ', text)
+    text = re.sub(r'(\[)?&[gl]t;(\])?', ' ', text)
 
     # Replace common words-phrases
     text = re.sub(r'\+\/\-', ' more or less ', text)
-    text = re.sub(r'x[\-\s]+ray', ' xray ', text)
-    text = re.sub(r'e[\-\s]+mail', ' email ', text)
-    text = re.sub(r'o[\'\-]+clock', ' ', text)
-    text = re.sub(r'd[\/\.]w', ' discussed with ', text)
-    text = re.sub(r's[\/\.]p', ' status post ', text)
-    text = re.sub(r'f[\/\.]u', ' follow up ', text)
-    text = re.sub(r'c[\/\.]w', ' consistent with ', text)
-    text = re.sub(r'b[\/\.]l', ' bilateral ', text)
-    text = re.sub(r'e\.?g\.?', ' example ', text)
+    text = re.sub(r'\bx[\-\s]+ray\b', ' xray ', text)
+    text = re.sub(r'\be[\-\s]+mail\b', ' email ', text)
+    text = re.sub(r'\bo[\'\-]+clock\b', ' ', text)
+    text = re.sub(r'\bd[\/\.]w\b', ' discussed with ', text)
+    text = re.sub(r'\bs[\/\.]p\b', ' status post ', text)
+    text = re.sub(r'\bf[\/\.]u\b', ' follow up ', text)
+    text = re.sub(r'\bc[\/\.]w\b', ' consistent with ', text)
+    text = re.sub(r'\bb[\/\.]l\b', ' bilateral ', text)
+    text = re.sub(r'\be\.?g\.?\b', ' example ', text)
 
     # Replace dr. with doctor
-    text = re.sub(r'dr[\.\s]', ' doctor ', text)
-    text = re.sub(r'm\.?d\.?', ' doctor ', text)
+    text = re.sub(r'\bdr[\.\s]\b', ' doctor ', text)
+    text = re.sub(r'\bm\.?d\.?\b', ' doctor ', text)
 
     # Separate PM or AM token
-    text = re.sub(r'(a|p)\.?m(\.|\s|\Z)', r' \1m ', text)
+    text = re.sub(r'[\b\d](a|p)\.?m(\.|\s|\Z)', r' \1m ', text)
 
     # Remove common signature
     text = re.sub(r'[_\-\=]+\w[_\-\=]+\Z', r' ', text)
@@ -137,7 +148,7 @@ def _text_to_tokens(text):
 
     # Other numbers
     text = re.sub(
-        r'(\W|\A)(\#+\s*)?\d[\d\.\-\/:h]*\s*(a|st|nd|th|rd|erd|\%|cm|mm|xxxx|pm|am|s)?',
+        r'(\W|\A)(\#+\s*)?\d[\d\.\-\/:h]*\s*(a|st|nd|th|rd|erd|\%|cm|mm|xxxx|pm|am|s)?\b',
         r' NUMBER ',
         text,
     )
@@ -179,8 +190,9 @@ def _text_to_tokens(text):
 
     tokens = remove_punctuation_after_dots(tokens)
     tokens = remove_initial_punctuation(tokens)
+    tokens = remove_repeated_garbage(tokens)
 
-    # TODO: remove repeated tokens? specially useless tokens, such as "xxxx xxxx"
+    # TODO: simple stemming?
 
     # Assure ending dot
     if len(tokens) >= 1 and tokens[-1] != '.':
