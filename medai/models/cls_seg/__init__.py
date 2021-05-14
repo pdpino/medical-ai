@@ -20,8 +20,8 @@ AVAILABLE_CLS_SEG_MODELS = list(_MODELS_DEF)
 
 def _get_printable_kwargs(kwargs):
     info_str = ' '.join(f'{k}={v}' for k, v in kwargs.items() if 'labels' not in k)
-    info_str += f' n_cl_labels={len(kwargs.get("cl_labels", []))}'
-    info_str += f' n_seg_labels={len(kwargs.get("seg_labels", []))}'
+    info_str += f' n_cl={len(kwargs.get("cl_labels", []))}'
+    info_str += f' n_seg={len(kwargs.get("seg_labels", []))}'
     return info_str
 
 def create_cls_seg_model(model_name, **kwargs):

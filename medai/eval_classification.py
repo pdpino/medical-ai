@@ -16,6 +16,7 @@ from medai.metrics.classification.writer import (
     attach_prediction_writer,
     delete_previous_outputs,
 )
+from medai.metrics.classification.optimize_threshold import calculate_optimal_threshold
 from medai.models.checkpoint import load_compiled_model_classification
 from medai.training.classification import get_step_fn
 from medai.utils import (
@@ -66,22 +67,14 @@ def evaluate_model(run_id,
     return engine.state.metrics
 
 
-@timeit_main(LOGGER)
-def evaluate_run(run_id,
-                 dataset_types=['train', 'val', 'test'],
-                 n_epochs=1,
-                 batch_size=None,
-                 max_samples=None,
-                 multiple_gpu=False,
-                 override=False,
-                 quiet=False,
-                 device='cuda',
-                 ):
-    """Evaluate a model."""
-    if not override and are_results_saved(run_id):
-        LOGGER.warning('Skipping run, already calculated')
-        return {}
-
+def _run_epoch_and_calculate_outputs(
+    run_id,
+    dataset_types=['train', 'val', 'test'],
+    n_epochs=1,
+    batch_size=None,
+    max_samples=None,
+    multiple_gpu=False,
+    device='cuda'):
     # Delete previous CSV outputs
     delete_previous_outputs(run_id)
 
@@ -132,10 +125,51 @@ def evaluate_run(run_id,
 
     save_results(metrics, run_id)
 
-    if not quiet:
-        pprint(metrics)
-
     return metrics
+
+
+@timeit_main(LOGGER)
+def evaluate_run(run_id,
+                 dataset_types=['train', 'val', 'test'],
+                 n_epochs=1,
+                 batch_size=None,
+                 max_samples=None,
+                 multiple_gpu=False,
+                 override=False,
+                 quiet=False,
+                 device='cuda',
+                 ):
+    """Evaluate a model."""
+    if not override and are_results_saved(run_id):
+        LOGGER.warning('Skipping outputs, already calculated')
+    else:
+        metrics = _run_epoch_and_calculate_outputs(
+            run_id,
+            dataset_types=dataset_types,
+            n_epochs=n_epochs,
+            batch_size=batch_size,
+            max_samples=max_samples,
+            multiple_gpu=multiple_gpu,
+            device=device,
+        )
+
+        if not quiet:
+            # Filter only some macro-avg metrics
+            pprint([
+                (split, [
+                    f'{m}={values[m]}'
+                    for m in ['roc_auc', 'pr_auc', 'iou']
+                ])
+                for split, values in metrics.items()
+            ])
+
+
+    # Always calculate threshs
+    LOGGER.info('Calculating optimal thresholds')
+    _, _, best_values = calculate_optimal_threshold(run_id)
+
+    if not quiet:
+        pprint(best_values)
 
 
 def parse_args():
@@ -154,7 +188,7 @@ def parse_args():
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
     parser.add_argument('--override', action='store_true',
-                        help='Override previous results')
+                        help='Override previous outputs')
     parser.add_argument('--quiet', action='store_true',
                         help='Do not print results to stdout')
 
