@@ -78,6 +78,7 @@ class TBWriter:
             'recall': 'Recall',
             'prec': 'Prec',
             'spec': 'Spec',
+            'f1': 'F1',
             'iou': 'IoU',
             'iou-grad-cam': 'IoU-grad-cam',
             'iobb-grad-cam': 'IoBB-grad-cam',

@@ -1,4 +1,3 @@
-from functools import partial
 import logging
 import numpy as np
 from torch.utils.data import DataLoader, Subset
@@ -14,6 +13,7 @@ from medai.datasets.covid_x import CovidXDataset
 from medai.datasets.covid_actual import CovidActualDataset
 from medai.datasets.covid_fig1 import CovidFig1Dataset
 from medai.datasets.covid_uc import CovidUCDataset
+from medai.datasets.imagenet import ImageNetDataset
 from medai.datasets.iu_xray import IUXRayDataset
 from medai.datasets.mimic_cxr import MIMICCXRDataset
 from medai.datasets.jsrt import JSRTDataset
@@ -24,6 +24,7 @@ from medai.datasets.tools.undersampler import OneLabelUnderSampler
 from medai.datasets.tools.augmentation import Augmentator
 from medai.datasets.tools.balanced_sampler import MultilabelBalancedSampler
 
+from medai.utils import partialclass
 from medai.utils.nlp import count_sentences
 
 _CL_DATASETS = {
@@ -36,14 +37,16 @@ _CL_DATASETS = {
     'covid-uc': CovidUCDataset,
     'iu-x-ray': IUXRayDataset,
     'mimic-cxr': MIMICCXRDataset,
-    'mini-mimic': partial(MIMICCXRDataset, mini=1),
+    'mini-mimic': partialclass(MIMICCXRDataset, mini=1),
     'vinbig': VinBigDataset,
+    'imagenet': ImageNetDataset,
+    'mini-imagenet': partialclass(ImageNetDataset, mini=1),
 }
 
 _RG_DATASETS = {
     'iu-x-ray': IUXRayDataset,
     'mimic-cxr': MIMICCXRDataset,
-    'mini-mimic': partial(MIMICCXRDataset, mini=1),
+    'mini-mimic': partialclass(MIMICCXRDataset, mini=1),
 }
 
 _SEG_DATASETS = {

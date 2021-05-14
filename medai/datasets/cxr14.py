@@ -14,7 +14,7 @@ from medai.datasets.common import (
     JSRT_ORGANS,
     UP_TO_DATE_MASKS_VERSION,
 )
-from medai.utils.images import get_default_image_transform
+from medai.utils.images import get_default_image_transform, load_image
 
 LOGGER = logging.getLogger(__name__)
 
@@ -184,19 +184,8 @@ class CXR14Dataset(Dataset):
         # Extract labels
         labels = torch.ByteTensor(row[self.labels])
 
-        # Load image
         image_fpath = os.path.join(self.image_dir, image_fname)
-        try:
-            image = Image.open(image_fpath).convert(self.image_format)
-        except OSError as e:
-            LOGGER.error(
-                '%s: Failed to load image, may be broken: %s',
-                self.dataset_type, image_fpath,
-            )
-            LOGGER.error(e)
-
-            # FIXME: a way to ignore the image during training? (though it may break other things)
-            raise
+        image = load_image(image_fpath, self.image_format)
 
         image = self.transform(image)
 

@@ -1,4 +1,5 @@
 import os
+import logging
 import numbers
 import numpy as np
 import torch
@@ -10,6 +11,8 @@ from PIL import Image
 from medai.datasets.common import BatchItem
 from medai.utils import tensor_to_range01
 
+
+LOGGER = logging.getLogger(__name__)
 
 class ImageFolderIterator:
     def __init__(self, folder, image_names, image_format='RGB'):
@@ -71,7 +74,6 @@ def compute_mean_std(image_iterator, n_channels=3, show=False, threads=1):
     return mean, std
 
 
-
 class NormalizeBySample:
     """Normalizes images with their mean and std."""
     def __init__(self, epsilon=1e-6):
@@ -104,7 +106,6 @@ class ScaleValues:
         intersect = self.target - 2 * self.target * sample_max.true_divide(sample_range)
 
         return image * slope + intersect
-
 
 
 def get_default_image_transform(image_size=(512, 512),
@@ -229,3 +230,21 @@ def squeeze_masks(masks):
     n_organs = masks.size(0)
     multiplier = torch.arange(0, n_organs).unsqueeze(-1).unsqueeze(-1)
     return (multiplier * masks).sum(dim=0)
+
+
+def load_image(image_fpath, image_format):
+    try:
+        image_fp = Image.open(image_fpath)
+        image = image_fp.convert(image_format)
+    except OSError as e:
+        LOGGER.error(
+            'Failed to load image, may be broken: %s', image_fpath,
+        )
+        LOGGER.error(e)
+
+        # FIXME: a way to ignore the image during training? (though it may break other things)
+        raise
+    finally:
+        image_fp.close()
+
+    return image

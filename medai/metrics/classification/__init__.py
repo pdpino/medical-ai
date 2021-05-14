@@ -1,5 +1,6 @@
 from functools import reduce, partial
 import operator
+import logging
 import torch
 from torch.nn.functional import binary_cross_entropy
 from ignite.metrics import (
@@ -12,7 +13,7 @@ from ignite.metrics import (
 )
 from ignite.utils import to_onehot
 
-from medai.metrics.classification.accuracy import MultilabelAccuracy
+# from medai.metrics.classification.accuracy import MultilabelAccuracy
 from medai.metrics.classification.hamming import Hamming
 from medai.metrics.classification.roc_auc import RocAucMetric
 from medai.metrics.classification.pr_auc import PRAucMetric
@@ -20,6 +21,9 @@ from medai.metrics.classification.specificity import Specificity
 from medai.metrics.segmentation.iou import IoU
 from medai.metrics.segmentation.iobb import IoBB
 from medai.utils.metrics import attach_metric_for_labels
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _get_transform_one_label(label_index, use_round=True):
@@ -51,32 +55,52 @@ def _get_transform_one_label(label_index, use_round=True):
     return transform_fn
 
 
-def _get_transform_one_class(label_index):
-    """Creates a transform function to extract one label
+# def _get_transform_one_class_as_binary_DEPRECATED(label_index):
+#     """Creates a transform function to extract one label
 
-    Works only for multilabel=False.
+#     Works only for multilabel=False.
+#     """
+#     def transform_fn(output):
+#         """Transform multiclass arrays into binary class arrays.
+
+#         Args:
+#             y_pred shape: batch_size, n_labels
+#             y_true shape: batch_size
+
+#         Returns:
+#             binary arrays:
+#             y_pred shape: batch_size
+#             y_true shape: batch_size
+#         """
+#         y_pred = output['pred_labels']
+#         y_true = output['gt_labels']
+
+#         y_pred = y_pred.argmax(dim=1) # shape: batch_size
+
+#         y_pred = (y_pred == label_index).long()
+#         y_true = (y_true == label_index).long()
+
+#         return y_pred, y_true
+#     return transform_fn
+
+
+def _transform_multiclass_softmax(output):
+    """Transform multiclass arrays into binary class arrays.
+
+    Args:
+        y_pred shape: batch_size, n_labels
+        y_true shape: batch_size
+
+    Returns:
+        y_pred shape: batch_size, n_labels
+        y_true shape: batch_size
     """
-    def transform_fn(output):
-        """Transform multiclass arrays into binary class arrays.
+    y_pred = output['pred_labels']
+    y_true = output['gt_labels']
 
-        Args:
-            y_pred shape: batch_size, n_labels
-            y_true shape: batch_size
+    y_pred = torch.softmax(y_pred, dim=-1) # shape: batch_size, n_labels
 
-        Returns:
-            binary arrays:
-            y_pred shape: batch_size
-            y_true shape: batch_size
-        """
-        y_pred = output['pred_labels']
-        y_true = output['gt_labels']
-
-        _, y_pred = y_pred.max(dim=1)
-        y_pred = (y_pred == label_index).long()
-        y_true = (y_true == label_index).long()
-
-        return y_pred, y_true
-    return transform_fn
+    return y_pred, y_true
 
 
 def _get_transform_cm_multilabel(label_index):
@@ -139,6 +163,27 @@ def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
         macro_avg.attach(engine, metric_name)
 
 
+def _attach_multiclass_metrics(engine, labels, metric_name, MetricClass,
+                               include_macro=True,
+                               include_individual=True,
+                               **kwargs,
+                               ):
+    """Attaches a precision-recall-like metric for the multiclass case."""
+    metric = MetricClass(is_multilabel=False, **kwargs)
+    # returns an array of values, one per class
+
+    if include_macro:
+        macro_avg = MetricsLambda(lambda x: x.mean().item(), metric)
+        macro_avg.attach(engine, metric_name)
+
+    if include_individual:
+        for i, label in enumerate(labels):
+            metric_for_label = MetricsLambda(operator.itemgetter(i), metric)
+            metric_for_label.attach(engine, f'{metric_name}_{label}')
+
+    return metric
+
+
 def _transform_remove_loss(output):
     """Simple transform to remove the loss from the output."""
     y_pred = output['pred_labels']
@@ -179,27 +224,54 @@ def attach_metrics_classification(engine, labels, multilabel=True,
         # FIXME: Precision and Recall are failing with
         # "Metric  must have at least one example before it can be computed"
         # (After pytorch-ignite upgrade to 0.4.3)
+        # NOTE: try to use the metric directly, instead of the _get_transform_one_label
+        # (awkward solution)
         # FIXME: Accuracy, MultilabelAccuracy, Specificity, Precision and Recall
         # use round-in-0.5, instead of optimizing the threshold.
         # FIXME: two accuracies were attached before??
         # _attach_binary_metrics(engine, labels, 'prec', Precision, True, device=device)
         # _attach_binary_metrics(engine, labels, 'recall', Recall, True, device=device)
         # _attach_binary_metrics(engine, labels, 'spec', Specificity, True, device=device)
-        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, False, device=device)
-        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric, False, device=device)
+        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric,
+                               use_round=False, device=device)
+        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric,
+                               use_round=False, device=device)
     else:
+        if len(labels) > 20:
+            include_individual = False
+            LOGGER.info('Not attaching individual metrics (n_labels=%d)', len(labels))
+        else:
+            include_individual = True
+
         acc = Accuracy(output_transform=_transform_remove_loss, device=device)
         acc.attach(engine, 'acc')
 
-        _attach_binary_metrics(engine, labels, 'prec', Precision,
-                               get_transform_fn=_get_transform_one_class,
-                               device=device)
-        _attach_binary_metrics(engine, labels, 'recall', Recall,
-                               get_transform_fn=_get_transform_one_class,
-                               device=device)
-        _attach_binary_metrics(engine, labels, 'spec', Specificity,
-                               get_transform_fn=_get_transform_one_class,
-                               device=device)
+        # Attach per-label metrics
+        kwargs = {
+            'output_transform': _transform_multiclass_softmax,
+            'include_individual': include_individual,
+            'device': device,
+        }
+
+
+        prec = _attach_multiclass_metrics(engine, labels, 'prec', Precision, **kwargs)
+        recall = _attach_multiclass_metrics(engine, labels, 'recall', Recall, **kwargs)
+
+        # Attach f1
+        f1_metric = 2 * prec * recall / (prec + recall + 1e-20)
+        f1_metric = MetricsLambda(lambda t: t.mean().item(), f1_metric)
+        f1_metric.attach(engine, 'f1')
+
+        # TODO: attach this the same way Precision and Recall are attached
+        # _attach_binary_metrics(engine, labels, 'spec', Specificity, **kwargs)
+
+        # Attach ROC-AUC
+        # RocAucMetric(
+        #     roc_kwargs={ 'multi_class': 'ovr', 'assert_binary': False },
+        #     output_transform=_transform_multiclass_softmax,
+        #     check_compute_fn=False,
+        # ).attach(engine, 'roc_auc')
+
 
 
 def attach_hint_saliency(engine, labels, multilabel=True, device='cuda'):

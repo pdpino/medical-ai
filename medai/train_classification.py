@@ -55,7 +55,9 @@ def _choose_print_metrics(dataset_name, additional=None):
     if dataset_name == 'cxr14':
         print_metrics = ['loss', 'roc_auc', 'pr_auc', 'hamming']
     elif 'covid' in dataset_name:
-        print_metrics = ['loss', 'roc_auc', 'pr_auc', 'prec_covid', 'recall_covid']
+        print_metrics = ['loss', 'prec_covid', 'recall_covid']
+    elif 'imagenet' in dataset_name :
+        print_metrics = ['loss', 'acc', 'f1', 'prec', 'recall']
     else:
         print_metrics = ['loss', 'roc_auc', 'pr_auc']
 
@@ -81,6 +83,7 @@ def train_model(run_id,
                 lr_sch_metric='loss',
                 dryrun=False,
                 tb_kwargs={},
+                checkpoint_metric='roc_auc',
                 print_metrics=['loss'],
                 device='cuda',
                 ):
@@ -172,7 +175,7 @@ def train_model(run_id,
                             compiled_model,
                             trainer,
                             validator,
-                            metric='roc_auc',
+                            metric=checkpoint_metric,
                             dryrun=dryrun,
                             )
 
@@ -328,7 +331,7 @@ def train_from_scratch(run_name,
                        ):
     """Train a model from scratch."""
     # Default values
-    lr = lr or 1e-6
+    lr = lr or 1e-4
     batch_size = batch_size or 10
 
     # Create run name
@@ -512,6 +515,7 @@ def train_from_scratch(run_name,
         'grad_cam_thresh': grad_cam_thresh,
         'hint': hint,
         'hint_lambda': hint_lambda,
+        'checkpoint_metric': 'f1' if 'imagenet' in dataset_name else 'roc_auc',
     }
 
 

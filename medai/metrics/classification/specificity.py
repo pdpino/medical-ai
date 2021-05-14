@@ -5,7 +5,7 @@ from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 class Specificity(Metric):
     """Computes specificity metric for a binary classification.
-    
+
     Tested only for multilabel=False
     TODO: test with multilabel=True
     """
@@ -19,7 +19,7 @@ class Specificity(Metric):
     @reinit__is_reduced
     def update(self, output):
         """Updates the metric state after a batch/epoch.
-        
+
         output = (outputs, labels)
             - shape for both arrays: batch_size
             - in binary format
