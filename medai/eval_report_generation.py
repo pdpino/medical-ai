@@ -259,16 +259,6 @@ def parse_args():
 
 
     parsers.build_args_free_values_(args, parser)
-    use_free = not args.skip_free
-    use_notfree = not args.skip_notfree
-    if use_free and use_notfree:
-        args.free = 'both'
-    elif use_free:
-        args.free = True
-    elif use_notfree:
-        args.free = False
-    else:
-        parser.error('Cannot skip both free and not free')
 
     return args
 
@@ -282,7 +272,7 @@ if __name__ == '__main__':
 
     print_hw_options(DEVICE, ARGS)
 
-    evaluate_run(run_id = RunId(ARGS.run_name, not ARGS.no_debug, 'rg'),
+    evaluate_run(run_id=RunId(ARGS.run_name, not ARGS.no_debug, 'rg'),
                  free_values=ARGS.free_values,
                  dataset_types=ARGS.eval_in,
                  multiple_gpu=ARGS.multiple_gpu,

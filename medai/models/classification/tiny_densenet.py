@@ -45,6 +45,14 @@ class CustomDenseNetCNN(nn.Module):
 
         return (x,)
 
+    @property
+    def cl_labels(self):
+        return self.labels
+
+    @property
+    def classifier(self):
+        return self.prediction
+
 
 TINY_DENSENET_CONFIGS = {
     'tiny-densenet': {

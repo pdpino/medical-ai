@@ -40,8 +40,8 @@ def _clean_gen_reports(gen_words):
     return clean_reports
 
 
-def _clean_gt_reports(gt_reports):
-    """Cleans the generated reports.
+def clean_gt_reports(gt_reports):
+    """Cleans the GT reports.
 
     Args:
         gt_reports -- tensor of shape batch_size, n_words
@@ -106,7 +106,7 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
         return {
             'loss': batch_loss,
             'flat_clean_reports_gen': _clean_gen_reports(generated_words),
-            'flat_clean_reports_gt': _clean_gt_reports(reports),
+            'flat_clean_reports_gt': clean_gt_reports(reports),
         }
 
     return step_fn

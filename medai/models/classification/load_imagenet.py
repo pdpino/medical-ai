@@ -45,7 +45,6 @@ class ImageNetModel(nn.Module):
 
         self.prediction = nn.Linear(pred_input_size, len(self.labels))
 
-
     def forward(self, x, features=False):
         x = self.features(x)
         # shape: batch_size, n_features, height, width
@@ -67,3 +66,11 @@ class ImageNetModel(nn.Module):
         x = self.prediction(x) # shape: batch_size, n_diseases
 
         return x, embedding
+
+    @property
+    def cl_labels(self):
+        return self.labels
+
+    @property
+    def classifier(self):
+        return self.prediction

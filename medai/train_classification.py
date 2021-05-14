@@ -658,9 +658,9 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    ARGS = parse_args()
-
     config_logging()
+
+    ARGS = parse_args()
 
     if ARGS.num_threads > 0:
         torch.set_num_threads(ARGS.num_threads)

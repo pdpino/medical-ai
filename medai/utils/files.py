@@ -87,7 +87,8 @@ def _resolve_run_name(run_id, search_in=('runs', 'results', 'models'), workspace
 
             # Search the run with timestamp
             if not os.path.isdir(parent_folder):
-                raise FileNotFoundError(f'No folder to search run: {parent_folder}')
+                continue
+
             matching_runs = [
                 saved_run
                 for saved_run in os.listdir(parent_folder)
@@ -125,6 +126,17 @@ class RunId:
 
     def __repr__(self):
         return self.__str__().replace('\n\t', ' ')
+
+    def get_dataset_name(self):
+        name_without_timestamp = self.name[12:] # dataset-name is at the front
+        lodash_index = name_without_timestamp.index('_')
+        dataset_name = name_without_timestamp[:lodash_index]
+
+        if self.task == 'rg':
+            # Hardcoded for older runs that do not display dataset-name
+            if 'mimic' not in dataset_name:
+                dataset_name = 'iu-x-ray'
+        return dataset_name
 
     @property
     def full_name(self):

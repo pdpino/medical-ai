@@ -754,7 +754,8 @@ def parse_args():
     parsers.build_args_med_(args)
 
     if not args.no_med and args.early_stopping and \
-        (args.med_after is not None and args.es_patience <= args.med_after):
+        (args.med_after is not None and args.es_patience <= args.med_after) and \
+        'chex' in args.es_metric:
         LOGGER.warning(
             'ES-patience (%d) is less than med-after (%d), run may get preempted',
             args.es_patience, args.med_after,
@@ -797,12 +798,12 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    config_logging()
+
     ARGS = parse_args()
 
     if ARGS.num_threads > 0:
         torch.set_num_threads(ARGS.num_threads)
-
-    config_logging()
 
     DEVICE = torch.device('cuda' if not ARGS.cpu and torch.cuda.is_available() else 'cpu')
 

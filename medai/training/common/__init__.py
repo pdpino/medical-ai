@@ -157,9 +157,9 @@ class TrainingProcess(abc.ABC):
         self.args = args
 
     def run(self):
-        self._parse_args()
-
         config_logging()
+
+        self._parse_args()
 
         if self.args.num_threads > 0:
             torch.set_num_threads(self.args.num_threads)
