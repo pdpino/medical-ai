@@ -156,21 +156,40 @@ class TrainingClsSeg(TrainingProcess):
         if self.args.pretrained_run_id is None:
             return
 
+        _info = {
+            'run': self.args.pretrained_run_id.short_name,
+            'task': self.args.pretrained_run_id.task,
+            'dataset': self.args.pretrained_run_id.get_dataset_name(),
+            'cls': self.args.pretrained_cls,
+            'seg': self.args.pretrained_seg,
+        }
+        self.logger.info(
+            'Using pretrained model: %s',
+            ' '.join(f"{k}={v}" for k, v in _info.items()),
+        )
+
         pretrained_model = load_compiled_model(
             self.args.pretrained_run_id, device=self.device).model
+
 
         # Copy features
         self.model.features.load_state_dict(pretrained_model.features.state_dict())
 
         if self.args.pretrained_cls:
-            raise NotImplementedError('--pretrained-cls not tested yet')
-            # assert len(pretrained_model.labels) == len(self.model.labels)
-            # task = self.args.pretrained_run_id.task
-            # if task == 'cls':
-            #     prev_layers = pretrained_model.prediction
-            # elif task == 'seg':
-            #     prev_layers = pretrained_model.classifier
-            # self.model.classifier.load_state_dict(prev_layers.state_dict())
+            new_labels = self.model.cl_labels
+            n_new_labels = len(new_labels)
+            old_labels = pretrained_model.cl_labels
+            n_old_labels = len(old_labels)
+            if n_old_labels != n_new_labels:
+                raise Exception(f'N-labels do not match: old={n_old_labels} vs now={n_new_labels}')
+            if old_labels != new_labels:
+                self.logger.warning(
+                    'Labels used do not match with pretrained: pretrained=%s vs this=%s',
+                    old_labels, new_labels,
+                )
+
+            prev_layers = pretrained_model.classifier
+            self.model.classifier.load_state_dict(prev_layers.state_dict())
 
         if self.args.pretrained_seg:
             self.model.segmentator.load_state_dict(pretrained_model.segmentator.state_dict())
