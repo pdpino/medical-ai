@@ -83,11 +83,11 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
             hint_loss = hint_loss_fn(grad_cam_attrs, masks) # shape: 1
             total_loss = cl_loss + hint_lambda * hint_loss
         else:
-            hint_loss = torch.tensor(-1) # pylint: disable=not-callable
+            hint_loss = None
             total_loss = cl_loss
 
-            grad_cam_attrs = torch.tensor(-1) # pylint: disable=not-callable
-            masks = torch.tensor(-1) # pylint: disable=not-callable
+            grad_cam_attrs = None
+            masks = None
 
 
         if training:
@@ -107,12 +107,12 @@ def get_step_fn(model, loss_fn, optimizer=None, training=True,
                 raise Exception('Total loss is nan or inf')
 
         return {
-            'loss': total_loss.item(),
-            'cl_loss': cl_loss.item(),
-            'hint_loss': hint_loss.item(),
+            'loss': total_loss.detach(),
+            'cl_loss': cl_loss.detach(),
+            'hint_loss': hint_loss.detach() if hint_loss is not None else None,
             'pred_labels': outputs.detach(),
             'gt_labels': labels,
-            'activations': grad_cam_attrs.detach(),
+            'activations': grad_cam_attrs.detach() if grad_cam_attrs is not None else None,
             'gt_activations': masks,
         }
 

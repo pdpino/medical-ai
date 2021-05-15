@@ -92,10 +92,8 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
         if not free:
             # Compute word classification loss
             loss = loss_fn(generated_words.permute(0, 2, 1), reports)
-
-            batch_loss = loss.item()
         else:
-            batch_loss = -1
+            loss = None
 
         if training:
             loss.backward()
@@ -104,7 +102,7 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
         generated_words = generated_words.detach()
 
         return {
-            'loss': batch_loss,
+            'loss': loss.detach() if loss is not None else None,
             'flat_clean_reports_gen': _clean_gen_reports(generated_words),
             'flat_clean_reports_gt': clean_gt_reports(reports),
         }

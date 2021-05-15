@@ -4,10 +4,7 @@ import json
 import logging
 import torch
 import pandas as pd
-from PIL import Image
 from torch.utils.data import Dataset
-from torchvision import transforms
-from ignite.utils import to_onehot
 
 from medai.datasets.common import (
     BatchItem,
@@ -17,7 +14,12 @@ from medai.datasets.common import (
     UP_TO_DATE_MASKS_VERSION,
 )
 from medai.datasets.vocab import load_vocab
-from medai.utils.images import get_default_image_transform
+from medai.utils.images import (
+    get_default_image_transform,
+    load_image,
+    load_organ_masks,
+    get_default_mask_transform,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -133,10 +135,7 @@ class MIMICCXRDataset(Dataset):
 
             assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
 
-            self.transform_mask = transforms.Compose([
-                transforms.Resize(image_size, 0), # Nearest mode
-                transforms.ToTensor(),
-            ])
+            self.transform_mask = get_default_mask_transform(image_size)
 
 
     def __len__(self):
@@ -155,7 +154,7 @@ class MIMICCXRDataset(Dataset):
         tokens = report['tokens_idxs']
 
         # Load image
-        image = self.load_image(image_fpath)
+        image = self._load_image(image_fpath)
 
         # Extract labels
         labels = torch.ByteTensor(row[self.labels])
@@ -172,21 +171,13 @@ class MIMICCXRDataset(Dataset):
             report_fname=report_fpath,
         )
 
-    def load_image(self, image_fpath):
+    def _load_image(self, image_fpath):
         if self.do_not_load_image:
             # pylint: disable=not-callable
             return torch.tensor(-1)
 
         image_fpath = os.path.join(self.images_dir, image_fpath)
-        try:
-            image = Image.open(image_fpath).convert(self.image_format)
-        except OSError as e:
-            LOGGER.error(
-                '%s: Failed to load image, may be broken: %s',
-                self.dataset_type, image_fpath,
-            )
-            LOGGER.error(e)
-            raise
+        image = load_image(image_fpath, self.image_format)
 
         image = self.transform(image)
         return image
@@ -196,26 +187,12 @@ class MIMICCXRDataset(Dataset):
 
         filepath = os.path.join(self.masks_dir, image_fpath)
 
-        if not os.path.isfile(filepath):
-            LOGGER.error('No such mask: %s', filepath)
-            return None
-
-        mask = Image.open(filepath).convert('L')
-        mask = self.transform_mask(mask)
-        # shape: n_channels=1, height, width
-
-        mask = (mask * 255).long()
-        # shape: 1, height, width
-
-        if self.seg_multilabel:
-            mask = to_onehot(mask, len(self.organs))
-            # shape: 1, n_organs, height, width
-
-        mask = mask.squeeze(0)
-        # shape(seg_multilabel=True): n_organs, height, width
-        # shape(seg_multilabel=False): height, width
-
-        return mask
+        return load_organ_masks(
+            filepath,
+            self.transform_mask,
+            self.seg_multilabel,
+            len(self.organs),
+        )
 
     def _preprocess_reports(self, reports_version, studies, vocab=None, vocab_greater=None):
         # Load reports

@@ -61,9 +61,9 @@ def get_step_fn_cls_seg(model, optimizer=None, training=True,
         pred_labels = torch.sigmoid(pred_labels)
 
         return {
-            'loss': total_loss.item(),
-            'cl_loss': cl_loss.item(),
-            'seg_loss': seg_loss.item(),
+            'loss': total_loss.detach(),
+            'cl_loss': cl_loss.detach(),
+            'seg_loss': seg_loss.detach(),
             'pred_labels': pred_labels,
             'gt_labels': gt_labels,
             'activations': pred_masks.detach(),

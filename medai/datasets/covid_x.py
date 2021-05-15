@@ -1,11 +1,10 @@
 import os
 import logging
 from torch.utils.data import Dataset
-from PIL import Image
 import pandas as pd
 
 from medai.datasets.common import BatchItem
-from medai.utils.images import get_default_image_transform
+from medai.utils.images import get_default_image_transform, load_image
 
 LOGGER = logging.getLogger(__name__)
 
@@ -99,7 +98,7 @@ class CovidXDataset(Dataset):
         label = self._label_to_idx[label_str]
 
         image_path = os.path.join(self.images_dir, image_name)
-        image = Image.open(image_path).convert(self.image_format)
+        image = load_image(image_path, self.image_format)
         image = self.transform(image)
 
         return BatchItem(

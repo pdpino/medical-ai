@@ -172,16 +172,12 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
             else:
                 sentence_loss = -1
 
-            batch_loss = total_loss.item()
-            word_loss = word_loss.item()
-            stop_loss = stop_loss.item()
-
         else:
-            batch_loss = -1
-            word_loss = -1
-            stop_loss = -1
-            att_loss = -1
-            sentence_loss = -1
+            total_loss = None
+            word_loss = None
+            stop_loss = None
+            att_loss = None
+            sentence_loss = None
 
         if training:
             total_loss.backward()
@@ -193,11 +189,11 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
             gen_masks = gen_masks.detach()
 
         return {
-            'loss': batch_loss,
-            'word_loss': word_loss,
-            'stop_loss': stop_loss,
-            'att_loss': att_loss,
-            'sentence_loss': sentence_loss,
+            'loss': total_loss.detach() if total_loss is not None else None,
+            'word_loss': word_loss.detach() if word_loss is not None else None,
+            'stop_loss': stop_loss.detach() if stop_loss is not None else None,
+            'att_loss': att_loss.detach() if att_loss is not None else None,
+            'sentence_loss': sentence_loss.detach() if sentence_loss is not None else None,
             'flat_clean_reports_gen': _flatten_gen_reports(generated_words, stop_prediction),
             'flat_clean_reports_gt': _flatten_gt_reports(reports),
             'gt_masks': gt_masks,

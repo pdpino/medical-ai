@@ -2,11 +2,8 @@ import os
 import json
 import logging
 import pandas as pd
-from PIL import Image
 import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
-from ignite.utils import to_onehot
 
 from medai.datasets.common import (
     BatchItem,
@@ -16,7 +13,13 @@ from medai.datasets.common import (
     LATEST_REPORTS_VERSION,
 )
 from medai.datasets.vocab import load_vocab
-from medai.utils.images import get_default_image_transform
+from medai.utils.images import (
+    get_default_image_transform,
+    load_image,
+    load_organ_masks,
+    get_default_mask_transform,
+)
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -71,10 +74,7 @@ class IUXRayDataset(Dataset):
         assert not masks or frontal_only, 'if masks is True, set frontal_only=True'
 
         self.enable_masks = masks
-        self.transform_mask = transforms.Compose([
-            transforms.Resize(image_size, 0), # Nearest mode
-            transforms.ToTensor(),
-        ])
+        self.transform_mask = get_default_mask_transform(image_size)
 
         self.multilabel = True # CL multilabel
         self.seg_multilabel = seg_multilabel
@@ -117,7 +117,7 @@ class IUXRayDataset(Dataset):
 
         report_fname = report['filename']
         image_fname = report['image_name']
-        image = self.load_image(image_fname)
+        image = self._load_image(image_fname)
 
         labels = self.labels_by_report[report_fname]
 
@@ -130,23 +130,15 @@ class IUXRayDataset(Dataset):
             image_fname=image_fname,
             report_fname=report_fname,
             masks=mask,
-            )
+        )
 
-    def load_image(self, image_name):
+    def _load_image(self, image_name):
         if self.do_not_load_image:
             # pylint: disable=not-callable
             return torch.tensor(-1)
 
         image_path = os.path.join(self.images_dir, f'{image_name}.png')
-        try:
-            image = Image.open(image_path).convert(self.image_format)
-        except OSError as e:
-            LOGGER.error(
-                '%s: Failed to load image, may be broken: %s',
-                self.dataset_type, image_path,
-            )
-            LOGGER.error(e)
-            raise
+        image = load_image(image_path, self.image_format)
 
         image = self.transform(image)
         return image
@@ -154,25 +146,12 @@ class IUXRayDataset(Dataset):
     def load_mask(self, image_name):
         filepath = os.path.join(self.masks_dir, f'{image_name}.png')
 
-        if not os.path.isfile(filepath):
-            return None
-
-        mask = Image.open(filepath).convert('L')
-        mask = self.transform_mask(mask)
-        # shape: n_channels=1, height, width
-
-        mask = (mask * 255).long()
-        # shape: 1, height, width
-
-        if self.seg_multilabel:
-            mask = to_onehot(mask, len(self.organs))
-            # shape: 1, n_organs, height, width
-
-        mask = mask.squeeze(0)
-        # shape(seg_multilabel=True): n_organs, height, width
-        # shape(seg_multilabel=False): height, width
-
-        return mask
+        return load_organ_masks(
+            filepath,
+            self.transform_mask,
+            self.seg_multilabel,
+            len(self.organs),
+        )
 
     def get_vocab(self):
         return self.word_to_idx

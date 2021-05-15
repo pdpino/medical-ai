@@ -7,7 +7,6 @@ from torchvision import transforms
 from torchvision.transforms.functional import to_tensor
 import pandas as pd
 from ignite.utils import to_onehot
-from PIL import Image
 
 from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
 from medai.datasets.common import (
@@ -16,7 +15,7 @@ from medai.datasets.common import (
     JSRT_ORGANS,
     UP_TO_DATE_MASKS_VERSION,
 )
-from medai.utils.images import get_default_image_transform
+from medai.utils.images import get_default_image_transform, load_image
 
 LOGGER = logging.getLogger(__name__)
 
@@ -123,17 +122,7 @@ class VinBigDataset(Dataset):
 
         # Load image
         image_fpath = os.path.join(self.image_dir, f'{image_id}.png')
-        try:
-            image = Image.open(image_fpath).convert(self.image_format)
-        except OSError as e:
-            LOGGER.error(
-                '%s: Failed to load image, may be broken: %s',
-                self.dataset_type, image_fpath,
-            )
-            LOGGER.error(e)
-
-            # FIXME: a way to ignore the image during training? (though it may break other things)
-            raise
+        image = load_image(image_fpath, self.image_format)
 
         original_size = tuple(image.size)
         image = self.transform(image)
@@ -176,7 +165,9 @@ class VinBigDataset(Dataset):
     def load_organ_masks(self, image_id):
         filepath = os.path.join(self.masks_dir, f'{image_id}.png')
 
-        mask = Image.open(filepath).convert('L')
+        # TODO: can this be replaced by load_organ_masks() ??
+
+        mask = load_image(filepath, 'L')
         mask = to_tensor(mask)
         # shape: 1, height, width
 

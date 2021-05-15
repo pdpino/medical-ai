@@ -111,9 +111,12 @@ def attach_metrics_report_generation(engine, free=False, device='cuda'):
     distinct_sentences.attach(engine, 'distinct_sentences')
 
 
-def attach_losses_rg(engine, hierarchical=False,
+def attach_losses_rg(engine, free=False, hierarchical=False,
                      supervise_attention=False, supervise_sentences=False,
                      device='cuda'):
+    if free:
+        return
+
     losses = []
     if hierarchical:
         losses.extend(['word_loss', 'stop_loss'])

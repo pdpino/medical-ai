@@ -286,7 +286,7 @@ def train_from_scratch(run_name,
                        dropout=0,
                        imagenet=True,
                        freeze=False,
-                       cnn_pooling='max',
+                       cnn_pooling='avg',
                        fc_layers=(),
                        max_samples=None,
                        image_size=512,
@@ -324,6 +324,7 @@ def train_from_scratch(run_name,
                        augment_kwargs={},
                        tb_kwargs={},
                        debug=True,
+                       experiment=None,
                        multiple_gpu=False,
                        num_workers=2,
                        device='cuda',
@@ -395,13 +396,15 @@ def train_from_scratch(run_name,
         run_name += '_normS'
     else:
         run_name += '_normD'
-    if weight_decay != 0:
-        run_name += f'_wd{weight_decay}'
-    if image_size != 512:
+    if not shuffle:
+        run_name += '_order-fixed'
+    if image_size != 256:
         run_name += f'_size{image_size}'
     if n_epochs == 0:
         run_name += '_e0'
     run_name += f'_lr{lr}'
+    if weight_decay != 0:
+        run_name += f'_wd{weight_decay}'
     if lr_sch_metric:
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
@@ -415,11 +418,9 @@ def train_from_scratch(run_name,
     #     metric = early_stopping_kwargs['metric']
     #     patience = early_stopping_kwargs['patience']
     #     run_name += f'_es-{metric}-p{patience}'
-    if shuffle:
-        run_name += '_shuffle'
     run_name = run_name.replace(' ', '-')
 
-    run_id = RunId(run_name, debug, 'cls')
+    run_id = RunId(run_name, debug, 'cls', experiment)
 
     set_seed(seed)
 
@@ -541,18 +542,21 @@ def train_from_scratch(run_name,
     compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
 
     # Train!
-    train_model(run_id,
-                compiled_model,
-                train_dataloader,
-                val_dataloader,
-                n_epochs=n_epochs,
-                loss_name=loss_name,
-                loss_kwargs=loss_kwargs,
-                print_metrics=_choose_print_metrics(dataset_name, print_metrics),
-                tb_kwargs=tb_kwargs,
-                device=device,
-                **other_train_kwargs,
-                )
+    train_metrics, val_metrics = train_model(
+        run_id,
+        compiled_model,
+        train_dataloader,
+        val_dataloader,
+        n_epochs=n_epochs,
+        loss_name=loss_name,
+        loss_kwargs=loss_kwargs,
+        print_metrics=_choose_print_metrics(dataset_name, print_metrics),
+        tb_kwargs=tb_kwargs,
+        device=device,
+        **other_train_kwargs,
+    )
+
+    return run_id, compiled_model, train_metrics, val_metrics
 
 
 def parse_args():
@@ -577,6 +581,8 @@ def parse_args():
                         help='Additional metrics to print to stdout')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('-exp', '--experiment', type=str, default='',
+                        help='Custom experiment name')
     parser.add_argument('--hint', action='store_true',
                         help='Use HINT training')
     parser.add_argument('--hint-lambda', type=float, default=1,
@@ -732,6 +738,7 @@ if __name__ == '__main__':
             undersample_label=ARGS.undersample,
             balanced_sampler=ARGS.balanced_sampler,
             debug=ARGS.debug,
+            experiment=ARGS.experiment,
             tb_kwargs=ARGS.tb_kwargs,
             multiple_gpu=ARGS.multiple_gpu,
             num_workers=ARGS.num_workers,

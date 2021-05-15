@@ -3,14 +3,13 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
-from PIL import Image
 
 from medai.datasets.common import (
     BatchItem,
     ORGAN_BACKGROUND,
     JSRT_ORGANS,
 )
-from medai.utils.images import get_default_image_transform
+from medai.utils.images import get_default_image_transform, load_image
 
 DATASET_DIR = os.environ.get('DATASET_DIR_JSRT', None)
 
@@ -76,7 +75,7 @@ class JSRTDataset(Dataset):
         image_name = self.images_names[idx]
 
         image_fpath = os.path.join(self.images_dir, image_name)
-        image = Image.open(image_fpath).convert(self.image_format)
+        image = load_image(image_fpath, self.image_format)
 
         image = self.transform(image)
 
@@ -107,7 +106,9 @@ class JSRTDataset(Dataset):
 
             fpath = os.path.join(masks_folder, organ, image_name_gif)
 
-            mask = Image.open(fpath)
+            mask = load_image(fpath, 'L')
+            # TESTME: does it work with 'L'?
+            # it worked before without converting, run this and check!
             mask = self.transform_mask(mask) # shape: 1, height, width
 
             mask = mask.squeeze(0) # shape: height, width

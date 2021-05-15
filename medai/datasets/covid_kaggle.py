@@ -1,7 +1,7 @@
+import os
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
-import os
 
 from medai.datasets.common import BatchItem
 
@@ -24,10 +24,14 @@ def _get_default_image_transformation(image_size=(512, 512)):
 
 class CovidKaggleDataset(Dataset):
     def __init__(self, dataset_type='train', max_samples=None, image_size=(512, 512), **kwargs):
+        super().__init__()
+
         raise NotImplementedError('CovidKaggleDataset mean and std')
 
+        # pylint: disable=unreachable
+
         if DATASET_DIR is None:
-            raise Exception(f'DATASET_DIR_COVID_KAGGLE not found in env variables')
+            raise Exception('DATASET_DIR_COVID_KAGGLE not found in env variables')
 
         if dataset_type not in ['train', 'val', 'test']:
             raise ValueError('No such type, must be train, val, or test')

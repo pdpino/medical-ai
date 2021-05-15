@@ -3,10 +3,7 @@ import json
 import logging
 import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
-from ignite.utils import to_onehot
 import pandas as pd
-from PIL import Image
 
 from medai.datasets.common import (
     BatchItem,
@@ -14,7 +11,12 @@ from medai.datasets.common import (
     JSRT_ORGANS,
     UP_TO_DATE_MASKS_VERSION,
 )
-from medai.utils.images import get_default_image_transform, load_image
+from medai.utils.images import (
+    get_default_image_transform,
+    load_image,
+    load_organ_masks,
+    get_default_mask_transform,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -155,10 +157,7 @@ class CXR14Dataset(Dataset):
 
         self.enable_masks = masks
         if self.enable_masks:
-            self.transform_mask = transforms.Compose([
-                transforms.Resize(image_size, 0), # Nearest mode
-                transforms.ToTensor(),
-            ])
+            self.transform_mask = get_default_mask_transform(image_size)
 
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
 
@@ -239,26 +238,12 @@ class CXR14Dataset(Dataset):
 
         filepath = os.path.join(self.masks_dir, image_name)
 
-        if not os.path.isfile(filepath):
-            LOGGER.error('No such file: %s', filepath)
-            return None
-
-        mask = Image.open(filepath).convert('L')
-        mask = self.transform_mask(mask)
-        # shape: n_channels=1, height, width
-
-        mask = (mask * 255).long()
-        # shape: 1, height, width
-
-        if self.seg_multilabel:
-            mask = to_onehot(mask, len(self.organs))
-            # shape: 1, n_organs, height, width
-
-        mask = mask.squeeze(0)
-        # shape(seg_multilabel=True): n_organs, height, width
-        # shape(seg_multilabel=False): height, width
-
-        return mask
+        return load_organ_masks(
+            filepath,
+            self.transform_mask,
+            self.seg_multilabel,
+            len(self.organs),
+        )
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a

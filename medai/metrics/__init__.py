@@ -4,7 +4,7 @@ import operator
 import logging
 import torch
 import pandas as pd
-from ignite.metrics import RunningAverage
+from ignite.metrics import RunningAverage, MetricsLambda
 
 from medai.utils.files import get_results_folder
 
@@ -94,4 +94,4 @@ def attach_losses(engine, losses=[], device='cuda'):
             output_transform=operator.itemgetter(loss_name), alpha=1,
             device=device,
         )
-        loss_metric.attach(engine, loss_name)
+        MetricsLambda(lambda x: x.item(), loss_metric).attach(engine, loss_name)

@@ -178,6 +178,7 @@ def _attach_multiclass_metrics(engine, labels, metric_name, MetricClass,
 
     if include_individual:
         for i, label in enumerate(labels):
+            # Needs to add .item() call?? Test this!!
             metric_for_label = MetricsLambda(operator.itemgetter(i), metric)
             metric_for_label.attach(engine, f'{metric_name}_{label}')
 

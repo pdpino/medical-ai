@@ -1,11 +1,13 @@
 import os
 import logging
 import numbers
+from tqdm.auto import tqdm
+
 import numpy as np
 import torch
 from torch.nn.functional import interpolate
 from torchvision import transforms
-from tqdm.auto import tqdm
+from ignite.utils import to_onehot
 from PIL import Image
 
 from medai.datasets.common import BatchItem
@@ -248,3 +250,32 @@ def load_image(image_fpath, image_format):
         image_fp.close()
 
     return image
+
+def load_organ_masks(filepath, transform_mask, multilabel, n_organs):
+    if not os.path.isfile(filepath):
+        LOGGER.error('No such file for mask: %s', filepath)
+        return None
+
+    mask = load_image(filepath, 'L')
+    mask = transform_mask(mask)
+    # shape: n_channels=1, height, width
+
+    mask = (mask * 255).long()
+    # shape: 1, height, width
+
+    if multilabel:
+        mask = to_onehot(mask, n_organs)
+        # shape: 1, n_organs, height, width
+
+    mask = mask.squeeze(0)
+    # shape(seg_multilabel=True): n_organs, height, width
+    # shape(seg_multilabel=False): height, width
+
+    return mask
+
+
+def get_default_mask_transform(image_size):
+    return transforms.Compose([
+        transforms.Resize(image_size, 0), # Nearest mode
+        transforms.ToTensor(),
+    ])
