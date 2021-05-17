@@ -1,5 +1,6 @@
 import argparse
 import logging
+import numbers
 from pprint import pprint
 import torch
 from torch.utils.data.dataset import Subset
@@ -7,6 +8,7 @@ from ignite.engine import Engine
 
 from medai.datasets import prepare_data_report_generation
 from medai.metrics import save_results, are_results_saved
+from medai.metrics.classification.optimize_threshold import load_optimal_threshold
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
 )
@@ -29,11 +31,15 @@ from medai.utils import (
     RunId,
 )
 
-
 LOGGER = logging.getLogger('medai.rg.eval')
 
+def _get_step_fn_classify_plus_templates(cl_model, rg_templates_model,
+                                         threshold=0.5, device='cuda'):
+    """Return a step_fn that uses a CNN and templates to generate a report.
 
-def _get_step_fn_classify_plus_templates(cl_model, rg_templates_model, device='cuda'):
+    Args:
+        threshold -- number or tensor of shape (n_diseases,)
+    """
     def step_fn(unused_engine, data_batch):
         # Move inputs to GPU
         images = data_batch.images.to(device)
@@ -49,9 +55,11 @@ def _get_step_fn_classify_plus_templates(cl_model, rg_templates_model, device='c
         outputs = torch.sigmoid(output_tuple[0])
         # shape: batch_size, n_labels
 
-        # TODO: use different thresholds! (or optimize it first)
+        labels = (outputs >= threshold).type(torch.uint8)
+        # shape: batch_size, n_labels
+
         # Compute reports with templates
-        flat_reports_gen = rg_templates_model(outputs)
+        flat_reports_gen = rg_templates_model(labels)
         # list of lists with reports (word indices)
 
         reports = data_batch.reports.long()
@@ -68,12 +76,12 @@ def _get_step_fn_classify_plus_templates(cl_model, rg_templates_model, device='c
     return step_fn
 
 
-
 def _evaluate_model_in_dataloader(
         run_id,
         cl_model,
         rg_templates_model,
         dataloader,
+        threshold=0.5,
         n_epochs=1,
         medical_correctness=True,
         device='cuda'):
@@ -89,6 +97,7 @@ def _evaluate_model_in_dataloader(
     engine = Engine(_get_step_fn_classify_plus_templates(
         cl_model,
         rg_templates_model,
+        threshold=threshold,
         device=device,
     ))
     attach_metrics_report_generation(engine, free=True, device=device)
@@ -110,6 +119,7 @@ def evaluate_model_and_save(
         dataloaders,
         device='cuda',
         medical_correctness=True,
+        threshold=0.5,
         n_epochs=1,
         ):
     """Evaluates a model in ."""
@@ -126,6 +136,7 @@ def evaluate_model_and_save(
             cl_model,
             rg_templates_model,
             dataloader,
+            threshold=threshold,
             device=device,
             medical_correctness=medical_correctness,
             n_epochs=n_epochs,
@@ -134,6 +145,7 @@ def evaluate_model_and_save(
     save_results(metrics, run_id, suffix='free')
 
     return metrics
+
 
 def _get_diseases_from_cl_metadata(metadata):
     """Return the list of labels used for a model in the metadata."""
@@ -145,6 +157,28 @@ def _get_diseases_from_cl_metadata(metadata):
             return labels
 
     raise Exception(f'Labels not found in metadata: {metadata}')
+
+
+def _get_threshold(cl_run_id, mode, diseases, device='cuda'):
+    if isinstance(mode, numbers.Number):
+        # hardcoded threshold
+        return mode
+
+    if not isinstance(mode, str):
+        raise Exception(f'Threshold type not recognized: {type(mode)} - {mode}')
+
+    thresh_dict = load_optimal_threshold(cl_run_id, mode)
+
+    if not set(diseases).issubset(thresh_dict):
+        raise Exception(
+            f'Threshold not found for all diseases: diseases={diseases}, thresh={thresh_dict}',
+        )
+
+    return torch.FloatTensor([
+        thresh_dict[disease]
+        for disease in diseases
+    ]).to(device)
+
 
 @timeit_main(LOGGER)
 def evaluate_run(cl_run_id,
@@ -208,9 +242,12 @@ def evaluate_run(cl_run_id,
         for dataset_type in dataset_types
     ]
 
+    # Decide threshold
+    diseases = _get_diseases_from_cl_metadata(compiled_model.metadata)
+    threshold = _get_threshold(cl_run_id, 'pr', diseases, device=device)
+
     # Create RG templates model
     vocab = dataloaders[0].dataset.get_vocab()
-    diseases = _get_diseases_from_cl_metadata(compiled_model.metadata)
     rg_template_model = create_rg_template_model(template_set, diseases, vocab)
 
     metrics = evaluate_model_and_save(
@@ -219,6 +256,7 @@ def evaluate_run(cl_run_id,
         rg_template_model,
         dataloaders,
         device=device,
+        threshold=threshold,
         medical_correctness=medical_correctness,
         n_epochs=n_epochs,
     )

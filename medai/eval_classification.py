@@ -158,7 +158,7 @@ def evaluate_run(run_id,
             pprint([
                 (split, [
                     f'{m}={values[m]}'
-                    for m in ['roc_auc', 'pr_auc', 'iou']
+                    for m in ['roc_auc', 'pr_auc']
                 ])
                 for split, values in metrics.items()
             ])

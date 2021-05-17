@@ -48,19 +48,17 @@ class TemplateRGModel:
                 self.templates[disease][value] = template_as_idxs
 
 
-    def __call__(self, labels, threshold=0.5):
-        # labels shape: batch_size, n_diseases
-
-        labels = (labels >= threshold).type(torch.uint8)
-        # same shape
+    def __call__(self, labels):
+        # labels shape: batch_size, n_diseases (binary)
 
         reports = []
+        labels = labels.tolist()
+
         for sample_predictions in labels:
             # shape: n_diseases
 
             report = []
             for disease_name, value in zip(self.diseases, sample_predictions):
-                value = value.item()
                 report.extend(self.templates[disease_name].get(value, []))
 
             reports.append(report)

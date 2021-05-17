@@ -92,3 +92,17 @@ def calculate_optimal_threshold(run_id, split='val'):
             LOGGER.info('Saved thresholds to %s', fpath)
 
     return optimal_thresh_roc, optimal_thresh_pr, best_values
+
+
+def load_optimal_threshold(run_id, name):
+    if name not in ('pr', 'roc'):
+        raise Exception(f'Threshold name not recognized: {name}')
+
+    results_folder = get_results_folder(run_id)
+    fpath = os.path.join(results_folder, f'thresholds-{name}.json')
+
+    if not os.path.isfile(fpath):
+        raise Exception(f'Best thresholds not calculated: {fpath}')
+
+    with open(fpath, 'r') as f:
+        return json.load(f)
