@@ -44,6 +44,7 @@ def _keep_max_samples_balanced(df, labels, max_samples):
 class ImageNetDataset(Dataset):
     dataset_dir = DATASET_DIR
     multilabel = False
+    enable_masks = False
 
     def __init__(self, dataset_type='train', norm_by_sample=False,
                  image_format='RGB', image_size=(256, 256), max_samples=None,

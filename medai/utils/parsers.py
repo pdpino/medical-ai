@@ -176,6 +176,9 @@ def add_args_med(parser):
                            help='Start using med-metrics after N epochs (in validation)')
     med_group.add_argument('--med-val-steps', type=int, default=None,
                            help='Run med-metrics every N epochs (in validation)')
+    med_group.add_argument('--med-dummy', action='store_true',
+                           help='Use a dummy labeler (debug faster!)')
+
 
 
 def build_args_med_(args):
@@ -184,6 +187,7 @@ def build_args_med_(args):
         'steps': args.med_steps,
         'val_after': args.med_val_after,
         'val_steps': args.med_val_steps,
+        'dummy': args.med_dummy,
     }
 
 

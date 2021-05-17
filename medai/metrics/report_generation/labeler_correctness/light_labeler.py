@@ -213,3 +213,14 @@ class ChexpertLightLabeler(LightLabeler):
         )
 
         return labels
+
+class DummyLabeler(LightLabeler):
+    """Use it for debugging!!."""
+    name = 'dummy'
+    diseases = CHEXPERT_LABELS
+
+    no_finding_idx = 0
+    support_idxs = 13
+
+    def _label_reports(self, reports):
+        return np.zeros((len(reports), len(self.diseases)))

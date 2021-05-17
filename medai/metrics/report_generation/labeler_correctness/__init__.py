@@ -6,7 +6,7 @@ from ignite.engine import Events
 from ignite.metrics import MetricsLambda
 
 from medai.metrics.report_generation.labeler_correctness.metric import MedicalLabelerCorrectness
-from medai.metrics.report_generation.labeler_correctness.light_labeler import ChexpertLightLabeler
+from medai.metrics.report_generation.labeler_correctness.light_labeler import ChexpertLightLabeler, DummyLabeler
 from medai.metrics.report_generation.labeler_correctness.labeler_timer import LabelerTimerMetric
 from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
 from medai.metrics.report_generation.labeler_correctness.hit_counter_metric import HitCounterMetric
@@ -111,6 +111,7 @@ def _attach_labeler(engine, labeler, basename, usage=None,
 
 def attach_medical_correctness(trainer, validator, vocab,
                                after=None, steps=None, val_after=None, val_steps=None,
+                               dummy=False,
                                device='cuda'):
     """Attaches medical correctness metrics to engines.
 
@@ -144,6 +145,9 @@ def attach_medical_correctness(trainer, validator, vocab,
         )
         return
 
+    if dummy:
+        LOGGER.warning('Attaching DUMMY med metrics!!')
+
     train_usage = EveryNAfterMEpochs(steps, after, trainer) if after or steps else None
     val_usage = EveryNAfterMEpochs(val_steps, val_after, trainer) \
         if val_after or val_steps else None
@@ -157,7 +161,10 @@ def attach_medical_correctness(trainer, validator, vocab,
         else:
             usage = val_usage
 
-        labeler = ChexpertLightLabeler(vocab)
+        if dummy:
+            labeler = DummyLabeler(vocab)
+        else:
+            labeler = ChexpertLightLabeler(vocab)
         _attach_labeler(engine, labeler, 'chex', device=device, usage=usage)
 
         # TODO: apply for MIRQI as well
