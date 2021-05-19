@@ -15,9 +15,11 @@ def create_flat_dataloader(dataset, **kwargs):
         images = []
         reports = []
         report_fnames = []
+        image_fnames = []
         for tup in batch_tuples:
             images.append(tup.image)
             report_fnames.append(tup.report_fname)
+            image_fnames.append(tup.image_fname)
             reports.append(torch.tensor(tup.report + [END_IDX])) # pylint: disable=not-callable
 
         images = torch.stack(images)
@@ -26,6 +28,7 @@ def create_flat_dataloader(dataset, **kwargs):
             images=images,
             reports=reports,
             report_fnames=report_fnames,
+            image_fnames=image_fnames,
         )
 
     return DataLoader(dataset, collate_fn=_collate_fn, **kwargs)

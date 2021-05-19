@@ -26,6 +26,7 @@ def create_hierarchical_dataloader(dataset, include_masks=False,
         masks = []
         sentence_embeddings = []
         report_fnames = []
+        image_fnames = []
         max_sentence_len = -1
         max_n_sentences = -1
 
@@ -34,6 +35,7 @@ def create_hierarchical_dataloader(dataset, include_masks=False,
             # Collate images and filename
             images.append(tup.image)
             report_fnames.append(tup.report_fname)
+            image_fnames.append(tup.image_fname)
 
             # Collate report
             report = tup.report # shape(list): n_words
@@ -112,6 +114,7 @@ def create_hierarchical_dataloader(dataset, include_masks=False,
             reports=reports,
             stops=stops,
             report_fnames=report_fnames,
+            image_fnames=image_fnames,
             masks=masks,
             sentence_embeddings=sentence_embeddings,
         )

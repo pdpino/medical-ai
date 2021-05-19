@@ -34,6 +34,7 @@ def attach_report_writer(engine, run_id, vocab, assert_n_samples=None, free=Fals
         'dataset_type',
         'ground_truth',
         'generated',
+        'image_fname',
     ])
 
     @engine.on(Events.STARTED)
@@ -46,6 +47,7 @@ def attach_report_writer(engine, run_id, vocab, assert_n_samples=None, free=Fals
     def _save_text(engine):
         output = engine.state.output
         filenames = engine.state.batch.report_fnames
+        image_fnames = engine.state.batch.image_fnames
         gt_reports = output['flat_clean_reports_gt']
         gen_reports = output['flat_clean_reports_gen']
 
@@ -53,10 +55,11 @@ def attach_report_writer(engine, run_id, vocab, assert_n_samples=None, free=Fals
         dataset_type = engine.state.dataloader.dataset.dataset_type
 
         # Save result
-        for report_idxs, generated_idxs, filename in zip(
+        for report_idxs, generated_idxs, filename, image_fname in zip(
             gt_reports,
             gen_reports,
             filenames,
+            image_fnames,
             ):
             # Convert to text
             report = report_reader.idx_to_text(report_idxs)
@@ -83,6 +86,7 @@ def attach_report_writer(engine, run_id, vocab, assert_n_samples=None, free=Fals
                 dataset_type,
                 report,
                 generated,
+                image_fname,
             )
 
             engine.state.line_counter += 1
