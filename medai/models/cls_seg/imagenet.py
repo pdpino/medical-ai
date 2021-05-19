@@ -41,10 +41,9 @@ class ImageNetClsSegModel(nn.Module):
             # out: n_seg_labels, in_size, in_size
         )
 
-        self.classifier = nn.Sequential(
-            get_adaptive_pooling_layer(gpool, drop=self.dropout_features),
-            nn.Linear(self.features_size, len(cl_labels)),
-        )
+        self.cl_reduction = get_adaptive_pooling_layer(gpool, drop=self.dropout_features)
+
+        self.classifier = nn.Linear(self.features_size, len(cl_labels))
 
 
     def forward(self, x):
@@ -53,7 +52,7 @@ class ImageNetClsSegModel(nn.Module):
         x = self.features(x)
         # shape: batch_size, n_features, f-height, f-width
 
-        classification = self.classifier(x)
+        classification = self.classifier(self.cl_reduction(x))
         # shape: batch_size, n_cl_diseases
 
         segmentation = self.segmentator(x)
