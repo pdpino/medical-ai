@@ -76,9 +76,19 @@ class MIMICCXRDataset(Dataset):
 
         self.seg_multilabel = seg_multilabel
 
+        if image_size[0] <= 256 and image_size[1] <= 256:
+            use_fast = True
+            used_images_folder = 'images-small'
+        else:
+            use_fast = mini == 1
+            used_images_folder = 'images'
+
+        if not use_fast:
+            LOGGER.warning('MIMIC loading images from HDD, will be slow')
+
         self.images_dir = os.path.join(
-            DATASET_DIR_FAST if mini == 1 else DATASET_DIR,
-            'images',
+            DATASET_DIR_FAST if use_fast else DATASET_DIR,
+            used_images_folder,
         )
         self.reports_dir = os.path.join(DATASET_DIR, 'reports')
 
