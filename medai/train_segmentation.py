@@ -315,7 +315,7 @@ def train_from_scratch(run_name,
     save_metadata(metadata, run_id)
 
     # Create compiled model
-    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
 
     # Train
     train_model(run_id,

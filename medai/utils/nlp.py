@@ -92,6 +92,12 @@ class ReportReader:
 
         self._ignore_pad = ignore_pad
 
+    def __len__(self):
+        n_tokens = len(self._word_to_idx)
+        if self._added_dot_idx in self._idx_to_word:
+            n_tokens -= 1
+        return n_tokens
+
     def _iter_hierarchical(self, report):
         """Iterates through a hierarchical report."""
         for sentence in report:
@@ -114,9 +120,12 @@ class ReportReader:
             report = report.tolist()
 
             if len(shape) > 1:
+                # TODO: remove this hierarchical usage?
+                # flattening is handled in the step_fn
                 _word_iterator = self._iter_hierarchical
 
         if not isinstance(report, (list, np.ndarray)):
+            LOGGER.error('Unknown type received in idx_to_text %s', type(report))
             return 'ERROR'
 
         return ' '.join(

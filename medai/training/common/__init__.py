@@ -165,8 +165,9 @@ class TrainingProcess(abc.ABC):
             'device': str(self.device),
             'visible': os.environ.get('CUDA_VISIBLE_DEVICES', ''),
             'multiple': self.args.multiple_gpu,
-            'num_workers': self.args.num_workers,
             'num_threads': self.args.num_threads,
+            # FIXME: should be extracted from dataset_kwargs if resume:
+            'num_workers': self.args.num_workers,
         }
 
     def run(self):
@@ -320,6 +321,7 @@ class TrainingProcess(abc.ABC):
         self._prepare_and_save_metadata()
 
         self.compiled_model = CompiledModel(
+            self.run_id,
             self.model,
             self.optimizer,
             self.lr_scheduler,

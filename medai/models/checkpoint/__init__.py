@@ -133,7 +133,7 @@ def _load_compiled_model_base(run_id,
         lr_scheduler = None
 
     # Compile model
-    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)
@@ -242,7 +242,7 @@ def load_compiled_model_report_generation(run_id,
         lr_scheduler = None
 
     # Compiled model
-    compiled_model = CompiledModel(model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)

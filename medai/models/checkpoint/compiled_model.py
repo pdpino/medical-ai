@@ -18,7 +18,8 @@ class SmartDict:
 
 class CompiledModel:
     """Handles a model and optimizer together."""
-    def __init__(self, model, optimizer, lr_scheduler=None, metadata=None, epoch=0):
+    def __init__(self, run_id, model, optimizer, lr_scheduler=None, metadata=None, epoch=0):
+        self.run_id = run_id
         self.model = model
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
