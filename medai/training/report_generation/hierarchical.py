@@ -156,7 +156,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
                 att_loss = att_loss_fn(gen_masks, gt_masks, stop_ground_truth)
                 total_loss += lambda_att * att_loss
             else:
-                att_loss = -1
+                att_loss = None
 
             if supervise_sentences:
                 sentence_loss = sentence_loss_fn(
@@ -170,7 +170,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
 
                 total_loss += lambda_sent * sentence_loss
             else:
-                sentence_loss = -1
+                sentence_loss = None
 
         else:
             total_loss = None

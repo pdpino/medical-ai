@@ -4,14 +4,20 @@ import argparse
 import logging
 import pprint
 import numpy as np
-from sklearn.metrics import precision_recall_fscore_support as prf1s, roc_auc_score, accuracy_score
+import pandas as pd
+from sklearn.metrics import (
+    precision_recall_fscore_support as prf1s,
+    roc_auc_score,
+    accuracy_score,
+    auc,
+    precision_recall_curve as pr_curve,
+)
 
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.metrics import load_rg_outputs
 from medai.metrics.report_generation import chexpert
 from medai.utils.files import get_results_folder
-from medai.utils import timeit_main, config_logging, get_timestamp, RunId
-
+from medai.utils import timeit_main, config_logging, get_timestamp, RunId, parsers
 
 LOGGER = logging.getLogger('medai.rg.eval.chexpert')
 
@@ -31,13 +37,32 @@ def _calculate_metrics(df):
 
     precision, recall, f1, _ = prf1s(ground_truth, generated, zero_division=0)
 
+    # Calculate ROC-AUC
     try:
         roc_auc = roc_auc_score(ground_truth, generated, average=None)
     except ValueError as e:
         LOGGER.warning(e)
         roc_auc = np.array([-1]*len(CHEXPERT_LABELS))
 
-    return acc, precision, recall, f1, roc_auc
+    # Calculate PR-AUC
+    pr_auc = []
+    for i, disease in enumerate(CHEXPERT_LABELS):
+        gt = ground_truth[:, i]
+        gen = generated[:, i]
+
+        prec_values, rec_values, unused_thresholds = pr_curve(gt, gen)
+        pr = auc(rec_values, prec_values)
+
+        if np.isnan(pr):
+            LOGGER.warning('PR-auc is nan for disease %s', disease)
+            pr = -1
+
+        pr_auc.append(pr)
+
+    pr_auc = np.array(pr_auc)
+
+
+    return acc, precision, recall, f1, roc_auc, pr_auc
 
 
 def _calculate_metrics_dict(df):
@@ -63,7 +88,7 @@ def _calculate_metrics_dict(df):
     for dataset_type in set(df['dataset_type']):
         sub_df = df[df['dataset_type'] == dataset_type]
 
-        acc, precision, recall, f1, roc_auc = _calculate_metrics(sub_df)
+        acc, precision, recall, f1, roc_auc, pr_auc = _calculate_metrics(sub_df)
 
         metrics = {}
         _add_to_results(metrics, acc, 'acc')
@@ -71,23 +96,16 @@ def _calculate_metrics_dict(df):
         _add_to_results(metrics, recall, 'recall')
         _add_to_results(metrics, f1, 'f1')
         _add_to_results(metrics, roc_auc, 'roc_auc')
+        _add_to_results(metrics, pr_auc, 'pr_auc')
 
         all_metrics[dataset_type] = metrics
 
     return all_metrics
 
 
-def _find_dataset_name(run_name):
-    if 'mini-mimic' in run_name:
-        return 'mini-mimic'
-    if '_mimic' in run_name:
-        return 'mimic-cxr'
-    return 'iu-x-ray'
-
-
-@timeit_main(LOGGER)
+@timeit_main(LOGGER, sep='-', sep_times=50)
 def evaluate_run(run_id,
-                 override=False,
+                 override_outputs=False,
                  max_samples=None,
                  free=False,
                  quiet=False,
@@ -101,51 +119,51 @@ def evaluate_run(run_id,
     suffix = 'free' if free else 'notfree'
     labeled_output_path = os.path.join(results_folder, f'outputs-labeled-{suffix}.csv')
 
-    if not override and os.path.isfile(labeled_output_path):
-        LOGGER.info('Skipping run, already calculated: %s', run_id)
-        return
+    if not override_outputs and os.path.isfile(labeled_output_path):
+        LOGGER.info('Outputs already calculated: %s', suffix)
+        df = pd.read_csv(labeled_output_path)
+    else:
+        # Read outputs
+        df = load_rg_outputs(run_id, free=free)
 
-    # Read outputs
-    df = load_rg_outputs(run_id, free=free)
-
-    if df is None:
-        LOGGER.error('Need to compute outputs for run first: %s', run_id)
-        return
-
-    n_samples = len(df)
-    LOGGER.info('%d samples found in outputs, free=%s', n_samples, free)
-
-    _n_distinct_epochs = set(df['epoch'])
-    if len(_n_distinct_epochs) != 1:
-        LOGGER.error('Only works for one epoch, found: %d', _n_distinct_epochs)
-        return
-
-    # Debugging purposes
-    if max_samples is not None:
-        df = df.head(max_samples)
-        df.reset_index(inplace=True, drop=True)
+        if df is None:
+            LOGGER.error('Need to compute outputs for run first: %s', run_id)
+            return
 
         n_samples = len(df)
-        LOGGER.info('Only using max_samples = %d', n_samples)
+        LOGGER.info('%d samples found in outputs, free=%s', n_samples, free)
 
-    # Get dataset_name
-    dataset_name = _find_dataset_name(run_id.full_name)
+        _n_distinct_epochs = set(df['epoch'])
+        if len(_n_distinct_epochs) != 1:
+            LOGGER.error('Only works for one epoch, found: %d', _n_distinct_epochs)
+            return
 
-    # Compute labels for both GT and generated
-    caller_id = f'{run_id.short_name}_eval{get_timestamp()}'
-    df = chexpert.apply_labeler_to_df(
-        df, caller_id=caller_id, dataset_name=dataset_name, batches=batches,
-    )
+        # Debugging purposes
+        if max_samples is not None:
+            df = df.head(max_samples)
+            df.reset_index(inplace=True, drop=True)
 
-    if len(df) != n_samples:
-        LOGGER.error(
-            'Internal error: n_samples does not match, initial=%d vs final=%d',
-            n_samples, len(df),
+            n_samples = len(df)
+            LOGGER.info('Only using max_samples = %d', n_samples)
+
+        # Get dataset_name
+        dataset_name = run_id.get_dataset_name()
+
+        # Compute labels for both GT and generated
+        caller_id = f'{run_id.short_name}_eval{get_timestamp()}'
+        df = chexpert.apply_labeler_to_df(
+            df, caller_id=caller_id, dataset_name=dataset_name, batches=batches,
         )
-        return
 
-    # Save to file, to avoid heavy recalculations
-    df.to_csv(labeled_output_path, index=False)
+        if len(df) != n_samples:
+            LOGGER.error(
+                'Internal error: n_samples does not match, initial=%d vs final=%d',
+                n_samples, len(df),
+            )
+            return
+
+        # Save to file, to avoid heavy recalculations
+        df.to_csv(labeled_output_path, index=False)
 
     # Calculate metrics over train, val and test
     metrics = _calculate_metrics_dict(df)
@@ -160,15 +178,25 @@ def evaluate_run(run_id,
         LOGGER.info(pprint.pformat(metrics))
 
 
+@timeit_main(LOGGER)
+def evaluate_run_with_free_values(run_id, free_values, **kwargs):
+    LOGGER.info('Evaluating %s', run_id)
+
+    for free_value in free_values:
+        evaluate_run(
+            run_id,
+            free=free_value,
+            **kwargs
+        )
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--run-name', type=str, default=None, required=True,
                         help='Run name to evaluate')
-    parser.add_argument('--override', action='store_true',
+    parser.add_argument('--override-outputs', action='store_true',
                         help='Whether to override previous calculation')
-    parser.add_argument('--free', action='store_true',
-                        help='If present, use outputs freely generated')
     parser.add_argument('--no-debug', action='store_true',
                         help='If present, the run is non-debug')
     parser.add_argument('--max-samples', type=int, default=None,
@@ -178,7 +206,11 @@ def parse_args():
     parser.add_argument('--batches', type=int, default=None,
                         help='Process the reports in batches')
 
+    parsers.add_args_free_values(parser)
+
     args = parser.parse_args()
+
+    parsers.build_args_free_values_(args, parser)
 
     args.debug = not args.no_debug
 
@@ -186,14 +218,15 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    ARGS = parse_args()
-
     config_logging()
 
-    evaluate_run(RunId(ARGS.run_name, ARGS.debug, 'rg'),
-                 override=ARGS.override,
-                 max_samples=ARGS.max_samples,
-                 free=ARGS.free,
-                 quiet=ARGS.quiet,
-                 batches=ARGS.batches,
-                 )
+    ARGS = parse_args()
+
+    evaluate_run_with_free_values(
+        RunId(ARGS.run_name, ARGS.debug, 'rg'),
+        free_values=ARGS.free_values,
+        override_outputs=ARGS.override_outputs,
+        max_samples=ARGS.max_samples,
+        quiet=ARGS.quiet,
+        batches=ARGS.batches,
+    )

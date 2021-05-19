@@ -144,7 +144,7 @@ def parse_str_or_int(s):
         return s
 
 
-def timeit_main(logger):
+def timeit_main(logger, sep='=', sep_times=110):
     """Times a main function."""
     def wrapper(fn):
         def wrapped(*args, **kwargs):
@@ -155,7 +155,7 @@ def timeit_main(logger):
 
             total_time = time.time() - start_time
             logger.info('Total time: %s', duration_to_str(total_time))
-            logger.info('=' * 110)
+            logger.info(sep * sep_times)
 
             return result
 

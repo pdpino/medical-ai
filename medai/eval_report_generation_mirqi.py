@@ -4,12 +4,12 @@ import json
 import subprocess
 import argparse
 import logging
-
 from pprint import pprint
+
 import pandas as pd
 import numpy as np
 
-from medai.utils import TMP_DIR, timeit_main, RunId
+from medai.utils import TMP_DIR, timeit_main, RunId, config_logging
 from medai.utils.files import get_results_folder
 from medai.metrics import load_rg_outputs
 
@@ -194,8 +194,8 @@ def _apply_mirqi_to_df(df, gt_col_name='ground_truth', gen_col_name='generated',
     cmd = f'{cmd_cd} && {cmd_call}'
 
     try:
-        LOGGER.info('Evaluating reports with MIRQI...')
-        LOGGER.info('Calling %s', cmd_call)
+        LOGGER.info('Evaluating %s reports with MIRQI...', f'{len(df):,}')
+        LOGGER.debug('Calling %s', cmd_call)
         subprocess.run(
             cmd, shell=True, check=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -237,7 +237,7 @@ def _calculate_metrics_dict(df):
     return all_metrics
 
 
-@timeit_main
+@timeit_main(LOGGER)
 def evaluate_run(run_id,
                  override=False,
                  max_samples=None,
@@ -327,6 +327,8 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    config_logging()
+
     ARGS = parse_args()
 
     evaluate_run(RunId(ARGS.run_name, ARGS.debug, 'rg').resolve(),

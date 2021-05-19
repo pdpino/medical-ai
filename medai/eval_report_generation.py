@@ -250,8 +250,8 @@ def parse_args():
                         help='If is a non-debugging run')
     parser.add_argument('--override', action='store_true',
                         help='Whether to override previous results')
-    parser.add_argument('--no-med', action='store_true',
-                        help='If present, do not use medical-correctness metrics')
+    parser.add_argument('--use-med', action='store_true',
+                        help='If present, use (runtime) medical-correctness metrics')
     parser.add_argument('--skip-check-unclean', action='store_true',
                         help='If present, do not check for unclean reports in the outputs')
 
@@ -280,7 +280,7 @@ if __name__ == '__main__':
                  dataset_types=ARGS.eval_in,
                  multiple_gpu=ARGS.multiple_gpu,
                  device=DEVICE,
-                 medical_correctness=not ARGS.no_med,
+                 medical_correctness=ARGS.use_med,
                  n_epochs=ARGS.epochs,
                  max_samples=ARGS.max_samples,
                  override=ARGS.override,

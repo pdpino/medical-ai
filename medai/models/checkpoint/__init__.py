@@ -41,6 +41,7 @@ def _get_latest_filepath(folder):
     files = [
         (_get_checkpoint_fname_epoch(fname), fname)
         for fname in os.listdir(folder)
+        if fname.endswith('.pt')
     ]
 
     if len(files) == 0:

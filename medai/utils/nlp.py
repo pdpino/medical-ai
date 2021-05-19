@@ -242,8 +242,8 @@ def split_sentences_text(report, end_token=END_OF_SENTENCE_TOKEN):
 
 def get_sentences_appearances(reports):
     """Receives an iterator of reports, and returns all sentences."""
-
     sentences_counter = Counter()
+
     for report in reports:
         for sentence in split_sentences_text(report):
             sentences_counter[sentence] += 1

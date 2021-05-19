@@ -207,9 +207,13 @@ def evaluate_run(cl_run_id,
     image_format = cl_dataset_kwargs['image_format']
     image_size = cl_dataset_kwargs['image_size']
 
+    # Extract other useful kwargs
+    cnn_name = compiled_model.metadata['model_kwargs']['model_name']
+
     # Create new run_id
     run_name = cl_run_id.short_name
     run_name += f'_cl-{dataset_name}' # note dataset can also be inferred from the cl-run-name
+    run_name += f'_{cnn_name}'
     run_name += f'_tpl-{template_set}'
     run_id = RunId(run_name, debug, 'rg')
 

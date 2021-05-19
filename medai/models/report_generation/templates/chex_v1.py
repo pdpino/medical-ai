@@ -68,9 +68,11 @@ TEMPLATES_CHEXPERT_v1 = {
 # lung-lesion == 1
 #   ct scan is more sensitive in detecting small nodules
 #   no suspicious appearing lung nodules .
+#   'there is no evidence for mass lung apices .'
 
 # lung-opacity == 1
 #   no focal air space opacities .
+#    'this opacity cannot be well identified on the lateral view .',
 
 # consolidation == 1
 #   'no focal airspace consolidations .'
@@ -90,6 +92,7 @@ TEMPLATES_CHEXPERT_v1 = {
 #   'no definite visualized rib fractures .',
 #   'no displaced rib fractures identified .',
 #   'no displaced rib fractures visualized .'
+#    'limited exam , for evaluation of fractures .',
 
 # support-devices == 0
 #  'no evidence of tuberculosis .',
