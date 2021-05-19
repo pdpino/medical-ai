@@ -122,7 +122,7 @@ def build_args_lr_sch_(args):
     }
 
 
-def add_args_early_stopping(parser, metric='loss'):
+def add_args_early_stopping(parser, metric='loss', min_delta=0):
     es_group = parser.add_argument_group('Early stopping params')
     es_group.add_argument('-noes', '--no-early-stopping', action='store_true',
                           help='If present, dont early stop the training')
@@ -130,17 +130,20 @@ def add_args_early_stopping(parser, metric='loss'):
                           help='Patience value for early-stopping')
     es_group.add_argument('--es-metric', type=str, default=metric,
                           help='Metric to monitor for early-stopping')
-    es_group.add_argument('--es-min-delta', type=float, default=0.001,
+    es_group.add_argument('--es-min-delta', type=float, default=min_delta,
                           help='Min delta to use for early-stopping')
 
 
 def build_args_early_stopping_(args):
     args.early_stopping = not args.no_early_stopping
-    args.early_stopping_kwargs = {
-        'patience': args.es_patience,
-        'metric': args.es_metric,
-        'min_delta': args.es_min_delta,
-    }
+    if args.early_stopping:
+        args.early_stopping_kwargs = {
+            'patience': args.es_patience,
+            'metric': args.es_metric,
+            'min_delta': args.es_min_delta,
+        }
+    else:
+        args.early_stopping_kwargs = {}
 
 
 def add_args_free_values(parser):

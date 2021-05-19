@@ -113,6 +113,14 @@ def attach_early_stopping(trainer,
         anyway, implying that the run may be terminated even if no values are observed. (This
         is relevant for metrics that may not be calculated on every epoch, such as chex_f1).
     """
+    info = {
+        'metric': metric,
+        'patience': patience,
+        **kwargs,
+    }
+    info_str = ' '.join(f'{k}={v}' for k, v in info.items())
+    LOGGER.info('Early stopping: %s', info_str)
+
     # Set early-stopping to info level
     es_logger = logging.getLogger('ignite.handlers.early_stopping.EarlyStopping')
     es_logger.setLevel(logging.INFO)
