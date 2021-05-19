@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 
 import torch
 from torch import nn
@@ -9,6 +10,7 @@ from ignite.handlers import Timer
 
 from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATASETS
 from medai.datasets.common import LATEST_REPORTS_VERSION
+from medai.models import save_training_stats
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_attention_vs_masks,
@@ -108,6 +110,7 @@ def train_model(run_id,
                 print_metrics=None,
                 check_unclean=True,
                 device='cuda',
+                hw_options={},
                ):
     # Prepare run stuff
     LOGGER.info('Training run: %s', run_id)
@@ -226,6 +229,16 @@ def train_model(run_id,
     # Close stuff
     tb_writer.close()
 
+    save_training_stats(
+        run_id,
+        train_dataloader.batch_size,
+        n_epochs,
+        secs_per_epoch,
+        hw_options,
+        initial_epoch,
+        dryrun=(not save_model),
+    )
+
     LOGGER.info('Finished training: %s', run_id)
 
     return trainer, validator
@@ -242,6 +255,7 @@ def resume_training(run_id,
                     multiple_gpu=False,
                     check_unclean=True,
                     device='cuda',
+                    hw_options={},
                     ):
     """Resume training."""
     assert run_id.task == 'rg'
@@ -312,6 +326,7 @@ def resume_training(run_id,
                 print_metrics=print_metrics,
                 device=device,
                 check_unclean=check_unclean,
+                hw_options=hw_options,
                 **other_train_kwargs,
                 )
 
@@ -371,6 +386,7 @@ def train_from_scratch(run_name,
                        seed=None,
                        check_unclean=True,
                        print_metrics=None,
+                       hw_options={},
                        ):
     """Train a model from scratch."""
     # Decide hierarchical
@@ -630,6 +646,7 @@ def train_from_scratch(run_name,
                 print_metrics=print_metrics,
                 check_unclean=check_unclean,
                 save_model=save_model,
+                hw_options=hw_options,
                 **other_train_kwargs,
                 )
 
@@ -809,6 +826,14 @@ if __name__ == '__main__':
 
     print_hw_options(DEVICE, ARGS)
 
+    HW_OPTIONS = {
+        'device': str(DEVICE),
+        'visible': os.environ.get('CUDA_VISIBLE_DEVICES', ''),
+        'multiple': ARGS.multiple_gpu,
+        'num_workers': ARGS.num_workers,
+        'num_threads': ARGS.num_threads,
+    }
+
     if ARGS.resume:
         resume_training(RunId(ARGS.resume, not ARGS.no_debug, 'rg'),
                         n_epochs=ARGS.epochs,
@@ -820,6 +845,7 @@ if __name__ == '__main__':
                         med_kwargs=ARGS.med_kwargs,
                         early_stopping=ARGS.early_stopping,
                         check_unclean=ARGS.check_unclean,
+                        hw_options=HW_OPTIONS,
                         )
     else:
         train_from_scratch(get_timestamp(),
@@ -876,4 +902,5 @@ if __name__ == '__main__':
                            save_model=not ARGS.dont_save,
                            check_unclean=ARGS.check_unclean,
                            print_metrics=ARGS.print_metrics,
+                           hw_options=HW_OPTIONS,
                            )

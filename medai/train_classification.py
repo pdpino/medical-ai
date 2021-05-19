@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 
 import torch
 from torch import nn
@@ -14,6 +15,7 @@ from medai.datasets import (
     UP_TO_DATE_MASKS_VERSION,
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
+from medai.models import save_training_stats
 from medai.metrics import attach_losses
 from medai.metrics.classification import (
     attach_metrics_classification,
@@ -86,6 +88,7 @@ def train_model(run_id,
                 checkpoint_metric='roc_auc',
                 print_metrics=['loss'],
                 device='cuda',
+                hw_options={},
                 ):
     # Prepare run
     LOGGER.info('Training run: %s', run_id)
@@ -199,6 +202,16 @@ def train_model(run_id,
 
     LOGGER.info('Finished training: %s', run_id)
 
+    save_training_stats(
+        run_id,
+        train_dataloader.batch_size,
+        n_epochs,
+        secs_per_epoch,
+        hw_options,
+        initial_epoch,
+        dryrun=dryrun,
+    )
+
     return trainer.state.metrics, validator.state.metrics
 
 
@@ -213,6 +226,7 @@ def resume_training(run_name,
                     debug=True,
                     multiple_gpu=False,
                     device='cuda',
+                    hw_options={},
                     ):
     """Resume training from a previous run."""
     run_id = RunId(run_name, debug, 'cls')
@@ -272,6 +286,7 @@ def resume_training(run_name,
                 print_metrics=_choose_print_metrics(dataset_name, print_metrics),
                 tb_kwargs=tb_kwargs,
                 device=device,
+                hw_options=hw_options,
                 **other_train_kwargs,
                 )
 
@@ -329,6 +344,7 @@ def train_from_scratch(run_name,
                        num_workers=2,
                        device='cuda',
                        seed=None,
+                       hw_options={},
                        ):
     """Train a model from scratch."""
     # Default values
@@ -553,6 +569,7 @@ def train_from_scratch(run_name,
         print_metrics=_choose_print_metrics(dataset_name, print_metrics),
         tb_kwargs=tb_kwargs,
         device=device,
+        hw_options=hw_options,
         **other_train_kwargs,
     )
 
@@ -679,6 +696,14 @@ if __name__ == '__main__':
 
     print_hw_options(DEVICE, ARGS)
 
+    HW_OPTIONS = {
+        'device': str(DEVICE),
+        'visible': os.environ.get('CUDA_VISIBLE_DEVICES', ''),
+        'multiple': ARGS.multiple_gpu,
+        'num_workers': ARGS.num_workers,
+        'num_threads': ARGS.num_threads,
+    }
+
     if ARGS.resume:
         resume_training(ARGS.resume,
                         max_samples=ARGS.max_samples,
@@ -689,7 +714,9 @@ if __name__ == '__main__':
                         tb_kwargs=ARGS.tb_kwargs,
                         debug=ARGS.debug,
                         multiple_gpu=ARGS.multiple_gpu,
-                        device=DEVICE)
+                        device=DEVICE,
+                        hw_options=HW_OPTIONS,
+                        )
     else:
         train_from_scratch(
             get_timestamp(),
@@ -744,4 +771,5 @@ if __name__ == '__main__':
             num_workers=ARGS.num_workers,
             device=DEVICE,
             seed=ARGS.seed,
+            hw_options=HW_OPTIONS,
             )

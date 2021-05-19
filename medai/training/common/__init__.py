@@ -1,6 +1,7 @@
 import abc
 import argparse
 import logging
+import os
 import time
 
 import torch
@@ -17,6 +18,7 @@ from medai.models.checkpoint import (
     save_metadata,
     load_compiled_model,
 )
+from medai.models import save_training_stats
 from medai.tensorboard import TBWriter
 from medai.utils import (
     get_timestamp,
@@ -76,6 +78,7 @@ class TrainingProcess(abc.ABC):
         self.tb_writer = None
         self.metadata = None
         self.other_train_kwargs = None
+        self.hw_options = None
 
     def _add_additional_args(self, parser):
         """Call additional add_args functions."""
@@ -156,6 +159,16 @@ class TrainingProcess(abc.ABC):
 
         self.args = args
 
+    def _build_hw_options(self):
+        """Save hw options."""
+        self.hw_options = {
+            'device': str(self.device),
+            'visible': os.environ.get('CUDA_VISIBLE_DEVICES', ''),
+            'multiple': self.args.multiple_gpu,
+            'num_workers': self.args.num_workers,
+            'num_threads': self.args.num_threads,
+        }
+
     def run(self):
         config_logging()
 
@@ -169,6 +182,7 @@ class TrainingProcess(abc.ABC):
             if not self.args.cpu and torch.cuda.is_available() else 'cpu'
         )
 
+        self._build_hw_options()
         print_hw_options(self.device, self.args)
 
         start_time = time.time()
@@ -545,6 +559,16 @@ class TrainingProcess(abc.ABC):
         self.tb_writer.close()
 
         self.logger.info('Finished training: %s', self.run_id)
+
+        save_training_stats(
+            self.run_id,
+            self.dataset_kwargs['batch_size'],
+            self.args.epochs,
+            secs_per_epoch,
+            self.hw_options,
+            initial_epoch=initial_epoch,
+            dryrun=self.args.dont_save,
+        )
 
         return self.trainer.state.metrics, self.validator.state.metrics
 

@@ -84,6 +84,7 @@ def config_logging(basic_level=logging.WARNING):
 
 def print_hw_options(device, args):
     """Prints hardware options (device selected) and args provided."""
+    # TODO: receive hw_options dict instead
     def _safe_get_attr(obj, attr, default_value=None):
         if not hasattr(obj, attr):
             return default_value
