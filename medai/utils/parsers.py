@@ -201,6 +201,8 @@ def add_args_cnn(parser):
                         help='Choose base CNN to use')
     cnn_group.add_argument('-drop', '--dropout', type=float, default=0,
                         help='dropout-rate to use (only available for some models)')
+    cnn_group.add_argument('-dropf', '--dropout-features', type=float, default=0,
+                        help='dropout-rate to use after model features')
     cnn_group.add_argument('-noig', '--no-imagenet', action='store_true',
                         help='If present, dont use imagenet pretrained weights')
     cnn_group.add_argument('-frz', '--freeze', action='store_true',

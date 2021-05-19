@@ -98,6 +98,10 @@ class ReportReader:
             n_tokens -= 1
         return n_tokens
 
+    @property
+    def vocab(self):
+        return self._word_to_idx
+
     def _iter_hierarchical(self, report):
         """Iterates through a hierarchical report."""
         for sentence in report:

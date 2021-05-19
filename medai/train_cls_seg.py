@@ -5,9 +5,9 @@ from medai.losses import AVAILABLE_LOSSES
 from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import attach_metrics_iox
+from medai.models import load_pretrained_weights_cnn_
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.cls_seg import create_cls_seg_model, AVAILABLE_CLS_SEG_MODELS
-from medai.models.checkpoint import load_compiled_model
 from medai.training.common import TrainingProcess
 from medai.training.detection.cls_seg import get_step_fn_cls_seg
 from medai.utils import parsers, RunId
@@ -156,43 +156,11 @@ class TrainingClsSeg(TrainingProcess):
         if self.args.pretrained_run_id is None:
             return
 
-        _info = {
-            'run': self.args.pretrained_run_id.short_name,
-            'task': self.args.pretrained_run_id.task,
-            'dataset': self.args.pretrained_run_id.get_dataset_name(),
-            'cls': self.args.pretrained_cls,
-            'seg': self.args.pretrained_seg,
-        }
-        self.logger.info(
-            'Using pretrained model: %s',
-            ' '.join(f"{k}={v}" for k, v in _info.items()),
+        load_pretrained_weights_cnn_(
+            self.model, self.args.pretrained_run_id,
+            cls_weights=self.args.pretrained_cls,
+            seg_weights=self.args.pretrained_seg,
         )
-
-        pretrained_model = load_compiled_model(
-            self.args.pretrained_run_id, device=self.device).model
-
-
-        # Copy features
-        self.model.features.load_state_dict(pretrained_model.features.state_dict())
-
-        if self.args.pretrained_cls:
-            new_labels = self.model.cl_labels
-            n_new_labels = len(new_labels)
-            old_labels = pretrained_model.cl_labels
-            n_old_labels = len(old_labels)
-            if n_old_labels != n_new_labels:
-                raise Exception(f'N-labels do not match: old={n_old_labels} vs now={n_new_labels}')
-            if old_labels != new_labels:
-                self.logger.warning(
-                    'Labels used do not match with pretrained: pretrained=%s vs this=%s',
-                    old_labels, new_labels,
-                )
-
-            prev_layers = pretrained_model.classifier
-            self.model.classifier.load_state_dict(prev_layers.state_dict())
-
-        if self.args.pretrained_seg:
-            self.model.segmentator.load_state_dict(pretrained_model.segmentator.state_dict())
 
     def _fill_hparams(self):
         if self.args.pretrained_run_id:

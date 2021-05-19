@@ -15,7 +15,7 @@ from medai.datasets import (
     UP_TO_DATE_MASKS_VERSION,
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
-from medai.models import save_training_stats
+from medai.models import save_training_stats, load_pretrained_weights_cnn_
 from medai.metrics import attach_losses
 from medai.metrics.classification import (
     attach_metrics_classification,
@@ -52,6 +52,7 @@ from medai.utils.handlers import (
 
 LOGGER = logging.getLogger('medai.cl.train')
 
+_DEFAULT_TARGET_METRIC = 'pr_auc'
 
 def _choose_print_metrics(dataset_name, additional=None):
     if dataset_name == 'cxr14':
@@ -85,7 +86,7 @@ def train_model(run_id,
                 lr_sch_metric='loss',
                 dryrun=False,
                 tb_kwargs={},
-                checkpoint_metric='roc_auc',
+                checkpoint_metric=_DEFAULT_TARGET_METRIC,
                 print_metrics=['loss'],
                 device='cuda',
                 hw_options={},
@@ -299,6 +300,7 @@ def train_from_scratch(run_name,
                        image_format='RGB',
                        cnn_name='resnet-50',
                        dropout=0,
+                       dropout_features=0,
                        imagenet=True,
                        freeze=False,
                        cnn_pooling='avg',
@@ -323,6 +325,8 @@ def train_from_scratch(run_name,
                        lr_sch_metric='loss',
                        lr_sch_kwargs={},
                        frontal_only=False,
+                       pretrained_run_id=None,
+                       pretrained_cls=True,
                        oversample=False,
                        oversample_label=None,
                        oversample_class=None,
@@ -371,10 +375,14 @@ def train_from_scratch(run_name,
         run_name += f'_g{cnn_pooling}'
     if dropout != 0:
         run_name += f'_drop{dropout}'
+    if dropout_features != 0:
+        run_name += f'_dropf{dropout_features}'
     if freeze:
         run_name += '_frz'
     if fc_layers and len(fc_layers) > 0:
         run_name += '_fc' + '-'.join(str(l) for l in fc_layers)
+    if pretrained_run_id:
+        run_name += f'_pre{pretrained_run_id.short_clean_name}'
     if oversample:
         run_name += '_os'
         if oversample_ratio is not None:
@@ -502,8 +510,18 @@ def train_from_scratch(run_name,
         'gpool': cnn_pooling,
         'fc_layers': fc_layers,
         'dropout': dropout,
+        'dropout_features': dropout_features,
     }
     model = create_cnn(**model_kwargs).to(device)
+
+    # Load features from pretrained CNN
+    if pretrained_run_id:
+        load_pretrained_weights_cnn_(
+            model, pretrained_run_id,
+            cls_weights=pretrained_cls, seg_weights=False,
+            device=device,
+        )
+
 
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
@@ -532,20 +550,28 @@ def train_from_scratch(run_name,
         'grad_cam_thresh': grad_cam_thresh,
         'hint': hint,
         'hint_lambda': hint_lambda,
-        'checkpoint_metric': 'f1' if 'imagenet' in dataset_name else 'roc_auc',
+        'checkpoint_metric': 'f1' if 'imagenet' in dataset_name else _DEFAULT_TARGET_METRIC,
     }
 
+    # Some additional hparams
+    hparams = {
+        'loss_name': loss_name,
+        'loss_kwargs': loss_kwargs,
+        'batch_size': batch_size,
+    }
+    if pretrained_run_id:
+        hparams.update({
+            'pretrained': pretrained_run_id.to_dict(),
+            'pretrained-cls': pretrained_cls,
+            'pretrained-seg': False,
+        })
 
     # Save model metadata
     metadata = {
         'model_kwargs': model_kwargs,
         'opt_kwargs': opt_kwargs,
         'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
-        'hparams': {
-            'loss_name': loss_name,
-            'loss_kwargs': loss_kwargs,
-            'batch_size': batch_size,
-        },
+        'hparams': hparams,
         'other_train_kwargs': other_train_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
@@ -628,12 +654,22 @@ def parse_args():
     grad_cam_group.add_argument('--grad-cam-thresh', type=float, default=0.5,
                               help='Threshold to apply to activations')
 
+    parser.add_argument('--pretrained', type=str, default=None,
+                        help='Run name of a pretrained CNN')
+    parser.add_argument('--pretrained-task', type=str, default='cls',
+                        choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
+    parser.add_argument('--pretrained-cls', action='store_true',
+                        help='Copy classifier weights also')
+    parser.add_argument('--pretrained-seg', action='store_true',
+                        help='Dummy parameter!! Allows using the same API as train_cls_seg, \
+                              but is useless')
+
     parsers.add_args_augment(parser)
     parsers.add_args_sampling(parser)
 
     parsers.add_args_tb(parser)
-    parsers.add_args_early_stopping(parser, metric='roc_auc')
-    parsers.add_args_lr_sch(parser, lr=None, metric='roc_auc', factor=0.5, patience=3)
+    parsers.add_args_early_stopping(parser, metric=_DEFAULT_TARGET_METRIC)
+    parsers.add_args_lr_sch(parser, lr=None, metric=_DEFAULT_TARGET_METRIC, factor=0.5, patience=3)
 
     parsers.add_args_hw(parser, num_workers=2)
 
@@ -681,6 +717,11 @@ def parse_args():
     parsers.build_args_tb_(args)
     parsers.build_args_augment_(args)
 
+    if args.pretrained:
+        args.pretrained_run_id = RunId(args.pretrained, debug=False, task=args.pretrained_task)
+    else:
+        args.pretrained_run_id = None
+
     return args
 
 
@@ -726,6 +767,7 @@ if __name__ == '__main__':
             image_format=ARGS.image_format,
             cnn_name=ARGS.model,
             dropout=ARGS.dropout,
+            dropout_features=ARGS.dropout_features,
             imagenet=not ARGS.no_imagenet,
             freeze=ARGS.freeze,
             cnn_pooling=ARGS.cnn_pooling,
@@ -750,6 +792,8 @@ if __name__ == '__main__':
             lr_sch_metric=ARGS.lr_metric,
             lr_sch_kwargs=ARGS.lr_sch_kwargs,
             frontal_only=ARGS.frontal_only,
+            pretrained_run_id=ARGS.pretrained_run_id,
+            pretrained_cls=ARGS.pretrained_cls,
             oversample=ARGS.oversample is not None,
             oversample_label=ARGS.oversample,
             oversample_class=ARGS.os_class,

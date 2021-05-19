@@ -194,7 +194,10 @@ def regex_mentions_other(sentence):
 
 
 
-def _find_organs_for_sentence(sentence, warnings):
+def _find_organs_for_sentence(sentence, warnings=None):
+    if warnings is None:
+        warnings = defaultdict(list)
+
     background = heart = right_lung = left_lung = 0
 
     if regex_mentions_other(sentence):
