@@ -212,12 +212,12 @@ def evaluate_run(cl_run_id,
 
     # Create new run_id
     run_name = cl_run_id.short_name
-    run_name += f'_cl-{dataset_name}' # note dataset can also be inferred from the cl-run-name
+    run_name += f'_cl-{dataset_name}'
     run_name += f'_{cnn_name}'
     run_name += f'_tpl-{template_set}'
     run_id = RunId(run_name, debug, 'rg')
 
-    LOGGER.info('Evaluating run %s', run_id)
+    LOGGER.info('Evaluating RG-template run %s', run_id)
 
     # Check if overriding
     if not override and are_results_saved(run_id, suffix='free'):

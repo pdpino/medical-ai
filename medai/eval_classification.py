@@ -139,7 +139,9 @@ def evaluate_run(run_id,
                  quiet=False,
                  device='cuda',
                  ):
-    """Evaluate a model."""
+    """Evaluate a run."""
+    LOGGER.info('Evaluating CLS: %s', run_id)
+
     if not override and are_results_saved(run_id):
         LOGGER.warning('Skipping outputs, already calculated')
     else:

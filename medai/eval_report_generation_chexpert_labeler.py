@@ -180,7 +180,7 @@ def evaluate_run(run_id,
 
 @timeit_main(LOGGER)
 def evaluate_run_with_free_values(run_id, free_values, **kwargs):
-    LOGGER.info('Evaluating %s', run_id)
+    LOGGER.info('Evaluating chexpert %s', run_id)
 
     for free_value in free_values:
         evaluate_run(

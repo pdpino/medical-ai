@@ -8,7 +8,7 @@ from medai.utils.files import get_checkpoint_folder
 LOGGER = logging.getLogger(__name__)
 
 def save_training_stats(run_id,
-                        batch_size,
+                        dataloader,
                         epochs,
                         secs_per_epoch,
                         hw_options,
@@ -19,7 +19,8 @@ def save_training_stats(run_id,
         return
     training_stats = {
         'secs_per_epoch': secs_per_epoch,
-        'batch_size': batch_size,
+        'batch_size': dataloader.batch_size,
+        'num_workers': dataloader.num_workers,
         'initial_epoch': initial_epoch,
         'n_epochs': epochs,
         'hw_options': hw_options,
