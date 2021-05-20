@@ -15,6 +15,7 @@ from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_attention_vs_masks,
     attach_losses_rg,
+    attach_organ_by_sentence,
 )
 from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
 from medai.models.classification import (
@@ -107,8 +108,10 @@ def train_model(run_id,
                 lambda_stop=1,
                 lambda_att=1,
                 lambda_sent=1,
+                organ_by_sentence=True,
                 print_metrics=None,
                 check_unclean=True,
+                checkpoint_metric=None,
                 device='cuda',
                 hw_options={},
                ):
@@ -144,11 +147,14 @@ def train_model(run_id,
         'device': device,
     }
 
+    vocab = train_dataloader.dataset.get_vocab()
+
     # Create validator engine
     validator = Engine(get_step_fn(model, training=False, **step_kwargs))
     attach_losses_rg(validator, **loss_attacher_kwargs)
     attach_unclean_report_checker(validator, check=check_unclean)
     attach_metrics_report_generation(validator, device=device)
+    attach_organ_by_sentence(validator, vocab, organ_by_sentence, device=device)
 
     # Create trainer engine
     trainer = Engine(get_step_fn(model, optimizer=optimizer, training=True, **step_kwargs))
@@ -165,10 +171,10 @@ def train_model(run_id,
     attach_unclean_report_checker(trainer, check=check_unclean)
     attach_losses_rg(trainer, **loss_attacher_kwargs)
     attach_metrics_report_generation(trainer, device=device)
+    attach_organ_by_sentence(trainer, vocab, organ_by_sentence, device=device)
 
     # Attach medical correctness metrics
     if medical_correctness:
-        vocab = train_dataloader.dataset.get_vocab()
         attach_medical_correctness(trainer, validator, vocab, device=device, **med_kwargs)
 
     if att_vs_masks:
@@ -199,9 +205,6 @@ def train_model(run_id,
     )
 
     # Attach checkpoint
-    # FIXME: for now, only save last checkpoints (metric is too unstable!)
-    # checkpoint_metric = _CORRECTNESS_TARGET_METRIC if medical_correctness else None
-    checkpoint_metric = None
     attach_checkpoint_saver(run_id,
                             compiled_model,
                             trainer,
@@ -231,7 +234,7 @@ def train_model(run_id,
 
     save_training_stats(
         run_id,
-        train_dataloader.batch_size,
+        train_dataloader,
         n_epochs,
         secs_per_epoch,
         hw_options,
@@ -370,6 +373,8 @@ def train_from_scratch(run_name,
                        lambda_stop=1,
                        lambda_att=1,
                        lambda_sent=1,
+                       checkpoint_metric=None,
+                       organ_by_sentence=True,
                        augment=False,
                        augment_mode='single',
                        augment_label=None,
@@ -464,6 +469,9 @@ def train_from_scratch(run_name,
         lr_emb = custom_lr.get('word_embeddings')
         if lr_emb is not None:
             run_name += f'_lr-emb{lr_emb}'
+        lr_att = custom_lr.get('attention')
+        if lr_att is not None:
+            run_name += f'_lr-att{lr_att}'
     if weight_decay != 0:
         run_name += f'_wd{weight_decay}'
     if lr_sch_metric:
@@ -610,6 +618,9 @@ def train_from_scratch(run_name,
         'lambda_stop': lambda_stop,
         'lambda_att': lambda_att,
         'lambda_sent': lambda_sent,
+        'organ_by_sentence': organ_by_sentence,
+        'checkpoint_metric': checkpoint_metric,
+        # 'checkpoint_metric': _CORRECTNESS_TARGET_METRIC if medical_correctness else None,
     }
 
     # Save metadata
@@ -684,6 +695,10 @@ def parse_args():
                         help='Lambda for att loss')
     parser.add_argument('--lambda-sent', type=float, default=1,
                         help='Lambda for sent loss')
+    parser.add_argument('--skip-organ-by-sentence', action='store_true',
+                        help='If present, do not attach organ-by-sentence metrics')
+    parser.add_argument('--checkpoint-metric', type=str, default=None,
+                        help='If present, save checkpoints with best value')
 
     decoder_group = parser.add_argument_group('Decoder')
     decoder_group.add_argument('-dec', '--decoder', type=str,
@@ -747,6 +762,8 @@ def parse_args():
     lr_group = parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
     lr_group.add_argument('--custom-lr-word-embedding', type=float, default=None,
                           help='Custom LR for the word_embedding params')
+    lr_group.add_argument('--custom-lr-attention', type=float, default=None,
+                          help='Custom LR for the attention params')
 
     parsers.add_args_early_stopping(parser, metric=_CORRECTNESS_TARGET_METRIC)
     parsers.add_args_tb(parser, tb_hist_filter='decoder', tb_hist_freq=10)
@@ -796,19 +813,25 @@ def parse_args():
         'batch_normalization': args.emb_bn,
     }
 
+    # Build custom lr kwargs
+    args.custom_lr = {}
+    min_lr = []
     if args.custom_lr_word_embedding is not None:
-        args.custom_lr = {
-            'word_embeddings': args.custom_lr_word_embedding,
-        }
+        args.custom_lr['word_embeddings'] = args.custom_lr_word_embedding
+        min_lr.append(args.custom_lr_word_embedding)
+
+    if args.custom_lr_attention is not None:
+        args.custom_lr['attention'] = args.custom_lr_attention
+        min_lr.append(args.custom_lr_attention)
+
+    if len(args.custom_lr) > 0:
+        # Do not reduce the customly set LR
+        min_lr.append(args.lr_sch_kwargs['min_lr'])
         args.lr_sch_kwargs.update({
-            'min_lr': [
-                args.custom_lr_word_embedding, # Do not reduce the customly set LR
-                args.lr_sch_kwargs['min_lr'],
-            ],
+            'min_lr': min_lr,
         })
     else:
         args.custom_lr = None
-
 
 
     return args
@@ -830,7 +853,6 @@ if __name__ == '__main__':
         'device': str(DEVICE),
         'visible': os.environ.get('CUDA_VISIBLE_DEVICES', ''),
         'multiple': ARGS.multiple_gpu,
-        'num_workers': ARGS.num_workers,
         'num_threads': ARGS.num_threads,
     }
 
@@ -886,6 +908,7 @@ if __name__ == '__main__':
                            lambda_stop=ARGS.lambda_stop,
                            lambda_att=ARGS.lambda_att,
                            lambda_sent=ARGS.lambda_sent,
+                           organ_by_sentence=not ARGS.skip_organ_by_sentence,
                            augment=ARGS.augment,
                            augment_mode=ARGS.augment_mode,
                            augment_label=ARGS.augment_label,
@@ -899,6 +922,7 @@ if __name__ == '__main__':
                            num_workers=ARGS.num_workers,
                            device=DEVICE,
                            seed=ARGS.seed,
+                           checkpoint_metric=ARGS.checkpoint_metric,
                            save_model=not ARGS.dont_save,
                            check_unclean=ARGS.check_unclean,
                            print_metrics=ARGS.print_metrics,

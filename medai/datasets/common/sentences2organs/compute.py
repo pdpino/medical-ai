@@ -195,6 +195,8 @@ def regex_mentions_other(sentence):
 
 
 def _find_organs_for_sentence(sentence, warnings=None):
+    # FIXME: do not use this warnings??
+    # return a flag if is all empty
     if warnings is None:
         warnings = defaultdict(list)
 
@@ -270,14 +272,14 @@ def save_sentences_with_organs(dataset_dir, sentences, show=False, ignore_all_on
 
 MAIN_ORGANS = ['heart', 'lungs', 'thorax', 'neutral', 'all']
 
-def get_main_organ(one_hot, sentence, warnings=None):
+def get_main_organ(one_hot, sentence=None, warnings=None):
     """Given a one-hot array indicating organs, return the main organ indicated."""
     background, heart, right_lung, left_lung = one_hot
 
-    neutral_sentences = warnings['all-empty'] if warnings is not None else set()
+    neutral_sentences = warnings['all-empty'] if warnings is not None else None
 
     if background == 1:
-        if sentence in neutral_sentences:
+        if neutral_sentences is not None and sentence in neutral_sentences:
             return 'neutral'
         return 'all'
     if heart + right_lung + left_lung == 3:
@@ -288,3 +290,7 @@ def get_main_organ(one_hot, sentence, warnings=None):
         return 'heart'
     print('Case not covered: ', one_hot, sentence)
     return 'unk'
+
+def get_main_organ_for_sentence(sentence):
+    organs_onehot = _find_organs_for_sentence(sentence)
+    return get_main_organ(organs_onehot)

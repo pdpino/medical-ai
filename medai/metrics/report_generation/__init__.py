@@ -14,6 +14,7 @@ from medai.metrics.report_generation.nlp.cider import CiderD
 from medai.metrics.report_generation.distinct_sentences import DistinctSentences
 from medai.metrics.report_generation.distinct_words import DistinctWords
 from medai.metrics.report_generation.transforms import get_flat_reports
+from medai.metrics.report_generation.organ_by_sentence import OrganBySentence
 
 LOGGER = logging.getLogger(__name__)
 
@@ -125,3 +126,11 @@ def attach_losses_rg(engine, free=False, hierarchical=False,
     if supervise_sentences:
         losses.append('sentence_loss')
     attach_losses(engine, losses, device=device)
+
+
+def attach_organ_by_sentence(engine, vocab, should_attach=True, device='cuda'):
+    if not should_attach:
+        return
+
+    metric = OrganBySentence(vocab, output_transform=get_flat_reports, device=device)
+    metric.attach(engine, 'organ-acc')

@@ -95,7 +95,6 @@ def print_hw_options(device, args):
         'device': device,
         'visible': _CUDA_VISIBLE,
         'multiple': _safe_get_attr(args, 'multiple_gpu'),
-        'num_workers': _safe_get_attr(args, 'num_workers'),
         'num_threads': _safe_get_attr(args, 'num_threads'),
     }
     info_str = ' '.join(f'{k}={v}' for k, v in d.items())

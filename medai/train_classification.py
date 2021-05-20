@@ -205,7 +205,7 @@ def train_model(run_id,
 
     save_training_stats(
         run_id,
-        train_dataloader.batch_size,
+        train_dataloader,
         n_epochs,
         secs_per_epoch,
         hw_options,
@@ -741,7 +741,6 @@ if __name__ == '__main__':
         'device': str(DEVICE),
         'visible': os.environ.get('CUDA_VISIBLE_DEVICES', ''),
         'multiple': ARGS.multiple_gpu,
-        'num_workers': ARGS.num_workers,
         'num_threads': ARGS.num_threads,
     }
 

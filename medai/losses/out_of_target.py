@@ -1,9 +1,6 @@
 import logging
-import torch
 import torch.nn as nn
-from torch.nn.functional import interpolate
-
-from medai.utils import divide_tensors
+from torch.nn.functional import interpolate, binary_cross_entropy
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,23 +49,38 @@ class OutOfTargetSumLoss(nn.Module):
                 output = _interpolate(output, size=target_size)
                 # shape: batch_size, n_channels, target_h, target_w
 
-        out_of_target = (target == 0).long()
-        # shape: batch_size, n_channels, height, width
+        loss = binary_cross_entropy(output, target.float(), reduction='none')
+        # shape: bs, n_channels, height, width
 
-        wrong_values = -torch.log(1 - output * out_of_target + self.eps) # Cross-entropy like
-        # wrong_values = output * out_of_target # Raw sum
-        # shape: batch_size, n_channels, height, width
-
-        # Sum out-of-target values
-        wrong_values = wrong_values.sum(dim=(-2,-1))
-
-        # Mean over pixels out-of-target pixels
-        n_pixels_out_of_target = out_of_target.sum(dim=(-2,-1)) # (bs, n_channels)
-        wrong_values = divide_tensors(wrong_values, n_pixels_out_of_target) # (bs, n_channels)
-
+        filter_values = (target == 0)
         if stops is not None:
-            ignore_filter = 1 - stops
-            wrong_values = wrong_values * ignore_filter
-            # shape: batch_size, n_channels
+            stops = stops.unsqueeze(-1).unsqueeze(-1) # shape: bs, n_channels, 1, 1
+            filter_values &= (stops == 0)
 
-        return torch.mean(wrong_values) # shape: 1
+        loss = loss[filter_values]
+        if loss.size() == (0,):
+            return loss.sum() # return a 0
+
+        return loss.mean()
+
+        # DELETEME: old (wrong) version
+        # out_of_target = (target == 0).long()
+        # # shape: batch_size, n_channels, height, width
+
+        # wrong_values = -torch.log(1 - output * out_of_target + self.eps) # Cross-entropy like
+        # # wrong_values = output * out_of_target # Raw sum
+        # # shape: batch_size, n_channels, height, width
+
+        # # Sum out-of-target values
+        # wrong_values = wrong_values.sum(dim=(-2,-1))
+
+        # # Mean over pixels out-of-target pixels
+        # n_pixels_out_of_target = out_of_target.sum(dim=(-2,-1)) # (bs, n_channels)
+        # wrong_values = divide_tensors(wrong_values, n_pixels_out_of_target) # (bs, n_channels)
+
+        # if stops is not None:
+        #     ignore_filter = 1 - stops
+        #     wrong_values = wrong_values * ignore_filter
+        #     # shape: batch_size, n_channels
+
+        # return torch.mean(wrong_values) # shape: 1

@@ -96,6 +96,7 @@ class TBWriter:
             'bleu': 'Bleu',
             'ciderD': 'Cider-D',
             'rougeL': 'Rouge-L',
+            'organ-acc': 'Organ-acc',
         }
 
         self._loss_regex = re.compile(r'(\w+)_loss')

@@ -8,7 +8,7 @@ import torch
 from torch import nn
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from ignite.engine import Engine, Events
+from ignite.engine import Events
 from ignite.handlers import Timer
 
 from medai.datasets import prepare_data_classification, AVAILABLE_CLASSIFICATION_DATASETS
@@ -166,8 +166,6 @@ class TrainingProcess(abc.ABC):
             'visible': os.environ.get('CUDA_VISIBLE_DEVICES', ''),
             'multiple': self.args.multiple_gpu,
             'num_threads': self.args.num_threads,
-            # FIXME: should be extracted from dataset_kwargs if resume:
-            'num_workers': self.args.num_workers,
         }
 
     def run(self):
@@ -564,7 +562,7 @@ class TrainingProcess(abc.ABC):
 
         save_training_stats(
             self.run_id,
-            self.dataset_kwargs['batch_size'],
+            self.train_dataloader,
             self.args.epochs,
             secs_per_epoch,
             self.hw_options,

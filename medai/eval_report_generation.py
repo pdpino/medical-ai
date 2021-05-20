@@ -10,6 +10,7 @@ from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_attention_vs_masks,
     attach_losses_rg,
+    attach_organ_by_sentence,
 )
 from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
 from medai.metrics.report_generation.writer import (
@@ -72,6 +73,7 @@ def _evaluate_model_in_dataloader(
                                      free=free,
                                      device=device,
                                      )
+    attach_organ_by_sentence(engine, vocab, device=device)
     attach_report_writer(engine, run_id,
                          vocab, assert_n_samples=len(dataset),
                          free=free)
@@ -149,6 +151,8 @@ def evaluate_run(run_id,
                  check_unclean=True,
                  ):
     """Evaluates a saved run."""
+    LOGGER.info('Evaluating %s', run_id)
+
     # Check if overriding
     if not override:
         filtered_free_values = []
@@ -164,7 +168,6 @@ def evaluate_run(run_id,
         if len(free_values) == 0:
             LOGGER.info('Skipping run')
             return
-
 
     # Load model
     compiled_model = load_compiled_model_report_generation(run_id,

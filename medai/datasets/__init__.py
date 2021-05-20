@@ -136,6 +136,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
         'version': kwargs.get('images_version'),
         'format': kwargs.get('image_format', 'RGB'),
         'n_labels': labels and len(labels),
+        'num_workers': num_workers,
     }
     _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
     LOGGER.info(
@@ -250,6 +251,7 @@ def prepare_data_report_generation(dataset_name=None,
         'hierarchical': hierarchical,
         'masks': hierarchical and masks,
         'sent-emb': hierarchical and sentence_embeddings,
+        'num_workers': num_workers,
     }
     _info_str = ' '.join(f'{k}={v}' for k, v in _info.items())
     LOGGER.info('Loading %s/%s rg-dataset, %s', dataset_name, dataset_type, _info_str)
