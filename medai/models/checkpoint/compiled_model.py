@@ -18,11 +18,11 @@ class SmartDict:
 
 class CompiledModel:
     """Handles a model and optimizer together."""
-    def __init__(self, run_id, model, optimizer, lr_scheduler=None, metadata=None, epoch=0):
+    def __init__(self, run_id, model, optimizer, lr_sch_handler=None, metadata=None, epoch=0):
         self.run_id = run_id
         self.model = model
         self.optimizer = optimizer
-        self.lr_scheduler = lr_scheduler
+        self.lr_sch_handler = lr_sch_handler
         self.metadata = metadata # NOTE: is not persisted here, use save_metadata()
 
         self.state = SmartDict()
@@ -35,7 +35,7 @@ class CompiledModel:
         return self.state.get('current_epoch')
 
     def get_elements(self):
-        return self.model, self.optimizer, self.lr_scheduler
+        return self.model, self.optimizer, self.lr_sch_handler
 
     def to_save_checkpoint(self):
         d = {
@@ -43,6 +43,6 @@ class CompiledModel:
             'optimizer': self.optimizer,
             'state': self.state,
         }
-        if self.lr_scheduler is not None:
-            d['lr_scheduler'] = self.lr_scheduler
+        if self.lr_sch_handler is not None and self.lr_sch_handler.scheduler is not None:
+            d['lr_scheduler'] = self.lr_sch_handler.scheduler
         return d

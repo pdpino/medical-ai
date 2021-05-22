@@ -1,4 +1,5 @@
 """Parser utilities."""
+from medai.losses.schedulers import AVAILABLE_SCHEDULERS
 from medai.datasets.tools.augmentation import AVAILABLE_AUG_MODES
 from medai.models.classification import AVAILABLE_CLASSIFICATION_MODELS
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
@@ -90,35 +91,56 @@ def add_args_hw(parser, num_workers=4):
                           help='Number of threads for pytorch')
 
 
-def add_args_lr_sch(parser, lr=0.0001, patience=5, factor=0.5, cooldown=0, metric='loss'):
-    lr_group = parser.add_argument_group('LR scheduler params')
+def add_args_lr(parser, lr=0.0001):
+    lr_group = parser.add_argument_group('LR params')
     lr_group.add_argument('-lr', '--learning-rate', type=float, default=lr,
                           help='Initial learning rate')
-    lr_group.add_argument('--lr-metric', type=str, default=metric,
-                          help='Select the metric to regulate the LR')
-    lr_group.add_argument('--lr-patience', type=int, default=patience,
-                          help='Patience value for LR-scheduler')
-    lr_group.add_argument('--lr-factor', type=float, default=factor,
-                          help='Factor to multiply the LR on each update')
-    lr_group.add_argument('--lr-cooldown', type=int, default=cooldown,
-                          help='Cooldown for lr-scheduler')
-    lr_group.add_argument('--lr-min', type=float, default=0,
-                          help='Min LR to reach if using scheduler')
     lr_group.add_argument('-wd', '--weight-decay', type=float, default=0,
                           help='Weight decay passed to the optimizer')
+    return lr_group
+
+def add_args_lr_sch(parser, patience=5, factor=0.5, cooldown=0, metric='loss'):
+    lr_group = parser.add_argument_group('LR scheduler params')
+    lr_group.add_argument('--lr-scheduler', type=str, default='plateau',
+                          choices=AVAILABLE_SCHEDULERS,
+                          help='Select the scheduler to use')
+    lr_group.add_argument('--lr-factor', type=float, default=factor,
+                          help='Factor to multiply the LR on each update (plateau/step)')
+    lr_group.add_argument('--lr-metric', type=str, default=metric,
+                          help='Select the metric to regulate the LR (plateau)')
+    lr_group.add_argument('--lr-patience', type=int, default=patience,
+                          help='Patience value for LR-scheduler (plateau)')
+    lr_group.add_argument('--lr-cooldown', type=int, default=cooldown,
+                          help='Cooldown for lr-scheduler (plateau)')
+    lr_group.add_argument('--lr-min', type=float, default=0,
+                          help='Min LR to reach if using scheduler (plateau)')
+    lr_group.add_argument('--lr-step', type=int, default=0,
+                          help='Decay every N steps (step)')
 
     return lr_group
 
 def build_args_lr_sch_(args):
-    args.lr_sch_kwargs = {
-        'mode': 'min' if args.lr_metric == 'loss' else 'max',
-        'threshold_mode': 'abs',
-        'factor': args.lr_factor,
-        'patience': args.lr_patience,
-        'cooldown': args.lr_cooldown,
-        'verbose': True,
-        'min_lr': args.lr_min,
-    }
+    if args.lr_scheduler == 'plateau':
+        args.lr_sch_kwargs = {
+            'metric': args.lr_metric,
+            'mode': 'min' if args.lr_metric == 'loss' else 'max',
+            'threshold_mode': 'abs',
+            'factor': args.lr_factor,
+            'patience': args.lr_patience,
+            'cooldown': args.lr_cooldown,
+            'verbose': True,
+            'min_lr': args.lr_min,
+        }
+    elif args.lr_scheduler == 'step':
+        args.lr_sch_kwargs = {
+            'step_size': args.lr_step,
+            'gamma': args.lr_factor,
+            'verbose': False,
+        }
+    else:
+        args.lr_sch_kwargs = {}
+
+    args.lr_sch_kwargs['name'] = args.lr_scheduler
 
 
 def add_args_early_stopping(parser, metric='loss', min_delta=0):

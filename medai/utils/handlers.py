@@ -138,35 +138,3 @@ def attach_early_stopping(trainer,
                                    )
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
-
-
-def attach_lr_scheduler_handler(lr_scheduler,
-                                trainer,
-                                validator,
-                                target_metric='loss',
-                                ):
-    """Attaches a callback that updates the lr_scheduler.
-
-    Note: if the metric value is -1, the scheduler will not be called.
-        For metrics that may not be calculated on every epoch, such as chex_f1,
-        this implies the scheduler patience will be accounted only in the epochs
-        where the value is indeed calculated; other epochs will be skipped.
-        For metrics that are calculated on every epoch, this has no effect.
-    """
-    _SHOULD_IGNORE_WARNING_METRICS = target_metric.startswith('chex_')
-
-    def _update_scheduler(unused_engine):
-        val_metrics = validator.state.metrics
-        if target_metric not in val_metrics:
-            if not _SHOULD_IGNORE_WARNING_METRICS:
-                LOGGER.warning(
-                    'Cannot step LR-scheduler, %s not found in val_metrics', target_metric,
-                )
-            return
-        value = val_metrics[target_metric]
-
-        # NOTE: ignores -1 values
-        if value != -1:
-            lr_scheduler.step(value)
-
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, _update_scheduler)

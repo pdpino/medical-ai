@@ -4,7 +4,6 @@ import logging
 import torch
 from torch import nn
 from torch import optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
@@ -14,6 +13,7 @@ from medai.losses import (
     get_detection_hint_loss,
     AVAILABLE_HINT_LOSSES,
 )
+from medai.losses.schedulers import create_lr_sch_handler
 from medai.metrics import attach_losses
 from medai.metrics.classification import attach_metrics_classification
 from medai.metrics.detection import (
@@ -44,7 +44,6 @@ from medai.utils import (
 from medai.utils.handlers import (
     attach_log_metrics,
     attach_early_stopping,
-    attach_lr_scheduler_handler,
 )
 
 LOGGER = logging.getLogger('medai.det.train')
@@ -77,7 +76,6 @@ def train_model(run_id,
                 cl_lambda=1,
                 h2bb_method_name=None,
                 h2bb_method_kwargs={},
-                lr_sch_metric='loss',
                 dryrun=False,
                 tb_kwargs={},
                 print_metrics=_DEFAULT_PRINT_METRICS,
@@ -91,7 +89,7 @@ def train_model(run_id,
         LOGGER.info('Resuming from epoch: %s', initial_epoch)
 
     # Unwrap stuff
-    model, optimizer, lr_scheduler = compiled_model.get_elements()
+    model, optimizer, lr_sch_handler = compiled_model.get_elements()
 
     # Classification description
     labels = train_dataloader.dataset.labels
@@ -173,8 +171,7 @@ def train_model(run_id,
     if early_stopping:
         attach_early_stopping(trainer, validator, **early_stopping_kwargs)
 
-    if lr_scheduler is not None:
-        attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
+    lr_sch_handler.attach(trainer, validator)
 
     # Train!
     LOGGER.info('-' * 50)
@@ -218,7 +215,6 @@ def train_from_scratch(run_name,
                        cl_lambda=1,
                        early_stopping=True,
                        early_stopping_kwargs={},
-                       lr_sch_metric='loss',
                        lr_sch_kwargs={},
                        h2bb_method_name=None,
                        h2bb_method_kwargs={},
@@ -300,10 +296,22 @@ def train_from_scratch(run_name,
     if image_size != 512:
         run_name += f'_size{image_size}'
     run_name += f'_lr{lr}'
-    if lr_sch_metric:
+
+    lr_sch_name = lr_sch_kwargs['name']
+    if lr_sch_name == 'plateau':
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
-        run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+        metric = lr_sch_kwargs['metric'].replace('_', '-')
+        run_name += f'_sch-{metric}-p{patience}-f{factor}'
+
+        cooldown = lr_sch_kwargs.get('cooldown', 0)
+        if cooldown != 0:
+            run_name += f'-c{cooldown}'
+    elif lr_sch_name == 'step':
+        step = lr_sch_kwargs['step_size']
+        factor = lr_sch_kwargs['factor']
+        run_name += f'_sch-step{step}-f{factor}'
+
     if shuffle:
         run_name += '_shuffle'
     run_name = run_name.replace(' ', '-')
@@ -383,16 +391,11 @@ def train_from_scratch(run_name,
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
     # Create lr_scheduler
-    lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
-    LOGGER.info(
-        'Using LR-scheduler=%s, metric=%s',
-        lr_scheduler is not None, lr_sch_metric,
-    )
+    lr_sch_handler = create_lr_sch_handler(optimizer, **lr_sch_kwargs)
 
     other_train_kwargs = {
         'early_stopping': early_stopping,
         'early_stopping_kwargs': early_stopping_kwargs,
-        'lr_sch_metric': lr_sch_metric,
         'cl_lambda': cl_lambda,
         'hint_lambda': hint_lambda,
         'hint_loss_name': hint_loss_name,
@@ -405,7 +408,7 @@ def train_from_scratch(run_name,
     metadata = {
         'model_kwargs': cnn_kwargs,
         'opt_kwargs': opt_kwargs,
-        'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
+        'lr_sch_kwargs': lr_sch_kwargs,
         'hparams': {
             'pretrained_cnn': pretrained_run_id.to_dict(),
             'batch_size': batch_size,
@@ -419,7 +422,7 @@ def train_from_scratch(run_name,
 
 
     # Create compiled_model
-    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
 
     # Train!
     train_model(run_id,
@@ -478,7 +481,8 @@ def parse_args():
     parsers.add_args_sampling(parser)
     parsers.add_args_tb(parser)
     parsers.add_args_early_stopping(parser, metric='roc_auc')
-    parsers.add_args_lr_sch(parser, lr=0.0001, metric='roc_auc', patience=3)
+    parsers.add_args_lr(parser, lr=0.0001)
+    parsers.add_args_lr_sch(parser, metric='roc_auc', patience=3)
     # REVIEW: use mAP as metric??
     parsers.add_args_h2bb(parser)
 
@@ -541,7 +545,6 @@ if __name__ == '__main__':
         cl_lambda=ARGS.cl_lambda,
         early_stopping=ARGS.early_stopping,
         early_stopping_kwargs=ARGS.early_stopping_kwargs,
-        lr_sch_metric=ARGS.lr_metric,
         lr_sch_kwargs=ARGS.lr_sch_kwargs,
         h2bb_method_name=ARGS.h2bb_method_name,
         h2bb_method_kwargs=ARGS.h2bb_method_kwargs,

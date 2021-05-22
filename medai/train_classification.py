@@ -5,7 +5,6 @@ import os
 import torch
 from torch import nn
 from torch import optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
@@ -15,6 +14,7 @@ from medai.datasets import (
     UP_TO_DATE_MASKS_VERSION,
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
+from medai.losses.schedulers import create_lr_sch_handler
 from medai.models import save_training_stats, load_pretrained_weights_cnn_
 from medai.metrics import attach_losses
 from medai.metrics.classification import (
@@ -47,7 +47,6 @@ from medai.utils import (
 from medai.utils.handlers import (
     attach_log_metrics,
     attach_early_stopping,
-    attach_lr_scheduler_handler,
 )
 
 LOGGER = logging.getLogger('medai.cl.train')
@@ -83,7 +82,6 @@ def train_model(run_id,
                 early_stopping_kwargs={},
                 hint=False,
                 hint_lambda=1,
-                lr_sch_metric='loss',
                 dryrun=False,
                 tb_kwargs={},
                 checkpoint_metric=_DEFAULT_TARGET_METRIC,
@@ -99,7 +97,7 @@ def train_model(run_id,
         LOGGER.info('Resuming from epoch: %s', initial_epoch)
 
     # Unwrap stuff
-    model, optimizer, lr_scheduler = compiled_model.get_elements()
+    model, optimizer, lr_sch_handler = compiled_model.get_elements()
 
     # Classification description
     labels = train_dataloader.dataset.labels
@@ -186,8 +184,7 @@ def train_model(run_id,
     if early_stopping:
         attach_early_stopping(trainer, validator, **early_stopping_kwargs)
 
-    if lr_scheduler is not None:
-        attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
+    lr_sch_handler.attach(trainer, validator)
 
     # Train!
     LOGGER.info('-' * 50)
@@ -203,6 +200,7 @@ def train_model(run_id,
 
     LOGGER.info('Finished training: %s', run_id)
 
+    # TODO: also save if the run is interrupted with ctrl-c?
     save_training_stats(
         run_id,
         train_dataloader,
@@ -322,7 +320,6 @@ def train_from_scratch(run_name,
                        grad_cam_thresh=0.5,
                        early_stopping=True,
                        early_stopping_kwargs={},
-                       lr_sch_metric='loss',
                        lr_sch_kwargs={},
                        frontal_only=False,
                        pretrained_run_id=None,
@@ -421,7 +418,7 @@ def train_from_scratch(run_name,
     else:
         run_name += '_normD'
     if not shuffle:
-        run_name += '_order-fixed'
+        run_name += '_noshuffle'
     if image_size != 256:
         run_name += f'_size{image_size}'
     if n_epochs == 0:
@@ -429,13 +426,22 @@ def train_from_scratch(run_name,
     run_name += f'_lr{lr}'
     if weight_decay != 0:
         run_name += f'_wd{weight_decay}'
-    if lr_sch_metric:
+
+    lr_sch_name = lr_sch_kwargs['name']
+    if lr_sch_name == 'plateau':
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
-        run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+        metric = lr_sch_kwargs['metric'].replace('_', '-')
+        run_name += f'_sch-{metric}-p{patience}-f{factor}'
+
         cooldown = lr_sch_kwargs.get('cooldown', 0)
         if cooldown != 0:
             run_name += f'-c{cooldown}'
+    elif lr_sch_name == 'step':
+        step = lr_sch_kwargs['step_size']
+        factor = lr_sch_kwargs['factor']
+        run_name += f'_sch-step{step}-f{factor}'
+
     # if not early_stopping:
     #     run_name += '_noes'
     # else:
@@ -536,16 +542,11 @@ def train_from_scratch(run_name,
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
     # Create lr_scheduler
-    lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
-    LOGGER.info(
-        'Using LR-scheduler=%s, metric=%s',
-        lr_scheduler is not None, lr_sch_metric,
-    )
+    lr_sch_handler = create_lr_sch_handler(optimizer, **lr_sch_kwargs)
 
     other_train_kwargs = {
         'early_stopping': early_stopping,
         'early_stopping_kwargs': early_stopping_kwargs,
-        'lr_sch_metric': lr_sch_metric,
         'grad_cam': grad_cam,
         'grad_cam_thresh': grad_cam_thresh,
         'hint': hint,
@@ -570,7 +571,7 @@ def train_from_scratch(run_name,
     metadata = {
         'model_kwargs': model_kwargs,
         'opt_kwargs': opt_kwargs,
-        'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
+        'lr_sch_kwargs': lr_sch_kwargs,
         'hparams': hparams,
         'other_train_kwargs': other_train_kwargs,
         'dataset_kwargs': dataset_kwargs,
@@ -581,7 +582,7 @@ def train_from_scratch(run_name,
 
 
     # Create compiled_model
-    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
 
     # Train!
     train_metrics, val_metrics = train_model(
@@ -669,7 +670,8 @@ def parse_args():
 
     parsers.add_args_tb(parser)
     parsers.add_args_early_stopping(parser, metric=_DEFAULT_TARGET_METRIC)
-    parsers.add_args_lr_sch(parser, lr=None, metric=_DEFAULT_TARGET_METRIC, factor=0.5, patience=3)
+    parsers.add_args_lr(parser, lr=None)
+    parsers.add_args_lr_sch(parser, metric=_DEFAULT_TARGET_METRIC, factor=0.5, patience=3)
 
     parsers.add_args_hw(parser, num_workers=2)
 
@@ -788,7 +790,6 @@ if __name__ == '__main__':
             grad_cam_thresh=ARGS.grad_cam_thresh,
             early_stopping=ARGS.early_stopping,
             early_stopping_kwargs=ARGS.early_stopping_kwargs,
-            lr_sch_metric=ARGS.lr_metric,
             lr_sch_kwargs=ARGS.lr_sch_kwargs,
             frontal_only=ARGS.frontal_only,
             pretrained_run_id=ARGS.pretrained_run_id,

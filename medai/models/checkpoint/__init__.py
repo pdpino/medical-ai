@@ -8,11 +8,11 @@ from functools import partial
 import torch
 from torch import nn
 from torch import optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Events
 from ignite.handlers import Checkpoint, DiskSaver
 
 from medai.losses.optimizers import create_optimizer
+from medai.losses.schedulers import create_lr_sch_handler
 from medai.models.classification import create_cnn
 from medai.models.report_generation import create_decoder
 from medai.models.segmentation import create_fcn
@@ -126,14 +126,13 @@ def _load_compiled_model_base(run_id,
     optimizer = optim.Adam(model.parameters(), **metadata['opt_kwargs'])
 
     # Create LR scheduler
-    lr_scheduler_kwargs = metadata.get('lr_scheduler_kwargs', None)
-    if lr_scheduler_kwargs is not None:
-        lr_scheduler = ReduceLROnPlateau(optimizer, **lr_scheduler_kwargs)
-    else:
-        lr_scheduler = None
+    # TODO: also pass last_epoch?
+    # Problem: that info comes from CompiledModel.get_current_epoch() (i.e. its state)
+    lr_sch_kwargs = metadata.get('lr_sch_kwargs', None)
+    lr_sch_handler = create_lr_sch_handler(optimizer, **lr_sch_kwargs)
 
     # Compile model
-    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)
@@ -235,14 +234,11 @@ def load_compiled_model_report_generation(run_id,
     optimizer = create_optimizer(model, **opt_kwargs)
 
     # Create LR scheduler
-    lr_scheduler_kwargs = metadata.get('lr_scheduler_kwargs', None)
-    if lr_scheduler_kwargs is not None:
-        lr_scheduler = ReduceLROnPlateau(optimizer, **lr_scheduler_kwargs)
-    else:
-        lr_scheduler = None
+    lr_sch_kwargs = metadata.get('lr_sch_kwargs', None)
+    lr_sch_handler = create_lr_sch_handler(optimizer, **lr_sch_kwargs)
 
     # Compiled model
-    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
 
     # Filepath for the latest checkpoint
     filepath = _get_latest_filepath(folder)

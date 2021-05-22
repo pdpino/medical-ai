@@ -4,7 +4,6 @@ import os
 
 import torch
 from torch import nn
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
@@ -37,6 +36,7 @@ from medai.models.checkpoint import (
     save_metadata,
     create_cnn_rg,
 )
+from medai.losses.schedulers import create_lr_sch_handler
 from medai.losses.optimizers import create_optimizer
 from medai.tensorboard import TBWriter
 from medai.training.report_generation.flat import get_step_fn_flat
@@ -55,7 +55,6 @@ from medai.utils import (
 from medai.utils.handlers import (
     attach_log_metrics,
     attach_early_stopping,
-    attach_lr_scheduler_handler,
 )
 from medai.utils.nlp import attach_unclean_report_checker
 
@@ -112,7 +111,6 @@ def train_model(run_id,
                 att_vs_masks=False,
                 early_stopping=True,
                 early_stopping_kwargs={},
-                lr_sch_metric='loss',
                 lambda_word=1,
                 lambda_stop=1,
                 lambda_att=1,
@@ -132,7 +130,7 @@ def train_model(run_id,
         LOGGER.info('Resuming from epoch %s', initial_epoch)
 
     # Unwrap stuff
-    model, optimizer, lr_scheduler = compiled_model.get_elements()
+    model, optimizer, lr_sch_handler = compiled_model.get_elements()
 
     # Flat vs hierarchical step_fn
     if hierarchical:
@@ -227,8 +225,7 @@ def train_model(run_id,
     if early_stopping:
         attach_early_stopping(trainer, validator, **early_stopping_kwargs)
 
-    if lr_scheduler is not None:
-        attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
+    lr_sch_handler.attach(trainer, validator)
 
     # Train!
     LOGGER.info('-' * 51)
@@ -378,7 +375,6 @@ def train_from_scratch(run_name,
                        image_size=512,
                        early_stopping=True,
                        early_stopping_kwargs={},
-                       lr_sch_metric='loss',
                        lr_sch_kwargs={},
                        lambda_word=1,
                        lambda_stop=1,
@@ -485,10 +481,22 @@ def train_from_scratch(run_name,
             run_name += f'_lr-att{lr_att}'
     if weight_decay != 0:
         run_name += f'_wd{weight_decay}'
-    if lr_sch_metric:
+
+    lr_sch_name = lr_sch_kwargs['name']
+    if lr_sch_name == 'plateau':
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
-        run_name += f'_sch-{lr_sch_metric.replace("_", "-")}-p{patience}-f{factor}'
+        metric = lr_sch_kwargs['metric'].replace('_', '-')
+        run_name += f'_sch-{metric}-p{patience}-f{factor}'
+
+        cooldown = lr_sch_kwargs.get('cooldown', 0)
+        if cooldown != 0:
+            run_name += f'-c{cooldown}'
+    elif lr_sch_name == 'step':
+        step = lr_sch_kwargs['step_size']
+        factor = lr_sch_kwargs['factor']
+        run_name += f'_sch-step{step}-f{factor}'
+
     if frontal_only and not supervise_attention: # If supervise attention, frontal_only is implied
         run_name += '_front'
 
@@ -608,18 +616,12 @@ def train_from_scratch(run_name,
     optimizer = create_optimizer(model, **opt_kwargs)
 
     # Create lr_scheduler
-    if lr_sch_metric:
-        LOGGER.info('Using ReduceLROnPlateau metric=%s, %s', lr_sch_metric, lr_sch_kwargs)
-        lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs)
-    else:
-        LOGGER.warning('Not using a LR scheduler')
-        lr_scheduler = None
+    lr_sch_handler = create_lr_sch_handler(optimizer, **lr_sch_kwargs)
 
     # Other training params
     other_train_kwargs = {
         'early_stopping': early_stopping,
         'early_stopping_kwargs': early_stopping_kwargs,
-        'lr_sch_metric': lr_sch_metric,
         'supervise_attention': supervise_attention,
         'supervise_sentences': supervise_sentences,
         'medical_correctness': medical_correctness,
@@ -638,7 +640,7 @@ def train_from_scratch(run_name,
         'cnn_kwargs': cnn_kwargs,
         'decoder_kwargs': decoder_kwargs,
         'opt_kwargs': opt_kwargs,
-        'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
+        'lr_sch_kwargs': lr_sch_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
         # 'vocab': vocab, # save space, is already saved in the dataset_kwargs
@@ -653,7 +655,7 @@ def train_from_scratch(run_name,
     save_metadata(metadata, run_id, dryrun=not save_model)
 
     # Compiled model
-    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
 
     # Train
     train_model(run_id,
@@ -769,11 +771,12 @@ def parse_args():
     emb_group.add_argument('--emb-bn', action='store_true',
                           help='Use a batch-normalization after the word-embedding')
 
-    lr_group = parsers.add_args_lr_sch(parser, lr=0.0001, metric=None)
+    lr_group = parsers.add_args_lr(parser, lr=0.0001)
     lr_group.add_argument('--custom-lr-word-embedding', type=float, default=None,
                           help='Custom LR for the word_embedding params')
     lr_group.add_argument('--custom-lr-attention', type=float, default=None,
                           help='Custom LR for the attention params')
+    parsers.add_args_lr_sch(parser, metric=None)
 
     parsers.add_args_early_stopping(parser, metric=None)
     parsers.add_args_tb(parser, tb_hist_filter='decoder', tb_hist_freq=10)
@@ -853,11 +856,12 @@ def parse_args():
         min_lr.append(args.custom_lr_attention)
 
     if len(args.custom_lr) > 0:
-        # Do not reduce the customly set LR
-        min_lr.append(args.lr_sch_kwargs['min_lr'])
-        args.lr_sch_kwargs.update({
-            'min_lr': min_lr,
-        })
+        if 'min_lr' in args.lr_sch_kwargs:
+            # Do not reduce the customly set LR
+            min_lr.append(args.lr_sch_kwargs['min_lr'])
+            args.lr_sch_kwargs.update({
+                'min_lr': min_lr,
+            })
     else:
         args.custom_lr = None
 
@@ -930,7 +934,6 @@ if __name__ == '__main__':
                            max_samples=ARGS.max_samples,
                            early_stopping=ARGS.early_stopping,
                            early_stopping_kwargs=ARGS.early_stopping_kwargs,
-                           lr_sch_metric=ARGS.lr_metric,
                            lr_sch_kwargs=ARGS.lr_sch_kwargs,
                            lambda_word=ARGS.lambda_word,
                            lambda_stop=ARGS.lambda_stop,

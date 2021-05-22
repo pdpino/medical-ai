@@ -3,7 +3,6 @@ import logging
 import torch
 from torch import nn
 from torch import optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Engine, Events
 from ignite.handlers import Timer
 
@@ -11,6 +10,7 @@ from medai.datasets import (
     prepare_data_segmentation,
     AVAILABLE_SEGMENTATION_DATASETS,
 )
+from medai.losses.schedulers import create_lr_sch_handler
 from medai.metrics.segmentation import attach_metrics_segmentation
 from medai.models.segmentation import (
     create_fcn,
@@ -38,7 +38,6 @@ from medai.utils import (
 from medai.utils.handlers import (
     attach_log_metrics,
     attach_early_stopping,
-    attach_lr_scheduler_handler,
 )
 
 
@@ -52,7 +51,6 @@ def train_model(run_id,
                 loss_weights=None,
                 early_stopping=True,
                 early_stopping_kwargs={},
-                lr_sch_metric='loss',
                 n_epochs=1,
                 print_metrics=None,
                 tb_kwargs={},
@@ -66,7 +64,7 @@ def train_model(run_id,
     if initial_epoch > 0:
         LOGGER.info('Resuming from epoch: %s', initial_epoch)
 
-    model, optimizer, lr_scheduler = compiled_model.get_elements()
+    model, optimizer, lr_sch_handler = compiled_model.get_elements()
 
     labels = train_dataloader.dataset.seg_labels
     multilabel = train_dataloader.dataset.multilabel
@@ -125,8 +123,7 @@ def train_model(run_id,
     if early_stopping:
         attach_early_stopping(trainer, validator, **early_stopping_kwargs)
 
-    if lr_scheduler is not None:
-        attach_lr_scheduler_handler(lr_scheduler, trainer, validator, lr_sch_metric)
+    lr_sch_handler.attach(trainer, validator)
 
 
     # Train
@@ -204,7 +201,6 @@ def train_from_scratch(run_name,
                        loss_weights=None,
                        early_stopping=True,
                        early_stopping_kwargs={},
-                       lr_sch_metric='loss',
                        lr_sch_kwargs={},
                        batch_size=10,
                        max_samples=None,
@@ -238,10 +234,21 @@ def train_from_scratch(run_name,
         run_name += f'_aug{augment_times}'
         if augment_mode != 'single':
             run_name += f'-{augment_mode}'
-    if lr_sch_metric:
+
+    lr_sch_name = lr_sch_kwargs['name']
+    if lr_sch_name == 'plateau':
         factor = lr_sch_kwargs['factor']
         patience = lr_sch_kwargs['patience']
-        run_name += f'_sch-{lr_sch_metric}-p{patience}-f{factor}'
+        metric = lr_sch_kwargs['metric'].replace('_', '-')
+        run_name += f'_sch-{metric}-p{patience}-f{factor}'
+
+        cooldown = lr_sch_kwargs.get('cooldown', 0)
+        if cooldown != 0:
+            run_name += f'-c{cooldown}'
+    elif lr_sch_name == 'step':
+        step = lr_sch_kwargs['step_size']
+        factor = lr_sch_kwargs['factor']
+        run_name += f'_sch-step{step}-f{factor}'
 
     run_id = RunId(run_name, debug, 'seg')
 
@@ -292,21 +299,20 @@ def train_from_scratch(run_name,
     optimizer = optim.Adam(model.parameters(), **opt_kwargs)
 
     # Create lr_scheduler
-    lr_scheduler = ReduceLROnPlateau(optimizer, **lr_sch_kwargs) if lr_sch_metric else None
+    lr_sch_handler = create_lr_sch_handler(optimizer, **lr_sch_kwargs)
 
     # Other training params
     other_train_kwargs = {
         'loss_weights': loss_weights,
         'early_stopping': early_stopping,
         'early_stopping_kwargs': early_stopping_kwargs,
-        'lr_sch_metric': lr_sch_metric,
     }
 
     # Save metadata
     metadata = {
         'model_kwargs': model_kwargs,
         'opt_kwargs': opt_kwargs,
-        'lr_sch_kwargs': lr_sch_kwargs if lr_sch_metric else None,
+        'lr_sch_kwargs': lr_sch_kwargs,
         'hparams': other_train_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
@@ -315,7 +321,7 @@ def train_from_scratch(run_name,
     save_metadata(metadata, run_id)
 
     # Create compiled model
-    compiled_model = CompiledModel(run_id, model, optimizer, lr_scheduler, metadata)
+    compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
 
     # Train
     train_model(run_id,
@@ -369,7 +375,8 @@ def parse_args():
 
     parsers.add_args_early_stopping(parser, metric='iou')
 
-    parsers.add_args_lr_sch(parser, lr=0.0001, metric='iou')
+    parsers.add_args_lr(parser, lr=0.0001)
+    parsers.add_args_lr_sch(parser, metric='iou')
 
     parsers.add_args_augment(parser)
 
@@ -430,7 +437,6 @@ if __name__ == '__main__':
             loss_weights=ARGS.weight_ce,
             early_stopping=ARGS.early_stopping,
             early_stopping_kwargs=ARGS.early_stopping_kwargs,
-            lr_sch_metric=ARGS.lr_metric,
             lr_sch_kwargs=ARGS.lr_sch_kwargs,
             batch_size=ARGS.batch_size,
             max_samples=ARGS.max_samples,

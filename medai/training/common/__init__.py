@@ -18,6 +18,7 @@ from medai.models.checkpoint import (
     save_metadata,
     load_compiled_model,
 )
+from medai.losses.schedulers import create_lr_sch_handler
 from medai.models import save_training_stats
 from medai.tensorboard import TBWriter
 from medai.utils import (
@@ -32,7 +33,6 @@ from medai.utils import (
 from medai.utils.handlers import (
     attach_log_metrics,
     attach_early_stopping,
-    attach_lr_scheduler_handler,
 )
 
 
@@ -71,7 +71,7 @@ class TrainingProcess(abc.ABC):
         self.model = None
         self.opt_kwargs = None
         self.optimizer = None
-        self.lr_scheduler = None
+        self.lr_sch_handler = None
         self.compiled_model = None
         self.trainer = None
         self.validator = None
@@ -118,9 +118,9 @@ class TrainingProcess(abc.ABC):
                             help='If present, do not save model checkpoints to disk')
 
         parsers.add_args_images(parser, image_format=self.default_image_format)
+        parsers.add_args_lr(parser, lr=0.0001)
         parsers.add_args_lr_sch(
             parser,
-            lr=0.0001,
             metric=self.default_lr_metric or self.key_metric,
             patience=3,
         )
@@ -227,14 +227,21 @@ class TrainingProcess(abc.ABC):
         run_name += f'_lr{self.args.learning_rate}'
         if self.args.weight_decay != 0:
             run_name += f'_wd{self.args.weight_decay}'
-        if self.args.lr_metric:
+
+        lr_sch_name = self.args.lr_sch_kwargs['name']
+        if lr_sch_name == 'plateau':
             factor = self.args.lr_sch_kwargs['factor']
             patience = self.args.lr_sch_kwargs['patience']
-            run_name += f'_sch-{self.args.lr_metric.replace("_", "-")}-p{patience}-f{factor}'
+            metric = self.args.lr_sch_kwargs['metric'].replace('_', '-')
+            run_name += f'_sch-{metric}-p{patience}-f{factor}'
 
             cooldown = self.args.lr_sch_kwargs.get('cooldown', 0)
             if cooldown != 0:
                 run_name += f'-c{cooldown}'
+        elif lr_sch_name == 'step':
+            step = self.args.lr_sch_kwargs['step_size']
+            factor = self.args.lr_sch_kwargs['factor']
+            run_name += f'_sch-step{step}-f{factor}'
 
         return run_name
 
@@ -322,7 +329,7 @@ class TrainingProcess(abc.ABC):
             self.run_id,
             self.model,
             self.optimizer,
-            self.lr_scheduler,
+            self.lr_sch_handler,
             self.metadata,
         )
 
@@ -336,7 +343,7 @@ class TrainingProcess(abc.ABC):
         )
 
         self.metadata = self.compiled_model.metadata
-        self.model, self.optimizer, self.lr_scheduler = self.compiled_model.get_elements()
+        self.model, self.optimizer, self.lr_sch_handler = self.compiled_model.get_elements()
 
     def resume_training(self):
         # Create run_name attributes
@@ -445,13 +452,7 @@ class TrainingProcess(abc.ABC):
         self.optimizer = optim.Adam(self.model.parameters(), **self.opt_kwargs)
 
     def _create_lr_scheduler(self):
-        if self.args.lr_metric:
-            self.lr_scheduler = ReduceLROnPlateau(self.optimizer, **self.args.lr_sch_kwargs)
-
-            self.logger.info('Using LR-scheduler with metric=%s', self.args.lr_metric)
-        else:
-            self.lr_scheduler = None
-            self.logger.warning('Not using a LR-scheduler')
+        self.lr_sch_handler = create_lr_sch_handler(self.optimizer, **self.args.lr_sch_kwargs)
 
     def _fill_other_train_kwargs(self):
         """Fill more key-value pairs in self.other_train_kwargs.
@@ -480,7 +481,7 @@ class TrainingProcess(abc.ABC):
         self.metadata = {
             'model_kwargs': self.model_kwargs,
             'opt_kwargs': self.opt_kwargs,
-            'lr_sch_kwargs': self.args.lr_sch_kwargs if self.lr_scheduler is not None else None,
+            'lr_sch_kwargs': self.args.lr_sch_kwargs,
             'hparams': {
                 # 'batch_size': self.args.batch_size, # Not needed, is in dataset_kwargs
             },
@@ -497,7 +498,6 @@ class TrainingProcess(abc.ABC):
 
     def train_model(self, early_stopping=True,
                     early_stopping_kwargs={},
-                    lr_metric='loss',
                     **other_train_kwargs):
         # Log initial info
         self.logger.info('Training run: %s', self.run_id)
@@ -538,13 +538,7 @@ class TrainingProcess(abc.ABC):
         if early_stopping:
             attach_early_stopping(self.trainer, self.validator, **early_stopping_kwargs)
 
-        if self.lr_scheduler is not None:
-            attach_lr_scheduler_handler(
-                self.lr_scheduler,
-                self.trainer,
-                self.validator,
-                lr_metric,
-            )
+        self.lr_sch_handler.attach(self.trainer, self.validator)
 
         # Train!
         self.logger.info('-' * 50)
