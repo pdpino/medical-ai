@@ -1,25 +1,26 @@
-import numpy as np
+# import torch
+# import numpy as np
 from ignite.metrics import Metric
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
-from medai.utils import divide_arrays
-
-
-def _replace_nan_and_uncertain_(arr, nan_with=0, uncertain_with=1):
-    """Replaces -2 and -1 values in an array inplace."""
-    _NAN = -2
-    _UNC = -1
-
-    arr[arr == _NAN] = nan_with
-    arr[arr == _UNC] = uncertain_with
+from medai.utils import divide_arrays, divide_tensors
 
 
 class MedicalLabelerCorrectness(Metric):
     METRICS = ['acc', 'prec', 'recall', 'spec', 'npv', 'f1']
 
     def __init__(self, labeler, output_transform=lambda x: x, device=None):
-        self.labeler = labeler
         super().__init__(output_transform=output_transform, device=device)
+        self.labeler = labeler
+
+        if not hasattr(labeler, 'use_numpy'):
+            raise Exception(f'Internal error: set use_numpy in {labeler.__class__.__name__}')
+
+        if labeler.use_numpy:
+            self._divide_results = divide_arrays
+        else:
+            # use torch tensors
+            self._divide_results = divide_tensors
 
     @reinit__is_reduced
     def reset(self):
@@ -39,25 +40,22 @@ class MedicalLabelerCorrectness(Metric):
         gt_labels = self.labeler(gt)
         # shape (both): batch_size, n_labels
 
-        _replace_nan_and_uncertain_(generated_labels)
-        _replace_nan_and_uncertain_(gt_labels)
-
-        self._tp += np.sum((generated_labels == 1) & (gt_labels == 1), axis=0)
-        self._fp += np.sum((generated_labels == 1) & (gt_labels == 0), axis=0)
-        self._tn += np.sum((generated_labels == 0) & (gt_labels == 0), axis=0)
-        self._fn += np.sum((generated_labels == 0) & (gt_labels == 1), axis=0)
+        self._tp += ((generated_labels == 1) & (gt_labels == 1)).sum(0)
+        self._fp += ((generated_labels == 1) & (gt_labels == 0)).sum(0)
+        self._tn += ((generated_labels == 0) & (gt_labels == 0)).sum(0)
+        self._fn += ((generated_labels == 0) & (gt_labels == 1)).sum(0)
         # shape (all): n_labels
 
     @sync_all_reduce('_tp', '_fp', '_tn', '_fn')
     def compute(self):
         total = self._tp + self._fp + self._tn + self._fn
 
-        accuracy = divide_arrays(self._tp + self._tn, total)
-        precision = divide_arrays(self._tp, self._tp + self._fp)
-        recall = divide_arrays(self._tp, self._tp + self._fn)
-        specificity = divide_arrays(self._tn, self._tn + self._fp)
-        npv = divide_arrays(self._tn, self._tn + self._fn)
-        f1 = divide_arrays(precision * recall * 2, precision + recall)
+        accuracy = self._divide_results(self._tp + self._tn, total)
+        precision = self._divide_results(self._tp, self._tp + self._fp)
+        recall = self._divide_results(self._tp, self._tp + self._fn)
+        specificity = self._divide_results(self._tn, self._tn + self._fp)
+        npv = self._divide_results(self._tn, self._tn + self._fn)
+        f1 = self._divide_results(precision * recall * 2, precision + recall)
         # shape (all): n_diseases
 
         return {

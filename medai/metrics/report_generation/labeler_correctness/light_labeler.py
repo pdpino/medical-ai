@@ -47,12 +47,26 @@ def clean_sentence(sentence):
     ]
 
 
+def _replace_nan_and_uncertain_(arr, nan_with=0, uncertain_with=1):
+    """Replaces -2 and -1 values in an array inplace."""
+    _NAN = -2
+    _UNC = -1
+
+    arr[arr == _NAN] = nan_with
+    arr[arr == _UNC] = uncertain_with
+
+
 class LightLabeler(ABC):
     name = 'some-metric'
     diseases = ['dis1', 'dis2']
 
     no_finding_idx = None
     support_idxs = None
+
+    use_numpy = True
+
+    use_timer = True
+    use_cache = True
 
     def __init__(self, vocab):
         self._labels_by_sentence = ReportLabelsCache(self.name, 'sentences', self.diseases)
@@ -180,15 +194,17 @@ class LightLabeler(ABC):
         ])
         # np.array shape: batch_size, n_diseases
 
+        _replace_nan_and_uncertain_(reports_labels)
+
         return reports_labels
 
     def __call__(self, reports):
         """Labels a batch of generated and ground_truth reports.
 
         Args:
-            reports -- tensor of shape batch_size, n_words
+            reports -- list of lists of shape batch_size, n_words
         Returns:
-            labels, tensor of shape batch_size, n_labels
+            labels, np.array of shape batch_size, n_labels
         """
         with self.global_timer:
             return self._split_sentences_and_label(reports)

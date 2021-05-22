@@ -63,28 +63,37 @@ from medai.utils.nlp import attach_unclean_report_checker
 LOGGER = logging.getLogger('medai.rg.train')
 
 
-_CORRECTNESS_TARGET_METRIC = 'chex_f1_woNF'
-
 def _get_print_metrics(additional_metrics,
                        hierarchical=False,
-                       supervise_attention=False, supervise_sentences=False):
+                       supervise_attention=False,
+                       supervise_sentences=False,
+                       medical_correctness=False,
+                       med_kwargs={},
+                       ):
+    print_metrics = []
     if hierarchical:
-        print_metrics = ['word_loss', 'stop_loss']
-    else:
-        print_metrics = ['loss']
+        print_metrics.extend(['word_loss', 'stop_loss'])
     if supervise_attention:
         print_metrics.append('att_loss')
     if supervise_sentences:
         print_metrics.append('sentence_loss')
 
-    print_metrics += ['bleu', _CORRECTNESS_TARGET_METRIC]
+    if len(print_metrics) == 0:
+        print_metrics.append('loss')
+
+    print_metrics += ['bleu']
+
+    if medical_correctness:
+        if med_kwargs.get('metric', '').startswith('lighter'):
+            print_metrics.append('lighter-chex_f1')
+        else:
+            print_metrics.append('chex_f1_woNF')
 
     for m in (additional_metrics or []):
         if m not in print_metrics:
             print_metrics.append(m)
 
     return print_metrics
-
 
 
 def train_model(run_id,
@@ -201,6 +210,8 @@ def train_model(run_id,
             hierarchical=hierarchical,
             supervise_attention=supervise_attention,
             supervise_sentences=supervise_sentences,
+            medical_correctness=medical_correctness,
+            med_kwargs=med_kwargs,
         ),
     )
 
@@ -620,7 +631,6 @@ def train_from_scratch(run_name,
         'lambda_sent': lambda_sent,
         'organ_by_sentence': organ_by_sentence,
         'checkpoint_metric': checkpoint_metric,
-        # 'checkpoint_metric': _CORRECTNESS_TARGET_METRIC if medical_correctness else None,
     }
 
     # Save metadata
@@ -765,7 +775,7 @@ def parse_args():
     lr_group.add_argument('--custom-lr-attention', type=float, default=None,
                           help='Custom LR for the attention params')
 
-    parsers.add_args_early_stopping(parser, metric=_CORRECTNESS_TARGET_METRIC)
+    parsers.add_args_early_stopping(parser, metric=None)
     parsers.add_args_tb(parser, tb_hist_filter='decoder', tb_hist_freq=10)
     parsers.add_args_augment(parser)
 
@@ -786,6 +796,24 @@ def parse_args():
     parsers.build_args_augment_(args)
     parsers.build_args_tb_(args)
     parsers.build_args_med_(args)
+
+    def _assert_med_metric_is_present(metric, argname):
+        if metric is None or 'chex' not in metric:
+            # Is not a medical-correctness metric
+            return
+        if not args.medical_correctness:
+            parser.error(f'Cannot use {argname} {metric} and --no-med')
+        med_metric = args.med_kwargs['metric']
+        if metric.startswith('chex') and med_metric != 'light-chexpert':
+            parser.error(f'Cannot use {argname} "chex-" without --med-metric light-chexpert')
+        elif metric.startswith('lighter') and med_metric != 'lighter-chexpert':
+            parser.error(f'Cannot use {argname} "lighter-" without --med-metric lighter-chexpert')
+
+    if args.lr_metric is not None:
+        _assert_med_metric_is_present(args.lr_metric, '--lr-metric')
+
+    if args.early_stopping is None:
+        _assert_med_metric_is_present(args.es_metric, '--es-metric')
 
     if not args.no_med and args.early_stopping and \
         (args.med_after is not None and args.es_patience <= args.med_after) and \
@@ -892,7 +920,7 @@ if __name__ == '__main__':
                            weight_decay=ARGS.weight_decay,
                            custom_lr=ARGS.custom_lr,
                            n_epochs=ARGS.epochs,
-                           medical_correctness=not ARGS.no_med,
+                           medical_correctness=ARGS.medical_correctness,
                            med_kwargs=ARGS.med_kwargs,
                            image_size=ARGS.image_size,
                            cnn_run_id=ARGS.precnn_run_id,

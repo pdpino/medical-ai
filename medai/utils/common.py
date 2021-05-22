@@ -49,12 +49,16 @@ def duration_to_str(all_seconds):
     seconds = int(all_seconds % 60)
     minutes = all_seconds // 60
     hours = minutes // 60
+    days = hours // 24
 
+    hours = hours % 24
     minutes = minutes % 60
 
+    if days > 0:
+        return f'{days}d {hours}h {minutes}m {seconds}s'
     if hours > 0:
         return f'{hours}h {minutes}m {seconds}s'
-    elif minutes > 0:
+    if minutes > 0:
         return f'{minutes}m {seconds}s'
     return f'{seconds}s'
 

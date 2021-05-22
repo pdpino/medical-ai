@@ -2,10 +2,11 @@
 from medai.datasets.tools.augmentation import AVAILABLE_AUG_MODES
 from medai.models.classification import AVAILABLE_CLASSIFICATION_MODELS
 from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
-from medai.utils import parse_str_or_int
+from medai.utils.common import parse_str_or_int
 from medai.training.detection.h2bb import AVAILABLE_H2BB_METHODS
+from medai.metrics.report_generation.labeler_correctness import AVAILABLE_MED_LABELERS
 
-# FIXME: this module (medai.utils) imports from medai.models
+# FIXME: this module (medai.utils) imports from medai.models (and others that are not utils)
 
 
 def add_args_augment(parser):
@@ -37,7 +38,6 @@ def add_args_augment(parser):
     aug_group.add_argument('--aug-gaussian', type=float, default=0.1,
                            help='Augment samples by adding N(0,1)*value noise.')
 
-
 def build_args_augment_(args):
     # Build kwargs
     if args.augment:
@@ -68,7 +68,6 @@ def add_args_tb(parser, tb_hist_filter=None, tb_hist_freq=1):
                            help='In add_hist, only write every n epochs')
     tb_group.add_argument('--tb-hist-filter', type=str, default=tb_hist_filter,
                            help='In add_hist, include only layers matching this string')
-
 
 def build_args_tb_(args):
     args.tb_kwargs = {
@@ -133,7 +132,6 @@ def add_args_early_stopping(parser, metric='loss', min_delta=0):
     es_group.add_argument('--es-min-delta', type=float, default=min_delta,
                           help='Min delta to use for early-stopping')
 
-
 def build_args_early_stopping_(args):
     args.early_stopping = not args.no_early_stopping
     if args.early_stopping:
@@ -151,7 +149,6 @@ def add_args_free_values(parser):
                         help='If present, do not run in free mode')
     parser.add_argument('--skip-notfree', action='store_true',
                         help='If present, do not run in not-free mode')
-
 
 def build_args_free_values_(args, parser):
     use_free = not args.skip_free
@@ -179,18 +176,18 @@ def add_args_med(parser):
                            help='Start using med-metrics after N epochs (in validation)')
     med_group.add_argument('--med-val-steps', type=int, default=None,
                            help='Run med-metrics every N epochs (in validation)')
-    med_group.add_argument('--med-dummy', action='store_true',
-                           help='Use a dummy labeler (debug faster!)')
-
-
+    med_group.add_argument('--med-metric', type=str, default='lighter-chexpert',
+                           choices=AVAILABLE_MED_LABELERS,
+                           help='Choose metric to use as med-correctness')
 
 def build_args_med_(args):
+    args.medical_correctness = not args.no_med
     args.med_kwargs = {
         'after': args.med_after,
         'steps': args.med_steps,
         'val_after': args.med_val_after,
         'val_steps': args.med_val_steps,
-        'dummy': args.med_dummy,
+        'metric': args.med_metric,
     }
 
 
@@ -247,7 +244,6 @@ def add_args_sampling(parser):
 
     sampl_group.add_argument('--balanced-sampler', action='store_true',
                              help='Use a multilabel balanced sampler')
-
 
 def build_args_sampling_(args):
     # Enable passing str or int for oversample labels

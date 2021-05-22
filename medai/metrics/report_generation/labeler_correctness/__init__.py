@@ -6,10 +6,16 @@ from ignite.engine import Events
 from ignite.metrics import MetricsLambda
 
 from medai.metrics.report_generation.labeler_correctness.metric import MedicalLabelerCorrectness
-from medai.metrics.report_generation.labeler_correctness.light_labeler import ChexpertLightLabeler, DummyLabeler
+from medai.metrics.report_generation.labeler_correctness.light_labeler import (
+    ChexpertLightLabeler,
+    DummyLabeler,
+)
 from medai.metrics.report_generation.labeler_correctness.labeler_timer import LabelerTimerMetric
 from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
 from medai.metrics.report_generation.labeler_correctness.hit_counter_metric import HitCounterMetric
+from medai.metrics.report_generation.labeler_correctness.lighter_labeler import (
+    ChexpertLighterLabeler,
+)
 from medai.metrics.report_generation.transforms import get_flat_reports
 from medai.utils.lock import SyncLock
 from medai.utils.metrics import EveryNAfterMEpochs
@@ -20,6 +26,14 @@ LOGGER = logging.getLogger(__name__)
 _LOCK_FOLDER = LABELER_CACHE_DIR
 _LOCK_NAME = 'medical-correctness-cache'
 
+_LABELER_CLASSES = {
+    'dummy': ('dummy', DummyLabeler),
+    'lighter-chexpert': ('lighter-chex', ChexpertLighterLabeler),
+    'light-chexpert': ('chex', ChexpertLightLabeler),
+}
+
+AVAILABLE_MED_LABELERS = list(_LABELER_CLASSES)
+
 
 def _attach_hit_counter(engine, labeler, basename, device='cuda'):
     hit_counter_metric = HitCounterMetric(labeler, device=device)
@@ -29,8 +43,7 @@ def _attach_hit_counter(engine, labeler, basename, device='cuda'):
         metric.attach(engine, f'{basename}_labeler_{subvalue}')
 
 
-def _attach_labeler(engine, labeler, basename, usage=None,
-                    timer=True, device='cuda'):
+def _attach_labeler(engine, labeler, basename, usage=None, device='cuda'):
     """Attaches MedicalLabelerCorrectness metrics to an engine.
 
     It will attach metrics in the form <basename>_<metric_name>_<disease>
@@ -41,11 +54,12 @@ def _attach_labeler(engine, labeler, basename, usage=None,
         basename -- to use when attaching metrics
         device -- passed to Metrics
     """
-    if timer:
+    if labeler.use_timer:
         timer_metric = LabelerTimerMetric(labeler=labeler, device=device)
         timer_metric.attach(engine, f'{basename}_timer')
 
-    _attach_hit_counter(engine, labeler, basename, device=device)
+    if labeler.use_cache:
+        _attach_hit_counter(engine, labeler, basename, device=device)
 
     metric_obj = MedicalLabelerCorrectness(
         labeler, output_transform=get_flat_reports, device=device,
@@ -56,23 +70,29 @@ def _attach_labeler(engine, labeler, basename, usage=None,
 
         The metric obj returns a dict(key: metric_name, value: tensor/array of size n_diseases)
         e.g.: {
-          'acc': tensor of 14 diseases,
-          'prec': tensor of 14 diseases,
+          'acc': tensor/ndarray of 14 diseases,
+          'prec': tensor/ndarray of 14 diseases,
           etc
         }
         """
         return result[metric_name][metric_index].item()
 
     def _macro_avg_getter(result, metric_name):
-        return np.mean(result[metric_name])
+        return result[metric_name].mean().item()
 
-    ignore_no_finding_mask = np.zeros(len(labeler.diseases))
     if labeler.no_finding_idx is not None:
-        ignore_no_finding_mask[labeler.no_finding_idx] = 1
+        if not labeler.use_numpy:
+            # To use this, the tensors should be moved to CPU to use np.ma.array
+            # REVIEW: can something like array[mask == 0].mean().item() be used?
+            raise Exception('Internal error: cannot attach woNF metrics if use_numpy is False')
 
-    def _macro_avg_getter_fonly(result, metric_name):
-        values = result[metric_name] # shape: n_findings
-        return np.ma.array(values, mask=ignore_no_finding_mask).mean()
+        ignore_no_finding_mask = np.zeros(len(labeler.diseases))
+        if labeler.no_finding_idx is not None:
+            ignore_no_finding_mask[labeler.no_finding_idx] = 1
+
+        def _macro_avg_getter_fonly(result, metric_name):
+            values = result[metric_name] # shape: n_findings
+            return np.ma.array(values, mask=ignore_no_finding_mask).mean()
 
 
     if usage:
@@ -111,7 +131,7 @@ def _attach_labeler(engine, labeler, basename, usage=None,
 
 def attach_medical_correctness(trainer, validator, vocab,
                                after=None, steps=None, val_after=None, val_steps=None,
-                               dummy=False,
+                               metric='lighter-chexpert',
                                device='cuda'):
     """Attaches medical correctness metrics to engines.
 
@@ -129,6 +149,7 @@ def attach_medical_correctness(trainer, validator, vocab,
     val_after = val_after if val_after is not None else after
     val_steps = val_steps if val_steps is not None else steps
     info = {
+        'metric': metric,
         'train_after': after,
         'train_steps': steps,
         'val_after': val_after,
@@ -137,16 +158,23 @@ def attach_medical_correctness(trainer, validator, vocab,
     info_str = ' '.join(f"{k}={v}" for k, v in info.items())
     LOGGER.info('Using medical correctness metrics %s', info_str)
 
-    lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
+    if metric not in _LABELER_CLASSES:
+        raise Exception(f'Metric not found {metric}')
+    labeler_name, LabelerClass = _LABELER_CLASSES[metric]
 
-    if not lock.acquire():
-        LOGGER.warning(
-            'Cannot attach medical correctness metric, cache is locked',
-        )
-        return
-
-    if dummy:
+    if metric == 'dummy':
         LOGGER.warning('Attaching DUMMY med metrics!!')
+
+    needs_lock = metric.startswith('light-')
+
+    if needs_lock:
+        lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
+
+        if not lock.acquire():
+            LOGGER.warning(
+                'Cannot attach medical correctness metric, cache is locked',
+            )
+            return
 
     train_usage = EveryNAfterMEpochs(steps, after, trainer) if after or steps else None
     val_usage = EveryNAfterMEpochs(val_steps, val_after, trainer) \
@@ -161,25 +189,19 @@ def attach_medical_correctness(trainer, validator, vocab,
         else:
             usage = val_usage
 
-        if dummy:
-            labeler = DummyLabeler(vocab)
-        else:
-            labeler = ChexpertLightLabeler(vocab)
-        _attach_labeler(engine, labeler, 'chex', device=device, usage=usage)
+        labeler = LabelerClass(vocab)
+        _attach_labeler(engine, labeler, labeler_name, device=device, usage=usage)
 
-        # TODO: apply for MIRQI as well
-        # _attach_labeler(engine, MirqiLightLabeler(vocab), 'mirqi')
+    if needs_lock:
+        def _release_locks(engine, err=None):
+            lock.release()
 
+            if err is not None:
+                LOGGER.error('Error in trainer=%s', engine is trainer)
+                raise err
 
-    def _release_locks(engine, err=None):
-        lock.release()
+        trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
+        trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
 
-        if err is not None:
-            LOGGER.error('Error in trainer=%s', engine is trainer)
-            raise err
-
-    trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
-    trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
-
-    if validator is not None:
-        validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
+        if validator is not None:
+            validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
