@@ -128,8 +128,8 @@ def _load_compiled_model_base(run_id,
     # Create LR scheduler
     # TODO: also pass last_epoch?
     # Problem: that info comes from CompiledModel.get_current_epoch() (i.e. its state)
-    lr_sch_kwargs = metadata.get('lr_sch_kwargs', None)
-    lr_sch_handler = create_lr_sch_handler(optimizer, **lr_sch_kwargs)
+    lr_sch_kwargs = metadata.get('lr_sch_kwargs', None) or {}
+    lr_sch_handler = create_lr_sch_handler(optimizer, quiet=True, **lr_sch_kwargs)
 
     # Compile model
     compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
@@ -234,8 +234,8 @@ def load_compiled_model_report_generation(run_id,
     optimizer = create_optimizer(model, **opt_kwargs)
 
     # Create LR scheduler
-    lr_sch_kwargs = metadata.get('lr_sch_kwargs', None)
-    lr_sch_handler = create_lr_sch_handler(optimizer, **lr_sch_kwargs)
+    lr_sch_kwargs = metadata.get('lr_sch_kwargs', None) or {}
+    lr_sch_handler = create_lr_sch_handler(optimizer, quiet=False, **lr_sch_kwargs)
 
     # Compiled model
     compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)

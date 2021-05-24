@@ -156,7 +156,7 @@ def attach_medical_correctness(trainer, validator, vocab,
         'val_steps': val_steps,
     }
     info_str = ' '.join(f"{k}={v}" for k, v in info.items())
-    LOGGER.info('Using medical correctness metrics %s', info_str)
+    LOGGER.info('Using medical correctness: %s', info_str)
 
     if metric not in _LABELER_CLASSES:
         raise Exception(f'Metric not found {metric}')

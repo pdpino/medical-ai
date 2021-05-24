@@ -15,7 +15,7 @@ from medai.datasets import (
 )
 from medai.losses import get_loss_function, AVAILABLE_LOSSES, POS_WEIGHTS_BY_DATASET
 from medai.losses.schedulers import create_lr_sch_handler
-from medai.models import save_training_stats, load_pretrained_weights_cnn_
+from medai.models import load_pretrained_weights_cnn_
 from medai.metrics import attach_losses
 from medai.metrics.classification import (
     attach_metrics_classification,
@@ -47,6 +47,7 @@ from medai.utils import (
 from medai.utils.handlers import (
     attach_log_metrics,
     attach_early_stopping,
+    attach_save_training_stats,
 )
 
 LOGGER = logging.getLogger('medai.cl.train')
@@ -181,8 +182,17 @@ def train_model(run_id,
                             dryrun=dryrun,
                             )
 
-    if early_stopping:
-        attach_early_stopping(trainer, validator, **early_stopping_kwargs)
+    attach_save_training_stats(
+        trainer,
+        run_id,
+        timer,
+        n_epochs,
+        hw_options,
+        initial_epoch=initial_epoch,
+        dryrun=dryrun,
+    )
+
+    attach_early_stopping(trainer, validator, attach=early_stopping, **early_stopping_kwargs)
 
     lr_sch_handler.attach(trainer, validator)
 
@@ -199,17 +209,6 @@ def train_model(run_id,
     tb_writer.close()
 
     LOGGER.info('Finished training: %s', run_id)
-
-    # TODO: also save if the run is interrupted with ctrl-c?
-    save_training_stats(
-        run_id,
-        train_dataloader,
-        n_epochs,
-        secs_per_epoch,
-        hw_options,
-        initial_epoch,
-        dryrun=dryrun,
-    )
 
     return trainer.state.metrics, validator.state.metrics
 
@@ -439,7 +438,7 @@ def train_from_scratch(run_name,
             run_name += f'-c{cooldown}'
     elif lr_sch_name == 'step':
         step = lr_sch_kwargs['step_size']
-        factor = lr_sch_kwargs['factor']
+        factor = lr_sch_kwargs['gamma']
         run_name += f'_sch-step{step}-f{factor}'
 
     # if not early_stopping:
@@ -715,7 +714,7 @@ def parse_args():
     # Build params
     parsers.build_args_sampling_(args)
     parsers.build_args_early_stopping_(args)
-    parsers.build_args_lr_sch_(args)
+    parsers.build_args_lr_sch_(args, parser)
     parsers.build_args_tb_(args)
     parsers.build_args_augment_(args)
 

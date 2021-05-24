@@ -87,21 +87,22 @@ _SCHEDULERS = {
 AVAILABLE_SCHEDULERS = list(_SCHEDULERS)
 
 
-def create_lr_sch_handler(optimizer, name=None, **kwargs):
+def create_lr_sch_handler(optimizer, quiet=False, name=None, **kwargs):
     if name not in _SCHEDULERS:
         raise Exception(f'Scheduler not found: {name}')
 
     SchedulerClass = _SCHEDULERS[name]
     lr_scheduler = SchedulerClass(optimizer, **kwargs)
 
-    if isinstance(lr_scheduler, NoSchedulerHandler):
-        LOGGER.warning('Not using a LR-scheduler')
-    else:
-        info = {
-            'name': name,
-            **kwargs,
-        }
-        info_str = ' '.join(f'{k}={v}' for k, v in info.items())
-        LOGGER.info('Using LR-scheduler: %s', info_str)
+    if not quiet:
+        if isinstance(lr_scheduler, NoSchedulerHandler):
+            LOGGER.warning('Not using a LR-scheduler')
+        else:
+            info = {
+                'name': name,
+                **kwargs,
+            }
+            info_str = ' '.join(f'{k}={v}' for k, v in info.items())
+            LOGGER.info('Using LR-scheduler: %s', info_str)
 
     return lr_scheduler

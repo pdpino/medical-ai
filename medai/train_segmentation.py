@@ -120,8 +120,14 @@ def train_model(run_id,
                             metric='iou',
                             )
 
-    if early_stopping:
-        attach_early_stopping(trainer, validator, **early_stopping_kwargs)
+    LOGGER.warning('TODO: attach_save_training_stats!')
+
+    attach_early_stopping(
+        trainer,
+        validator,
+        attach=early_stopping,
+        **early_stopping_kwargs,
+    )
 
     lr_sch_handler.attach(trainer, validator)
 
@@ -247,7 +253,7 @@ def train_from_scratch(run_name,
             run_name += f'-c{cooldown}'
     elif lr_sch_name == 'step':
         step = lr_sch_kwargs['step_size']
-        factor = lr_sch_kwargs['factor']
+        factor = lr_sch_kwargs['gamma']
         run_name += f'_sch-step{step}-f{factor}'
 
     run_id = RunId(run_name, debug, 'seg')
@@ -398,7 +404,7 @@ def parse_args():
 
     # Build parameters
     parsers.build_args_early_stopping_(args)
-    parsers.build_args_lr_sch_(args)
+    parsers.build_args_lr_sch_(args, parser)
     parsers.build_args_augment_(args)
     parsers.build_args_tb_(args)
 

@@ -1,11 +1,14 @@
 """Common handlers for any engine."""
-import time
+import json
 import logging
 import numbers
+import os
+import time
 from ignite.engine import Events
 from ignite.handlers import EarlyStopping
 
 from medai.utils import duration_to_str
+from medai.utils.files import get_checkpoint_folder
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +30,7 @@ _shorter_names = {
     'n-shapes-gen': 'shapes',
     'n-holes-gen': 'holes',
     'chex_f1_woNF': 'f1_woNF',
+    'lighter-chex_f1': 'l-chex_f1',
     'chex_labeler_misses': 'miss',
     'chex_labeler_misses_unique': 'miss_uniq',
     'chex_labeler_misses_perc': 'miss_perc',
@@ -41,7 +45,7 @@ def _prettify(value):
     if value is None:
         return -1
     if isinstance(value, numbers.Number):
-        return str(round(value, 3))
+        return f'{round(value, 3):<5}'
     return value
 
 
@@ -97,6 +101,7 @@ def attach_log_metrics(trainer,
 
 def attach_early_stopping(trainer,
                           validator,
+                          attach=True,
                           metric='loss',
                           patience=10,
                           **kwargs,
@@ -113,6 +118,9 @@ def attach_early_stopping(trainer,
         anyway, implying that the run may be terminated even if no values are observed. (This
         is relevant for metrics that may not be calculated on every epoch, such as chex_f1).
     """
+    if not attach:
+        LOGGER.info('No early stopping')
+        return
     info = {
         'metric': metric,
         'patience': patience,
@@ -138,3 +146,31 @@ def attach_early_stopping(trainer,
                                    )
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, early_stopping)
+
+
+def attach_save_training_stats(trainer, run_id, timer, epochs, hw_options,
+                               initial_epoch=0, dryrun=False):
+    if dryrun:
+        return
+
+    folder = get_checkpoint_folder(run_id, save_mode=True)
+    final_epoch = initial_epoch + epochs
+    fpath = os.path.join(folder, f'training-stats-{initial_epoch}-{final_epoch}.json')
+
+    def _save_training_stats(unused_engine):
+        dataloader = trainer.state.dataloader
+        secs_per_epoch = timer.value()
+        training_stats = {
+            'secs_per_epoch': secs_per_epoch,
+            'batch_size': dataloader.batch_size,
+            'num_workers': dataloader.num_workers,
+            'initial_epoch': initial_epoch,
+            'final_epoch': final_epoch,
+            'current_epoch': trainer.state.epoch,
+            'hw_options': hw_options,
+        }
+
+        with open(fpath, 'w') as f:
+            json.dump(training_stats, f, indent=2)
+
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, _save_training_stats)

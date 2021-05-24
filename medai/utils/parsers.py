@@ -99,9 +99,9 @@ def add_args_lr(parser, lr=0.0001):
                           help='Weight decay passed to the optimizer')
     return lr_group
 
-def add_args_lr_sch(parser, patience=5, factor=0.5, cooldown=0, metric='loss'):
+def add_args_lr_sch(parser, scheduler='plateau', patience=5, factor=0.5, cooldown=0, metric='loss'):
     lr_group = parser.add_argument_group('LR scheduler params')
-    lr_group.add_argument('--lr-scheduler', type=str, default='plateau',
+    lr_group.add_argument('--lr-scheduler', type=str, default=scheduler,
                           choices=AVAILABLE_SCHEDULERS,
                           help='Select the scheduler to use')
     lr_group.add_argument('--lr-factor', type=float, default=factor,
@@ -119,8 +119,11 @@ def add_args_lr_sch(parser, patience=5, factor=0.5, cooldown=0, metric='loss'):
 
     return lr_group
 
-def build_args_lr_sch_(args):
+def build_args_lr_sch_(args, parser):
     if args.lr_scheduler == 'plateau':
+        if args.lr_metric is None:
+            parser.error('Cannot set --lr-scheduler plateau and --lr-metric None')
+
         args.lr_sch_kwargs = {
             'metric': args.lr_metric,
             'mode': 'min' if args.lr_metric == 'loss' else 'max',

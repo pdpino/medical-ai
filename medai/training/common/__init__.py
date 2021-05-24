@@ -7,7 +7,6 @@ import time
 import torch
 from torch import nn
 from torch import optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ignite.engine import Events
 from ignite.handlers import Timer
 
@@ -19,7 +18,6 @@ from medai.models.checkpoint import (
     load_compiled_model,
 )
 from medai.losses.schedulers import create_lr_sch_handler
-from medai.models import save_training_stats
 from medai.tensorboard import TBWriter
 from medai.utils import (
     get_timestamp,
@@ -33,6 +31,7 @@ from medai.utils import (
 from medai.utils.handlers import (
     attach_log_metrics,
     attach_early_stopping,
+    attach_save_training_stats,
 )
 
 
@@ -147,7 +146,7 @@ class TrainingProcess(abc.ABC):
 
         # Build params
         parsers.build_args_early_stopping_(args)
-        parsers.build_args_lr_sch_(args)
+        parsers.build_args_lr_sch_(args, parser)
         parsers.build_args_tb_(args)
 
         if self.allow_augmenting:
@@ -240,7 +239,7 @@ class TrainingProcess(abc.ABC):
                 run_name += f'-c{cooldown}'
         elif lr_sch_name == 'step':
             step = self.args.lr_sch_kwargs['step_size']
-            factor = self.args.lr_sch_kwargs['factor']
+            factor = self.args.lr_sch_kwargs['gamma']
             run_name += f'_sch-step{step}-f{factor}'
 
         return run_name
@@ -535,8 +534,22 @@ class TrainingProcess(abc.ABC):
             dryrun=self.args.dryrun or self.args.dont_save,
         )
 
-        if early_stopping:
-            attach_early_stopping(self.trainer, self.validator, **early_stopping_kwargs)
+        attach_save_training_stats(
+            self.trainer,
+            self.run_id,
+            timer,
+            self.args.epochs,
+            self.hw_options,
+            initial_epoch=initial_epoch,
+            dryrun=self.args.dont_save,
+        )
+
+        attach_early_stopping(
+            self.trainer,
+            self.validator,
+            attach=early_stopping,
+            **early_stopping_kwargs,
+        )
 
         self.lr_sch_handler.attach(self.trainer, self.validator)
 
@@ -553,16 +566,6 @@ class TrainingProcess(abc.ABC):
         self.tb_writer.close()
 
         self.logger.info('Finished training: %s', self.run_id)
-
-        save_training_stats(
-            self.run_id,
-            self.train_dataloader,
-            self.args.epochs,
-            secs_per_epoch,
-            self.hw_options,
-            initial_epoch=initial_epoch,
-            dryrun=self.args.dont_save,
-        )
 
         return self.trainer.state.metrics, self.validator.state.metrics
 

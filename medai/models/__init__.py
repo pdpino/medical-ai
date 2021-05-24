@@ -1,39 +1,8 @@
-import os
-import json
 import logging
 
 from medai.models.checkpoint import load_compiled_model
-from medai.utils.files import get_checkpoint_folder
 
 LOGGER = logging.getLogger(__name__)
-
-def save_training_stats(run_id,
-                        dataloader,
-                        epochs,
-                        secs_per_epoch,
-                        hw_options,
-                        initial_epoch=0,
-                        dryrun=False,
-                        ):
-    if dryrun:
-        return
-    training_stats = {
-        'secs_per_epoch': secs_per_epoch,
-        'batch_size': dataloader.batch_size,
-        'num_workers': dataloader.num_workers,
-        'initial_epoch': initial_epoch,
-        'n_epochs': epochs,
-        'hw_options': hw_options,
-    }
-    folder = get_checkpoint_folder(run_id, save_mode=True)
-    final_epoch = initial_epoch + epochs
-    fpath = os.path.join(folder, f'training-stats-{initial_epoch}-{final_epoch}.json')
-
-    with open(fpath, 'w') as f:
-        json.dump(training_stats, f, indent=2)
-
-    LOGGER.debug('Saved training stats to %s', fpath)
-
 
 def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
                                  cls_weights=False, seg_weights=False, device='cuda'):

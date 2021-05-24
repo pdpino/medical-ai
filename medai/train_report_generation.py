@@ -9,7 +9,6 @@ from ignite.handlers import Timer
 
 from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATASETS
 from medai.datasets.common import LATEST_REPORTS_VERSION
-from medai.models import save_training_stats
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     attach_attention_vs_masks,
@@ -55,6 +54,7 @@ from medai.utils import (
 from medai.utils.handlers import (
     attach_log_metrics,
     attach_early_stopping,
+    attach_save_training_stats,
 )
 from medai.utils.nlp import attach_unclean_report_checker
 
@@ -214,16 +214,31 @@ def train_model(run_id,
     )
 
     # Attach checkpoint
-    attach_checkpoint_saver(run_id,
-                            compiled_model,
-                            trainer,
-                            validator,
-                            metric=checkpoint_metric,
-                            dryrun=dryrun or (not save_model),
-                           )
+    attach_checkpoint_saver(
+        run_id,
+        compiled_model,
+        trainer,
+        validator,
+        metric=checkpoint_metric,
+        dryrun=dryrun or (not save_model),
+    )
 
-    if early_stopping:
-        attach_early_stopping(trainer, validator, **early_stopping_kwargs)
+    attach_save_training_stats(
+        trainer,
+        run_id,
+        timer,
+        n_epochs,
+        hw_options,
+        initial_epoch=initial_epoch,
+        dryrun=(not save_model),
+    )
+
+    attach_early_stopping(
+        trainer,
+        validator,
+        attach=early_stopping,
+        **early_stopping_kwargs,
+    )
 
     lr_sch_handler.attach(trainer, validator)
 
@@ -239,16 +254,6 @@ def train_model(run_id,
 
     # Close stuff
     tb_writer.close()
-
-    save_training_stats(
-        run_id,
-        train_dataloader,
-        n_epochs,
-        secs_per_epoch,
-        hw_options,
-        initial_epoch,
-        dryrun=(not save_model),
-    )
 
     LOGGER.info('Finished training: %s', run_id)
 
@@ -494,7 +499,7 @@ def train_from_scratch(run_name,
             run_name += f'-c{cooldown}'
     elif lr_sch_name == 'step':
         step = lr_sch_kwargs['step_size']
-        factor = lr_sch_kwargs['factor']
+        factor = lr_sch_kwargs['gamma']
         run_name += f'_sch-step{step}-f{factor}'
 
     if frontal_only and not supervise_attention: # If supervise attention, frontal_only is implied
@@ -776,7 +781,7 @@ def parse_args():
                           help='Custom LR for the word_embedding params')
     lr_group.add_argument('--custom-lr-attention', type=float, default=None,
                           help='Custom LR for the attention params')
-    parsers.add_args_lr_sch(parser, metric=None)
+    parsers.add_args_lr_sch(parser, scheduler=None, metric=None)
 
     parsers.add_args_early_stopping(parser, metric=None)
     parsers.add_args_tb(parser, tb_hist_filter='decoder', tb_hist_freq=10)
@@ -795,7 +800,7 @@ def parse_args():
 
     # Build params
     parsers.build_args_early_stopping_(args)
-    parsers.build_args_lr_sch_(args)
+    parsers.build_args_lr_sch_(args, parser)
     parsers.build_args_augment_(args)
     parsers.build_args_tb_(args)
     parsers.build_args_med_(args)
@@ -845,6 +850,11 @@ def parse_args():
     }
 
     # Build custom lr kwargs
+    if args.custom_lr_attention is not None:
+        if 'att' not in args.decoder:
+            # custom-lr-attention is only available for attention models!
+            args.custom_lr_attention = None
+
     args.custom_lr = {}
     min_lr = []
     if args.custom_lr_word_embedding is not None:
