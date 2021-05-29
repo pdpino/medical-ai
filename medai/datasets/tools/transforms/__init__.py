@@ -165,34 +165,3 @@ class WIP_TransformMany:
         }
 
         return tf_imgs
-
-
-
-def pre_transform_masks(masks):
-    """Steps to perform before applying a transform to a segmentation mask.
-
-    Args:
-        masks -- tensor of shape (height, width), with values between [0, 255]
-    Returns:
-        PIL Image of size (height, width)
-    """
-    masks = masks.to(torch.uint8)
-    masks = F.to_pil_image(masks, 'L')
-    return masks
-
-def post_transform_masks(masks_pil):
-    """Steps to perform after applying a transform to a segmentation mask.
-
-    Note: the pil -> numpy -> tensor transormation is done manually,
-    and not using the `transforms.ToTensor()` class, to avoid range
-    modifications (i.e. from 0-1, 0-255, etc).
-
-    Args:
-        masks_pil -- PIL image of shape (height, width)
-    Returns:
-        Tensor of shape (height, width), of type long
-    """
-    masks = torch.from_numpy(np.array(masks_pil)) # shape: height, width
-    # masks = masks.unsqueeze(0) # shape: 1, height, width
-    masks = masks.long()
-    return masks

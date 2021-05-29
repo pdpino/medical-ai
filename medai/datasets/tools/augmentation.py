@@ -5,16 +5,16 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 import matplotlib.pyplot as plt
+from PIL import Image
 
 from medai.datasets.tools.transforms import (
-    pre_transform_masks,
-    post_transform_masks,
     RandomRotationMany,
     RandomResizedCropMany,
     RandomAffineMany,
     ColorJitterMany,
     GaussianNoiseMany,
 )
+from medai.utils.images import MaskToTensor
 from medai.utils.circular_shuffled_list import CircularShuffledList
 
 _SPATIAL_TRANSFORMS = set([
@@ -208,8 +208,8 @@ class Augmentator(Dataset):
             random.shuffle(self.indices)
         self._did_shuffle = not dont_shuffle
 
-        self.augment_masks = seg_mask
-        if not self.augment_masks and dataset.enable_masks:
+        self.enable_masks = seg_mask
+        if not self.enable_masks and dataset.enable_masks:
             LOGGER.error('Passed seg_mask=False and dataset.enable_masks is set to True')
 
         # Print stats
@@ -218,7 +218,7 @@ class Augmentator(Dataset):
             'times': times,
             'new-total': f'{len(self.indices):,}',
             'original': f'{len(self.dataset):,}',
-            'enable-masks': self.augment_masks,
+            'enable-masks': self.enable_masks,
         }
         stats_str = ' '.join(f'{k}={v}' for k, v in stats.items())
         LOGGER.info('\tAugmenting %s: %s', _samples_info, stats_str)
@@ -233,34 +233,50 @@ class Augmentator(Dataset):
 
     def _pre_transform_masks_(self, item, fields):
         """Pre-transforms masks in-place in fields."""
-        if item.masks.ndim == 2:
+        pre_transform_masks = self.pre_post_transforms_masks[0]
+
+        if isinstance(item.masks, Image.Image):
             fields['masks'] = pre_transform_masks(item.masks)
-        elif item.masks.ndim == 3:
-            # HACK: for datasets like VinBig, that return more than one mask,
-            # this special case is explictly written
-            # FIXME: could the performance be improved? 14 additional transformations
-            # are made (all in CPU).
-            for i, mask in enumerate(item.masks):
-                fields[f'masks-{i}'] = pre_transform_masks(mask)
+        elif isinstance(item.masks, torch.Tensor):
+            # FIXME: VinBig datasets return this kind, but with the current monkey-patch
+            # always PIL.Images will be received here
+            if item.masks.ndim == 2:
+                fields['masks'] = pre_transform_masks(item.masks)
+            elif item.masks.ndim == 3:
+                # HACK: for datasets like VinBig, that return more than one mask,
+                # this special case is explictly written
+                # FIXME: could the performance be improved? 14 additional transformations
+                # are made (all in CPU).
+                for i, mask in enumerate(item.masks):
+                    fields[f'masks-{i}'] = pre_transform_masks(mask)
+            else:
+                LOGGER.error('Masks have ndim==%d, ignoring', item.masks.ndim)
         else:
-            LOGGER.warning('Masks have ndim==%d', item.masks.ndim)
+            LOGGER.error('Masks have type=%s, ignoring', type(item.masks))
 
     def _post_transform_masks_(self, item, fields):
-        if item.masks.ndim == 2:
-            fields['masks'] = post_transform_masks(fields['masks'])
-        elif item.masks.ndim == 3:
-            n_masks = len(item.masks)
+        post_transform_masks = self.pre_post_transforms_masks[1]
 
-            finished_masks = []
-            for i in range(n_masks):
-                key = f'masks-{i}'
-                finished_masks.append(post_transform_masks(fields[key]))
-                del fields[key]
+        masks = fields['masks']
+        if isinstance(masks, Image.Image):
+            fields['masks'] = post_transform_masks(masks)
+        elif isinstance(masks, torch.Tensor):
+            if masks.ndim == 2:
+                fields['masks'] = post_transform_masks(masks)
+            elif masks.ndim == 3:
+                n_masks = len(masks)
 
-            fields['masks'] = torch.stack(
-                finished_masks,
-                dim=0,
-            ).type(item.masks.type())
+                finished_masks = []
+                for i in range(n_masks):
+                    key = f'masks-{i}'
+                    finished_masks.append(post_transform_masks(fields[key]))
+                    del fields[key]
+
+                fields['masks'] = torch.stack(
+                    finished_masks,
+                    dim=0,
+                ).type(item.masks.type())
+
 
     def __getitem__(self, idx):
         inner_idx, aug_spatial, aug_color = self.indices[idx]
@@ -279,8 +295,7 @@ class Augmentator(Dataset):
         }
 
         # Pre-transform masks, if needed only
-        apply_to_seg_mask = self.augment_masks and aug_spatial in _SPATIAL_TRANSFORMS
-        if apply_to_seg_mask:
+        if self.enable_masks:
             self._pre_transform_masks_(item, fields)
 
         # Augment PIL image with color
@@ -297,7 +312,7 @@ class Augmentator(Dataset):
         fields['image'] = post_transform(fields['image'])
 
         # Apply post-transformation to masks, if needed only
-        if apply_to_seg_mask:
+        if self.enable_masks:
             self._post_transform_masks_(item, fields)
 
         # Augment Tensor image with color, if it should be applied to tensor
@@ -309,26 +324,37 @@ class Augmentator(Dataset):
 
     def _monkey_patch_transform(self):
         """Monkey patches the dataset.transform() function."""
-        if not hasattr(self.dataset, _TRANSFORM_METHOD_NAME):
-            raise Exception(f'Dataset does not have a method called {_TRANSFORM_METHOD_NAME}')
+        def _monkey_patch_method(method_name):
+            if not hasattr(self.dataset, method_name):
+                raise Exception(f'Dataset does not have a method called {method_name}')
 
-        tf_instance = getattr(self.dataset, _TRANSFORM_METHOD_NAME)
-        if isinstance(tf_instance, types.LambdaType):
-            raise Exception('Dataset is already monkey-patched!')
+            tf_instance = getattr(self.dataset, method_name)
+            if isinstance(tf_instance, types.LambdaType):
+                raise Exception('Dataset is already monkey-patched!')
 
-        # Check original transforms
-        _transforms = tf_instance.transforms
+            # Check original transforms
+            _transforms = tf_instance.transforms
 
-        assert len(_transforms) >= 2, 'There should be at least two transforms'
-        assert isinstance(_transforms[0], transforms.Resize), '1st transform should be Resize'
-        assert isinstance(_transforms[1], transforms.ToTensor), '2d transform should be ToTensor'
+            assert len(_transforms) >= 2, 'There should be at least two transforms'
+            assert isinstance(_transforms[0], transforms.Resize), '1st transform should be Resize'
+            assert isinstance(
+                _transforms[1],
+                (transforms.ToTensor, MaskToTensor),
+            ), '2d transform should be ToTensor'
 
-        pre_transform = _transforms[0] # Resize before
-        post_transform = transforms.Compose(_transforms[1:]) # ToTensor after
-        self.pre_post_transforms = pre_transform, post_transform
+            pre_transform = _transforms[0] # Resize before
+            post_transform = transforms.Compose(_transforms[1:]) # ToTensor after
+            pre_post_transforms = pre_transform, post_transform
 
-        # Monkey-patch with identity
-        setattr(self.dataset, _TRANSFORM_METHOD_NAME, lambda x: x)
+            # Monkey-patch with identity
+            setattr(self.dataset, method_name, lambda x: x)
+
+            return pre_post_transforms
+
+        self.pre_post_transforms = _monkey_patch_method(_TRANSFORM_METHOD_NAME)
+
+        if self.enable_masks:
+            self.pre_post_transforms_masks = _monkey_patch_method('transform_mask')
 
     def _build_indices_single(self, samples_idxs, times):
         """Creates an indices array using single-augmentation.
@@ -450,7 +476,7 @@ class Augmentator(Dataset):
             return ','.join(pretty_methods)
 
 
-        should_plot_masks = self.augment_masks and n_masks >= 1
+        should_plot_masks = self.enable_masks and n_masks >= 1
         should_plot_original = 1
 
         # Amounts
@@ -480,6 +506,8 @@ class Augmentator(Dataset):
             plt.axis('off')
 
         def _plot_item_masks(item, base_plot_index):
+            if not isinstance(item.masks, torch.Tensor):
+                raise Exception(f'Augmented mask is not tensor, received: {type(item.masks)}')
             if item.masks.ndim == 2:
                 _plot_mask(item.masks, base_plot_index)
             elif item.masks.ndim == 3:

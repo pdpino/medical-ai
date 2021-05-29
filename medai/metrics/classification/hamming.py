@@ -5,7 +5,7 @@ from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 class Hamming(Metric):
     """Computes Hamming loss (smaller is better).
-    
+
     Using calculation described here: https://stats.stackexchange.com/a/168952/221232
     """
     @reinit__is_reduced
@@ -18,7 +18,7 @@ class Hamming(Metric):
     @reinit__is_reduced
     def update(self, output):
         """Updates the metric state after a batch/epoch.
-        
+
         output = (outputs, labels)
             - shape for both arrays: batch_size, n_labels
             - in binary format (rounded)

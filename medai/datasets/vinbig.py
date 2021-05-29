@@ -1,11 +1,11 @@
 import os
 import json
 import logging
+import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
-from torchvision.transforms.functional import to_tensor
-import pandas as pd
 from ignite.utils import to_onehot
 
 from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
@@ -165,20 +165,19 @@ class VinBigDataset(Dataset):
     def load_organ_masks(self, image_id):
         filepath = os.path.join(self.masks_dir, f'{image_id}.png')
 
-        # TODO: can this be replaced by load_organ_masks() ??
+        # FIXME: this won't work with augmentation!
+        # Need to enable monkey-patch!!
+        # TODO: can this be replaced by get_default_transform_mask() ??
 
         mask = load_image(filepath, 'L')
-        mask = to_tensor(mask)
-        # shape: 1, height, width
-
-        mask = (mask * 255).long()
-        # shape: 1, height, width
-
-        mask = to_onehot(mask, len(self.organs))
-        # shape: 1, n_organs, height, width
-
         mask = self.transform_mask(mask)
-        # shape: 1, n_organs, target-height, target-width
+        # shape: height, width
+
+        mask = torch.from_numpy(np.array(mask)).unsqueeze(0)
+        # shape: 1, height, width; type: uint8
+
+        mask = to_onehot(mask.long(), len(self.organs))
+        # shape: 1, n_organs, height, width; type: uint8
 
         mask = mask.squeeze(0)
         # shape: n_organs, target-height, target-width

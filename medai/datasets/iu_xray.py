@@ -16,7 +16,6 @@ from medai.datasets.vocab import load_vocab
 from medai.utils.images import (
     get_default_image_transform,
     load_image,
-    load_organ_masks,
     get_default_mask_transform,
 )
 
@@ -73,12 +72,16 @@ class IUXRayDataset(Dataset):
         # Only frontal masks are available
         assert not masks or frontal_only, 'if masks is True, set frontal_only=True'
 
-        self.enable_masks = masks
-        self.transform_mask = get_default_mask_transform(image_size)
-
         self.multilabel = True # CL multilabel
         self.seg_multilabel = seg_multilabel
         self._preprocess_labels(labels)
+
+        self.enable_masks = masks
+        self.transform_mask = get_default_mask_transform(
+            image_size,
+            self.seg_multilabel,
+            len(self.organs),
+        )
 
         # Load reports
         reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME.format(reports_version))
@@ -146,12 +149,9 @@ class IUXRayDataset(Dataset):
     def load_mask(self, image_name):
         filepath = os.path.join(self.masks_dir, f'{image_name}.png')
 
-        return load_organ_masks(
-            filepath,
-            self.transform_mask,
-            self.seg_multilabel,
-            len(self.organs),
-        )
+        mask = load_image(filepath, 'L')
+        mask = self.transform_mask(mask)
+        return mask
 
     def get_vocab(self):
         return self.word_to_idx

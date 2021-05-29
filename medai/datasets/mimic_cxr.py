@@ -17,7 +17,6 @@ from medai.datasets.vocab import load_vocab
 from medai.utils.images import (
     get_default_image_transform,
     load_image,
-    load_organ_masks,
     get_default_mask_transform,
 )
 
@@ -59,11 +58,6 @@ class MIMICCXRDataset(Dataset):
                  vocab=None, **unused_kwargs):
         super().__init__()
 
-        if DATASET_DIR is None:
-            raise Exception('DATASET_DIR_MIMIC_CXR not found in env variables')
-        if mini == 1 and DATASET_DIR_FAST is None:
-            raise Exception('DATASET_DIR_MIMIC_CXR_FAST not found in env variables')
-
         self.dataset_type = dataset_type
         self.image_format = image_format
         self.image_size = image_size
@@ -85,6 +79,11 @@ class MIMICCXRDataset(Dataset):
 
         if not use_fast:
             LOGGER.warning('MIMIC loading images from HDD, will be slow')
+
+        if not use_fast and DATASET_DIR is None:
+            raise Exception('DATASET_DIR_MIMIC_CXR not found in env variables')
+        if use_fast and DATASET_DIR_FAST is None:
+            raise Exception('DATASET_DIR_MIMIC_CXR_FAST not found in env variables')
 
         self.images_dir = os.path.join(
             DATASET_DIR_FAST if use_fast else DATASET_DIR,
@@ -121,12 +120,13 @@ class MIMICCXRDataset(Dataset):
         # Ignore broken images
         self.master_df = self.master_df.loc[~self.master_df['image_fpath'].isin(_BROKEN_IMAGES)]
 
+        if sort_samples:
+            self.master_df = self.master_df.sort_values('report_length', ascending=True)
+
         # Keep only max images
         if max_samples is not None:
             self.master_df = self.master_df.tail(max_samples)
 
-        if sort_samples:
-            self.master_df = self.master_df.sort_values('report_length', ascending=True)
         self.master_df.reset_index(drop=True, inplace=True)
 
         # Prepare reports for getter calls
@@ -145,7 +145,11 @@ class MIMICCXRDataset(Dataset):
 
             assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
 
-            self.transform_mask = get_default_mask_transform(image_size)
+            self.transform_mask = get_default_mask_transform(
+                image_size,
+                self.seg_multilabel,
+                len(self.organs),
+            )
 
 
     def __len__(self):
@@ -197,12 +201,9 @@ class MIMICCXRDataset(Dataset):
 
         filepath = os.path.join(self.masks_dir, image_fpath)
 
-        return load_organ_masks(
-            filepath,
-            self.transform_mask,
-            self.seg_multilabel,
-            len(self.organs),
-        )
+        mask = load_image(filepath, 'L')
+        mask = self.transform_mask(mask)
+        return mask
 
     def _preprocess_reports(self, reports_version, studies, vocab=None, vocab_greater=None):
         # Load reports

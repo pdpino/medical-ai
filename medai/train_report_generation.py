@@ -866,6 +866,13 @@ def parse_args():
         min_lr.append(args.custom_lr_attention)
 
     if len(args.custom_lr) > 0:
+        for key, value in args.custom_lr.items():
+            if value == args.learning_rate:
+                LOGGER.warning(
+                    'custom-lr is equal to base-lr %s=%f vs base=%f',
+                    key, value, args.learning_rate,
+                )
+
         if 'min_lr' in args.lr_sch_kwargs:
             # Do not reduce the customly set LR
             min_lr.append(args.lr_sch_kwargs['min_lr'])

@@ -235,7 +235,7 @@ def load_compiled_model_report_generation(run_id,
 
     # Create LR scheduler
     lr_sch_kwargs = metadata.get('lr_sch_kwargs', None) or {}
-    lr_sch_handler = create_lr_sch_handler(optimizer, quiet=False, **lr_sch_kwargs)
+    lr_sch_handler = create_lr_sch_handler(optimizer, quiet=True, **lr_sch_kwargs)
 
     # Compiled model
     compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)

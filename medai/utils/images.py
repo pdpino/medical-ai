@@ -251,31 +251,38 @@ def load_image(image_fpath, image_format):
 
     return image
 
-def load_organ_masks(filepath, transform_mask, multilabel, n_organs):
-    if not os.path.isfile(filepath):
-        LOGGER.error('No such file for mask: %s', filepath)
-        return None
+class MaskToTensor:
+    def __init__(self, multilabel=False, n_labels=None):
+        self.multilabel = multilabel
+        self.n_labels = n_labels
 
-    mask = load_image(filepath, 'L')
-    mask = transform_mask(mask)
-    # shape: n_channels=1, height, width
+        if multilabel:
+            assert self.n_labels is not None, 'Cannot set multilabel=True and n_labels=None'
 
-    mask = (mask * 255).long()
-    # shape: 1, height, width
+    def __call__(self, mask_pil):
+        # NOTE: do not use transforms.ToTensor(),
+        # as the range gets moved from 0..255 to 0..1
+        mask = torch.from_numpy(np.array(mask_pil))
+        # shape: height, width; type: uint8
 
-    if multilabel:
-        mask = to_onehot(mask, n_organs)
-        # shape: 1, n_organs, height, width
+        if self.multilabel:
+            if mask.ndim == 2:
+                mask = mask.unsqueeze(0)
+                # shape: 1, height, width
 
-    mask = mask.squeeze(0)
-    # shape(seg_multilabel=True): n_organs, height, width
-    # shape(seg_multilabel=False): height, width
+            mask = to_onehot(mask.long(), self.n_labels)
+            # shape: 1, n_labels, height, width; type: uint8
 
-    return mask
+            mask = mask.squeeze(0)
+            # shape: n_labels, height, width
 
 
-def get_default_mask_transform(image_size):
+        # shape(seg_multilabel=True): n_labels, height, width
+        # shape(seg_multilabel=False): height, width
+        return mask
+
+def get_default_mask_transform(image_size, seg_multilabel, n_seg_labels=None):
     return transforms.Compose([
         transforms.Resize(image_size, 0), # Nearest mode
-        transforms.ToTensor(),
+        MaskToTensor(seg_multilabel, n_seg_labels),
     ])

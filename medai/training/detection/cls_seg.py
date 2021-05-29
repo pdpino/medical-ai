@@ -26,7 +26,7 @@ def get_step_fn_cls_seg(model, optimizer=None, training=True,
         gt_labels = data_batch.labels.to(device)
         # shape(cl_multilabel=True): batch_size, n_labels
 
-        gt_masks = data_batch.masks.to(device)
+        gt_masks = data_batch.masks.to(device).long()
         # shape(seg_multilabel=False): batch_size, height, width
 
         # Enable training

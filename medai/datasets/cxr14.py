@@ -14,7 +14,6 @@ from medai.datasets.common import (
 from medai.utils.images import (
     get_default_image_transform,
     load_image,
-    load_organ_masks,
     get_default_mask_transform,
 )
 
@@ -157,7 +156,11 @@ class CXR14Dataset(Dataset):
 
         self.enable_masks = masks
         if self.enable_masks:
-            self.transform_mask = get_default_mask_transform(image_size)
+            self.transform_mask = get_default_mask_transform(
+                image_size,
+                self.seg_multilabel,
+                len(self.organs),
+            )
 
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
 
@@ -167,7 +170,6 @@ class CXR14Dataset(Dataset):
                 raise Exception(f'Masks do not exist! {self.masks_dir}')
 
         self.bbox_scale = _calculate_bbox_scale(self.image_size)
-
 
     def __len__(self):
         n_samples, _ = self.label_index.shape
@@ -238,12 +240,9 @@ class CXR14Dataset(Dataset):
 
         filepath = os.path.join(self.masks_dir, image_name)
 
-        return load_organ_masks(
-            filepath,
-            self.transform_mask,
-            self.seg_multilabel,
-            len(self.organs),
-        )
+        mask = load_image(filepath, 'L')
+        mask = self.transform_mask(mask)
+        return mask
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a

@@ -13,7 +13,6 @@ from medai.datasets.common import (
 from medai.utils.images import (
     get_default_image_transform,
     load_image,
-    load_organ_masks,
     get_default_mask_transform,
 )
 
@@ -129,7 +128,11 @@ class ChexpertDataset(Dataset):
 
             assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
 
-            self.transform_mask = get_default_mask_transform(image_size)
+            self.transform_mask = get_default_mask_transform(
+                image_size,
+                self.seg_multilabel,
+                len(self.organs),
+            )
 
 
     def __len__(self):
@@ -165,12 +168,9 @@ class ChexpertDataset(Dataset):
 
         filepath = os.path.join(self.masks_dir, image_fname)
 
-        return load_organ_masks(
-            filepath,
-            self.transform_mask,
-            self.seg_multilabel,
-            len(self.organs),
-        )
+        mask = load_image(filepath, 'L')
+        mask = self.transform_mask(mask)
+        return mask
 
 
     def get_labels_presence_for(self, target_label):

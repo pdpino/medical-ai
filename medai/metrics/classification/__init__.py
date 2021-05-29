@@ -211,8 +211,9 @@ def attach_metrics_classification(engine, labels, multilabel=True,
         # acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round, device=device)
         # acc.attach(engine, 'acc')
 
-        ham = Hamming(output_transform=_transform_remove_loss_and_round, device=device)
-        ham.attach(engine, 'hamming')
+        # TODO: avoid using .item() in Hamming
+        # ham = Hamming(output_transform=_transform_remove_loss_and_round, device=device)
+        # ham.attach(engine, 'hamming')
 
         if extra_bce:
             bce_loss = Loss(binary_cross_entropy,
