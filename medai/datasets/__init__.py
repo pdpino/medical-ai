@@ -66,7 +66,7 @@ _MISSING_SPLITS = set([
 ])
 
 _DATASETS_WITH_MASKS_IMPLEMENTED = set([
-    'cxr14', 'iu-x-ray', 'vinbig', 'chexpert', 'mini-mimic',
+    'cxr14', 'iu-x-ray', 'vinbig', 'chexpert', 'mini-mimic', 'mimic-cxr',
 ])
 
 

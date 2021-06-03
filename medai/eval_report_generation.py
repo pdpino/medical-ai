@@ -50,7 +50,6 @@ def _evaluate_model_in_dataloader(
     dataset = dataloader.dataset
     if isinstance(dataset, Subset):
         dataset = dataset.dataset # HACK
-    LOGGER.info('Evaluating model in %s, free=%s', dataset.dataset_type, free)
 
     vocab = dataset.get_vocab()
 
@@ -84,6 +83,7 @@ def _evaluate_model_in_dataloader(
     if att_vs_masks and not free:
         attach_attention_vs_masks(engine, device=device)
 
+    LOGGER.info('Evaluating model in %s, free=%s', dataset.dataset_type, free)
     engine.run(dataloader, n_epochs)
 
     return engine.state.metrics
