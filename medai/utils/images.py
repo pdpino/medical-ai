@@ -238,6 +238,7 @@ def load_image(image_fpath, image_format):
     try:
         image_fp = Image.open(image_fpath)
         image = image_fp.convert(image_format)
+        image_fp.close()
     except OSError as e:
         LOGGER.error(
             'Failed to load image, may be broken: %s', image_fpath,
@@ -246,8 +247,6 @@ def load_image(image_fpath, image_format):
 
         # FIXME: a way to ignore the image during training? (though it may break other things)
         raise
-    finally:
-        image_fp.close()
 
     return image
 
