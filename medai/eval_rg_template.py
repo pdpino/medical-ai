@@ -21,7 +21,7 @@ from medai.models.report_generation.templates import (
     create_rg_template_model,
     AVAILABLE_TEMPLATE_SETS,
 )
-from medai.models.checkpoint import load_compiled_model
+from medai.models.checkpoint import load_compiled_model, save_metadata
 from medai.training.report_generation.flat import clean_gt_reports
 from medai.utils import (
     print_hw_options,
@@ -29,6 +29,7 @@ from medai.utils import (
     config_logging,
     timeit_main,
     RunId,
+    get_timestamp,
 )
 
 LOGGER = logging.getLogger('medai.rg.eval')
@@ -90,8 +91,6 @@ def _evaluate_model_in_dataloader(
     if isinstance(dataset, Subset):
         dataset = dataset.dataset # HACK
 
-    LOGGER.info('Evaluating model in %s', dataset.dataset_type)
-
     vocab = dataset.get_vocab()
 
     engine = Engine(_get_step_fn_classify_plus_templates(
@@ -106,6 +105,8 @@ def _evaluate_model_in_dataloader(
 
     if medical_correctness:
         attach_medical_correctness(engine, None, vocab, device=device)
+
+    LOGGER.info('Evaluating model in %s', dataset.dataset_type)
 
     engine.run(dataloader, n_epochs)
 
@@ -180,6 +181,42 @@ def _get_threshold(cl_run_id, mode, diseases, device='cuda'):
     ]).to(device)
 
 
+def _get_disease_order(order, dataset_name, diseases):
+    if not order or order.lower() == 'none':
+        return None
+
+    _BEST_CHEXPERT_ORDER = [
+        'Cardiomegaly',
+        'Enlarged Cardiomediastinum',
+        'Consolidation',
+        'Lung Opacity',
+        'Atelectasis',
+        'Support Devices',
+        'Pleural Effusion',
+        'Pleural Other',
+        'Pneumonia',
+        'Pneumothorax',
+        'Edema',
+        'Lung Lesion',
+        'Fracture',
+    ]
+
+    if dataset_name in ('iu-x-ray', 'mini-mimic', 'mimic-cxr'):
+        ordered_diseases = _BEST_CHEXPERT_ORDER
+        if set(diseases) != set(ordered_diseases):
+            raise Exception('Using different set of diseases: ', diseases)
+    else:
+        raise Exception(f'Order not implemented for dataset {dataset_name}')
+
+    if order == 'best':
+        return ordered_diseases
+    elif order == 'worst':
+        ordered_diseases.reverse()
+        return ordered_diseases
+    else:
+        raise Exception(f'Order not recognized: {order}')
+
+
 @timeit_main(LOGGER)
 def evaluate_run(cl_run_id,
                  template_set,
@@ -193,6 +230,7 @@ def evaluate_run(cl_run_id,
                  max_samples=None,
                  override=False,
                  quiet=False,
+                 order='best',
                  ):
     """Evaluates a saved run."""
     # Load CL model
@@ -208,13 +246,18 @@ def evaluate_run(cl_run_id,
     image_size = cl_dataset_kwargs['image_size']
 
     # Extract other useful kwargs
+    diseases = _get_diseases_from_cl_metadata(compiled_model.metadata)
     cnn_name = compiled_model.metadata['model_kwargs']['model_name']
 
+    # Define order
+    ordered_diseases = _get_disease_order(order, dataset_name, diseases)
+
     # Create new run_id
-    run_name = cl_run_id.short_name
-    run_name += f'_cl-{dataset_name}'
-    run_name += f'_{cnn_name}'
+    run_name = f'{get_timestamp()}_{dataset_name}'
     run_name += f'_tpl-{template_set}'
+    if order:
+        run_name += f'-ord{order}'
+    run_name += f'_cnn-{cl_run_id.short_clean_name}_{cnn_name}'
     run_id = RunId(run_name, debug, 'rg')
 
     LOGGER.info('Evaluating RG-template run %s', run_id)
@@ -247,12 +290,22 @@ def evaluate_run(cl_run_id,
     ]
 
     # Decide threshold
-    diseases = _get_diseases_from_cl_metadata(compiled_model.metadata)
     threshold = _get_threshold(cl_run_id, 'pr', diseases, device=device)
 
     # Create RG templates model
-    vocab = dataloaders[0].dataset.get_vocab()
-    rg_template_model = create_rg_template_model(template_set, diseases, vocab)
+    rg_templates_kwargs = {
+        'name': template_set,
+        'diseases': diseases,
+        'vocab': dataloaders[0].dataset.get_vocab(),
+        'order': ordered_diseases,
+    }
+    rg_template_model = create_rg_template_model(**rg_templates_kwargs)
+
+    # Save model metadata
+    metadata = {
+        'rg_templates_kwargs': rg_templates_kwargs,
+    }
+    save_metadata(metadata, run_id)
 
     metrics = evaluate_model_and_save(
         run_id,
@@ -272,9 +325,9 @@ def evaluate_run(cl_run_id,
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--cl-run', type=str, default=None, required=True,
+    parser.add_argument('--run-name', type=str, default=None, required=True,
                         help='CL run-name to load')
-    parser.add_argument('--cl-run-task', type=str, default='cls', choices=('cls', 'cls-seg'),
+    parser.add_argument('--task', type=str, default='cls', choices=('cls', 'cls-seg'),
                         help='CL run task')
     parser.add_argument('--templates', type=str, default='chex-v1',
                         help='Template set to use', choices=AVAILABLE_TEMPLATE_SETS)
@@ -294,12 +347,14 @@ def parse_args():
                         help='If present, do not use medical-correctness metrics')
     parser.add_argument('--quiet', action='store_true',
                         help='Do not print metrics to stdout')
+    parser.add_argument('--order', type=str, default='best',
+                        help='Default order to use')
 
     parsers.add_args_hw(parser, num_workers=4)
 
     args = parser.parse_args()
 
-    args.cl_run_id = RunId(args.cl_run, not args.no_debug, args.cl_run_task)
+    args.cl_run_id = RunId(args.run_name, not args.no_debug, args.task)
 
     return args
 
@@ -325,4 +380,5 @@ if __name__ == '__main__':
                  override=ARGS.override,
                  batch_size=ARGS.batch_size,
                  quiet=ARGS.quiet,
+                 order=ARGS.order,
                  )

@@ -1,5 +1,4 @@
 import logging
-import torch
 
 from medai.datasets.common import CHEXPERT_DISEASES
 from medai.models.report_generation.templates import chex_v1
@@ -16,7 +15,7 @@ LOGGER = logging.getLogger(__name__)
 
 class TemplateRGModel:
     """Transforms classification scores into fixed templates."""
-    def __init__(self, given_templates, diseases, vocab):
+    def __init__(self, given_templates, diseases, vocab, order=None):
         report_reader = ReportReader(vocab)
 
         self.diseases = list(diseases)
@@ -47,6 +46,12 @@ class TemplateRGModel:
 
                 self.templates[disease][value] = template_as_idxs
 
+        if order is None:
+            self.disease_order = list(range(len(self.templates)))
+        else:
+            if set(order) != set(self.diseases):
+                raise Exception(f'Order contains invalid diseases: {order} vs {self.diseases}')
+            self.disease_order = [self.diseases.index(d) for d in order]
 
     def __call__(self, labels):
         # labels shape: batch_size, n_diseases (binary)
@@ -58,20 +63,25 @@ class TemplateRGModel:
             # shape: n_diseases
 
             report = []
-            for disease_name, value in zip(self.diseases, sample_predictions):
-                report.extend(self.templates[disease_name].get(value, []))
+
+            for disease_index in self.disease_order:
+                pred_value = sample_predictions[disease_index]
+                disease_name = self.diseases[disease_index]
+                sentence = self.templates[disease_name].get(pred_value, [])
+
+                report.extend(sentence)
 
             reports.append(report)
 
         return reports
 
 
-def create_rg_template_model(name, diseases, vocab):
+def create_rg_template_model(name, diseases, vocab, **kwargs):
     if name not in _TEMPLATE_SETS:
         raise Exception(f'Template set not found: {name}')
 
     LOGGER.info('Creating RG-template from %s', name)
     templates = _TEMPLATE_SETS[name]
 
-    model = TemplateRGModel(templates, diseases, vocab)
+    model = TemplateRGModel(templates, diseases, vocab, **kwargs)
     return model

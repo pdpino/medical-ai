@@ -857,22 +857,21 @@ def parse_args():
 
     args.custom_lr = {}
     min_lr = []
-    if args.custom_lr_word_embedding is not None:
-        args.custom_lr['word_embeddings'] = args.custom_lr_word_embedding
-        min_lr.append(args.custom_lr_word_embedding)
+    def _add_custom_lr_value(custom_lr_value, key):
+        if custom_lr_value is not None:
+            if custom_lr_value == args.learning_rate:
+                LOGGER.warning(
+                    'custom-lr is equal to base-lr %s=%f, ignoring',
+                    key, custom_lr_value,
+                )
+            else:
+                args.custom_lr[key] = custom_lr_value
+                min_lr.append(custom_lr_value)
 
-    if args.custom_lr_attention is not None:
-        args.custom_lr['attention'] = args.custom_lr_attention
-        min_lr.append(args.custom_lr_attention)
+    _add_custom_lr_value(args.custom_lr_word_embedding, 'word_embeddings')
+    _add_custom_lr_value(args.custom_lr_attention, 'attention')
 
     if len(args.custom_lr) > 0:
-        for key, value in args.custom_lr.items():
-            if value == args.learning_rate:
-                LOGGER.warning(
-                    'custom-lr is equal to base-lr %s=%f vs base=%f',
-                    key, value, args.learning_rate,
-                )
-
         if 'min_lr' in args.lr_sch_kwargs:
             # Do not reduce the customly set LR
             min_lr.append(args.lr_sch_kwargs['min_lr'])
