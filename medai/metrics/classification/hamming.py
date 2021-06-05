@@ -1,4 +1,3 @@
-import torch
 from ignite.metrics import Metric
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
@@ -26,7 +25,7 @@ class Hamming(Metric):
         outputs, labels = output
 
         self._n_samples += outputs.numel()
-        self._result += torch.sum(outputs != labels).item()
+        self._result += (outputs != labels).sum()
 
     @sync_all_reduce('_n_samples', '_result')
     def compute(self):

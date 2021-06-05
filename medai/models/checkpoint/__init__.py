@@ -16,6 +16,7 @@ from medai.losses.schedulers import create_lr_sch_handler
 from medai.models.classification import create_cnn
 from medai.models.report_generation import create_decoder
 from medai.models.segmentation import create_fcn
+from medai.models.cls_spatial import create_cls_spatial_model
 from medai.models.detection import create_detection_seg_model
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.cls_seg import create_cls_seg_model
@@ -167,11 +168,18 @@ load_compiled_model_cls_seg = partial(
     constructor=create_cls_seg_model,
 )
 
+load_compiled_model_cls_spatial = partial(
+    _load_compiled_model_base,
+    assert_task='cls-spatial',
+    constructor=create_cls_spatial_model,
+)
+
 def load_compiled_model(run_id, **kwargs):
     # TODO: this function should be preferred instead of using a specific one?? refactor?
     _load_fns = {
         'cls': load_compiled_model_classification,
         'cls-seg': load_compiled_model_cls_seg,
+        'cls-spatial': load_compiled_model_cls_spatial,
         'det': load_compiled_model_detection_seg,
         'seg': load_compiled_model_segmentation,
         'rg': load_compiled_model_report_generation,

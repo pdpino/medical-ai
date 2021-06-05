@@ -11,6 +11,7 @@ from medai.metrics.detection.coco_map.metric import MAPCocoMetric
 from medai.metrics.detection.mse import HeatmapMSE
 from medai.metrics.segmentation.iou import IoU
 from medai.metrics.segmentation.iobb import IoBB
+from medai.metrics.segmentation.ioo import IoO
 from medai.utils.files import get_results_folder
 from medai.utils.heatmaps import threshold_attributions
 from medai.utils.metrics import attach_metric_for_labels
@@ -101,8 +102,10 @@ def _transform_max_onehot(output):
     return activations, gt_map, gt_valid
 
 
-def attach_metrics_iox(engine, labels, multilabel=False, device='cuda', **kwargs):
-    """Attaches IoU, IoBB metrics.
+def attach_metrics_iox(engine, labels, multilabel=False,
+                       iou=True, iobb=True, ioo=False,
+                       device='cuda', **kwargs):
+    """Attaches IoU, IoBB, IoO metrics.
 
     Expects not-thresholded values.
     """
@@ -113,15 +116,23 @@ def attach_metrics_iox(engine, labels, multilabel=False, device='cuda', **kwargs
         if len(kwargs) > 0:
             LOGGER.warning('Passed kwargs not used: %s', kwargs)
 
-    iou = IoU(reduce_sum=False,
-              output_transform=transform_fn,
-              device=device)
-    attach_metric_for_labels(engine, labels, iou, 'iou')
+    if iou:
+        iou_metric = IoU(
+            reduce_sum=False, output_transform=transform_fn, device=device,
+        )
+        attach_metric_for_labels(engine, labels, iou_metric, 'iou')
 
-    iobb = IoBB(reduce_sum=False,
-                output_transform=transform_fn,
-                device=device)
-    attach_metric_for_labels(engine, labels, iobb, 'iobb')
+    if iobb:
+        iobb_metric = IoBB(
+            reduce_sum=False, output_transform=transform_fn, device=device,
+        )
+        attach_metric_for_labels(engine, labels, iobb_metric, 'iobb')
+
+    if ioo:
+        ioo_metric = IoO(
+            reduce_sum=False, output_transform=transform_fn, device=device,
+        )
+        attach_metric_for_labels(engine, labels, ioo_metric, 'ioo')
 
 
 def attach_mse(engine, labels, multilabel=True, device='cuda'):

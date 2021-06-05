@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, Subset
 from torch.utils.data.dataloader import default_collate
 
 from medai.datasets.common import UP_TO_DATE_MASKS_VERSION, LATEST_REPORTS_VERSION
+from medai.datasets.common.diseases2organs import reduce_masks_for_diseases
 from medai.datasets.report_generation import get_dataloader_constructor
 
 from medai.datasets.cxr14 import CXR14Dataset
@@ -69,13 +70,17 @@ _DATASETS_WITH_MASKS_IMPLEMENTED = set([
     'cxr14', 'iu-x-ray', 'vinbig', 'chexpert', 'mini-mimic', 'mimic-cxr',
 ])
 
+def _get_collate_fn_organ_masks_to_diseases(diseases, organs, only_true=True):
+    def _cl_collate_fn(batch):
+        batch = default_collate(batch)
+        masks = reduce_masks_for_diseases(diseases, batch.masks, organs)
+        # shape: bs, n_labels, height, width
 
-def _classification_collate_fn(batch_items):
-    batch_items = [
-        batch_item._replace(report=-1)
-        for batch_item in batch_items
-    ]
-    return default_collate(batch_items)
+        if only_true:
+            masks[batch.labels == 0] = 0
+
+        return batch._replace(masks=masks)
+    return _cl_collate_fn
 
 
 def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
@@ -92,6 +97,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                                 balanced_sampler=False,
                                 batch_size=10, shuffle=False,
                                 num_workers=2,
+                                organ_masks_to_diseases=False,
                                 **kwargs,
                                 ):
     if (dataset_name, dataset_type) in _MISSING_SPLITS:
@@ -147,6 +153,7 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
                            labels=labels,
                            image_size=image_size,
                            max_samples=max_samples,
+                           do_not_load_report=True,
                            **kwargs,
                            )
 
@@ -168,8 +175,12 @@ def prepare_data_classification(dataset_name='cxr14', dataset_type='train',
     dataloader_kwargs = {
         'batch_size': batch_size,
         'num_workers': num_workers,
-        'collate_fn': _classification_collate_fn,
     }
+
+    if organ_masks_to_diseases:
+        dataloader_kwargs['collate_fn'] = _get_collate_fn_organ_masks_to_diseases(
+            dataset.labels, dataset.organs,
+        )
 
     if oversample:
         sampler = OneLabelOverSampler(dataset,

@@ -61,7 +61,7 @@ class MIMICCXRDataset(Dataset):
                  masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
                  seg_multilabel=True,
                  vocab_greater=None, reports_version=LATEST_REPORTS_VERSION,
-                 do_not_load_image=False,
+                 do_not_load_image=False, do_not_load_report=False,
                  vocab=None, **unused_kwargs):
         super().__init__()
 
@@ -145,6 +145,7 @@ class MIMICCXRDataset(Dataset):
         )
 
         self.do_not_load_image = do_not_load_image
+        self.do_not_load_report = do_not_load_report
 
         self.enable_masks = masks
         if masks:
@@ -171,8 +172,11 @@ class MIMICCXRDataset(Dataset):
         study_id = row['study_id']
 
         # Extract report
-        report = self.reports[study_id]
-        tokens = report['tokens_idxs']
+        if self.do_not_load_report:
+            tokens = -1
+        else:
+            report = self.reports[study_id]
+            tokens = report['tokens_idxs']
 
         # Load image
         image = self._load_image(image_fpath)

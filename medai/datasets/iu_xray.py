@@ -46,7 +46,7 @@ class IUXRayDataset(Dataset):
                  masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
                  seg_multilabel=True, reports_version=LATEST_REPORTS_VERSION,
                  vocab_greater=None,
-                 do_not_load_image=False,
+                 do_not_load_image=False, do_not_load_report=False,
                  vocab=None, **unused_kwargs):
         super().__init__()
 
@@ -111,6 +111,7 @@ class IUXRayDataset(Dataset):
             assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
 
         self.do_not_load_image = do_not_load_image
+        self.do_not_load_report = do_not_load_report
 
     def __len__(self):
         return len(self.reports)
@@ -126,10 +127,12 @@ class IUXRayDataset(Dataset):
 
         mask = self.load_mask(image_fname) if self.enable_masks else -1
 
+        report = report['tokens_idxs'] if not self.do_not_load_report else -1
+
         return BatchItem(
             image=image,
             labels=labels,
-            report=report['tokens_idxs'],
+            report=report,
             image_fname=image_fname,
             report_fname=report_fname,
             masks=mask,

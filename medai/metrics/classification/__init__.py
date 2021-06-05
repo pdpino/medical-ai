@@ -200,7 +200,7 @@ def _transform_remove_loss_and_round(output):
 
 
 def attach_metrics_classification(engine, labels, multilabel=True,
-                                  extra_bce=True,
+                                  extra_bce=True, hamming=False,
                                   device='cuda'):
     """Attach classification metrics to an engine, to use during training.
 
@@ -211,9 +211,9 @@ def attach_metrics_classification(engine, labels, multilabel=True,
         # acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round, device=device)
         # acc.attach(engine, 'acc')
 
-        # TODO: avoid using .item() in Hamming
-        # ham = Hamming(output_transform=_transform_remove_loss_and_round, device=device)
-        # ham.attach(engine, 'hamming')
+        if hamming:
+            ham = Hamming(output_transform=_transform_remove_loss_and_round, device=device)
+            ham.attach(engine, 'hamming')
 
         if extra_bce:
             bce_loss = Loss(binary_cross_entropy,

@@ -5,7 +5,9 @@ from medai.models.checkpoint import load_compiled_model
 LOGGER = logging.getLogger(__name__)
 
 def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
-                                 cls_weights=False, seg_weights=False, device='cuda'):
+                                 cls_weights=False, seg_weights=False,
+                                 spatial_weights=False,
+                                 device='cuda'):
     """Loads state_dict from a pretrained_model into a target_model.
 
     Works for cls and cls-seg models
@@ -19,6 +21,7 @@ def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
         'dataset': pretrained_run_id.get_dataset_name(),
         'cls': cls_weights,
         'seg': seg_weights,
+        'spatial': spatial_weights,
     }
     LOGGER.info(
         'Using pretrained model: %s',
@@ -27,10 +30,20 @@ def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
 
     pretrained_model = load_compiled_model(pretrained_run_id, device=device).model
 
-    # Copy features
-    target_model.features.load_state_dict(pretrained_model.features.state_dict())
+    def _check_weights_exist(key):
+        prev_has = hasattr(pretrained_model, key)
+        target_has = hasattr(target_model, key)
+        if not prev_has:
+            LOGGER.error('Pretrained model does not have %s!', key)
+        if not target_has:
+            LOGGER.error('Target model does not have %s!', key)
+        return prev_has and target_has
 
-    if cls_weights:
+    # Copy features
+    if _check_weights_exist('features'):
+        target_model.features.load_state_dict(pretrained_model.features.state_dict())
+
+    if cls_weights and _check_weights_exist('classifier'):
         new_labels = target_model.cl_labels
         n_new_labels = len(new_labels)
         old_labels = pretrained_model.cl_labels
@@ -43,13 +56,14 @@ def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
                 old_labels, new_labels,
             )
 
-        prev_layers = pretrained_model.classifier
-        target_model.classifier.load_state_dict(prev_layers.state_dict())
+        target_model.classifier.load_state_dict(
+            pretrained_model.classifier.state_dict(),
+        )
 
-    if seg_weights:
-        if not hasattr(pretrained_model, 'segmentator'):
-            LOGGER.error('Pretrained model does not have a segmentator!')
-        elif not hasattr(target_model, 'segmentator'):
-            LOGGER.error('Target model does not have a segmentator!')
-        else:
-            target_model.segmentator.load_state_dict(pretrained_model.segmentator.state_dict())
+    if seg_weights and _check_weights_exist('segmentator'):
+        target_model.segmentator.load_state_dict(pretrained_model.segmentator.state_dict())
+
+    if spatial_weights and _check_weights_exist('spatial_classifier'):
+        target_model.spatial_classifier.load_state_dict(
+            pretrained_model.spatial_classifier.state_dict(),
+        )

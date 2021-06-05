@@ -80,9 +80,10 @@ class TBWriter:
             'spec': 'Spec',
             'f1': 'F1',
             'iou': 'IoU',
+            'iobb': 'IoBB',
+            'ioo': 'IoO',
             'iou-grad-cam': 'IoU-grad-cam',
             'iobb-grad-cam': 'IoBB-grad-cam',
-            'iobb': 'IoBB',
             'mAP': 'MAP', # mean Average-precision (coco-challenge)
             'mse-total': 'MSE-total',
             'mse-pos': 'MSE-pos',

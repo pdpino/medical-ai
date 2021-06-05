@@ -9,6 +9,7 @@ def _get_task_folder(task):
         'seg': 'segmentation',
         'det': 'detection',
         'cls-seg': 'cls_seg',
+        'cls-spatial': 'cls_spatial',
     }
     task = task.lower()
     if task not in folder_by_task:
