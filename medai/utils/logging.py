@@ -91,11 +91,13 @@ def print_hw_options(device, args):
         return getattr(obj, attr)
 
     _CUDA_VISIBLE = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+    _OPENBLAS_NUM_THREADS = os.environ.get('OPENBLAS_NUM_THREADS', '')
     d = {
         'device': device,
         'visible': _CUDA_VISIBLE,
         'multiple': _safe_get_attr(args, 'multiple_gpu'),
         'num_threads': _safe_get_attr(args, 'num_threads'),
+        'openblas_num_threads': _OPENBLAS_NUM_THREADS,
     }
     info_str = ' '.join(f'{k}={v}' for k, v in d.items())
     LOGGER.info('Using: %s', info_str)
