@@ -2,7 +2,7 @@
 from medai.losses.schedulers import AVAILABLE_SCHEDULERS
 from medai.datasets.tools.augmentation import AVAILABLE_AUG_MODES
 from medai.models.classification import AVAILABLE_CLASSIFICATION_MODELS
-from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
+from medai.models.common import AVAILABLE_ACTIVATION_LAYERS, AVAILABLE_POOLING_REDUCTIONS
 from medai.utils.common import parse_str_or_int
 from medai.training.detection.h2bb import AVAILABLE_H2BB_METHODS
 from medai.metrics.report_generation.labeler_correctness import AVAILABLE_MED_LABELERS
@@ -234,6 +234,11 @@ def add_args_cnn(parser):
                         help='Choose reduction for global-pooling layer')
     cnn_group.add_argument('--fc-layers', nargs='+', type=int, default=(),
                         help='Choose sizes for FC layers at the end')
+
+
+def add_args_activation(parser, activation='relu'):
+    parser.add_argument('-act', '--activation', type=str, default=activation,
+                        choices=AVAILABLE_ACTIVATION_LAYERS, help='Choose activations')
 
 
 def add_args_images(parser, image_format='RGB'):

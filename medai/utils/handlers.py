@@ -4,6 +4,8 @@ import logging
 import numbers
 import os
 import time
+
+import torch
 from ignite.engine import Events
 from ignite.handlers import EarlyStopping
 
@@ -46,6 +48,8 @@ def _prettify(value):
     """Prettify a metric value."""
     if value is None:
         return -1
+    if isinstance(value, torch.Tensor):
+        value = value.item()
     if isinstance(value, numbers.Number):
         return f'{round(value, 3):<5}'
     return value

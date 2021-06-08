@@ -10,7 +10,7 @@ from medai.models.common import AVAILABLE_POOLING_REDUCTIONS
 from medai.models.cls_spatial import create_cls_spatial_model, AVAILABLE_CLS_SPATIAL_MODELS
 from medai.training.common import TrainingProcess
 from medai.training.detection.cls_spatial import get_step_fn_cls_spatial
-from medai.utils import RunId
+from medai.utils import RunId, parsers
 
 
 class TrainingClsSpatial(TrainingProcess):
@@ -44,14 +44,16 @@ class TrainingClsSpatial(TrainingProcess):
         parser.add_argument('-dropf', '--dropout-features', type=float, default=0,
                             help='dropout-rate to use after model features')
 
+        parsers.add_args_activation(parser)
+
         parser.add_argument('--spatial-lambda', type=float, default=1,
                             help='Factor to multiply spatial-loss')
         parser.add_argument('--cl-lambda', type=float, default=1,
                             help='Factor to multiply CL-loss')
         parser.add_argument('--cl-loss-name', type=str, choices=AVAILABLE_LOSSES,
                             default='wbce', help='CL Loss to use')
-        parser.add_argument('--spatial-loss-positives', action='store_true',
-                            help='Include positive pixels in the spatial loss')
+        parser.add_argument('--loss-spatial-ignore-positives', action='store_true',
+                            help='Ignore positive pixels in the spatial loss')
 
         parser.add_argument('--pretrained', type=str, default=None,
                             help='Run name of a pretrained CNN')
@@ -94,6 +96,9 @@ class TrainingClsSpatial(TrainingProcess):
         if self.args.cnn_pooling != 'max':
             run_name += f'_g{self.args.cnn_pooling}'
 
+        if self.args.activation != 'relu':
+            run_name += f'_act-{self.args.activation}'
+
         if self.args.no_imagenet:
             run_name += '_noig'
 
@@ -122,8 +127,8 @@ class TrainingClsSpatial(TrainingProcess):
         if self.args.cl_loss_name != 'wbce':
             run_name += f'_cl-{self.args.cl_loss_name}'
 
-        if self.args.spatial_loss_positives:
-            run_name += '_spat-pos'
+        if self.args.loss_spatial_ignore_positives:
+            run_name += '_spat-ignore-pos'
 
         return run_name
 
@@ -138,6 +143,7 @@ class TrainingClsSpatial(TrainingProcess):
             'dropout': self.args.dropout,
             'dropout_features': self.args.dropout_features,
             'imagenet': not self.args.no_imagenet,
+            'activation': self.args.activation,
         }
         self.model = create_cls_spatial_model(**self.model_kwargs).to(self.device)
 
@@ -162,7 +168,7 @@ class TrainingClsSpatial(TrainingProcess):
         d['cl_lambda'] = self.args.cl_lambda
         d['spatial_lambda'] = self.args.spatial_lambda
         d['cl_loss_name'] = self.args.cl_loss_name
-        d['out_of_target_only'] = not self.args.spatial_loss_positives
+        d['out_of_target_only'] = self.args.loss_spatial_ignore_positives
 
         info_str = ' '.join(
             f"{k}={v}"
@@ -203,7 +209,7 @@ class TrainingClsSpatial(TrainingProcess):
             cl_labels,
             multilabel=cl_multilabel,
             device=self.device,
-            extra_bce=cl_loss_name != 'bce',
+            extra_bce=True,
         )
 
         attach_metrics_iox(

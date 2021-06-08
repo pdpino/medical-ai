@@ -1,7 +1,17 @@
 from torch import nn
+from torch.nn.functional import adaptive_max_pool2d, adaptive_avg_pool2d
 from torchvision import models
 
-AVAILABLE_POOLING_REDUCTIONS = ['max', 'avg']
+AVAILABLE_POOLING_REDUCTIONS = ['max', 'avg', 'adapt']
+
+class GlobalMaxMeanPool2d(nn.Module):
+    def forward(self, x):
+        # x shape: bs, n_channels, height, width
+
+        if self.training:
+            return adaptive_avg_pool2d(x, (1, 1))
+        return adaptive_max_pool2d(x, (1, 1))
+
 
 def get_adaptive_pooling_layer(reduction, drop=0):
     """Returns a torch layer with AdaptivePooling2d, plus dropout if needed."""
@@ -9,6 +19,8 @@ def get_adaptive_pooling_layer(reduction, drop=0):
         reduction_step = nn.AdaptiveAvgPool2d((1, 1))
     elif reduction == 'max':
         reduction_step = nn.AdaptiveMaxPool2d((1, 1))
+    elif reduction == 'adapt':
+        reduction_step = GlobalMaxMeanPool2d()
     else:
         raise Exception(f'No such reduction {reduction}')
 
@@ -18,6 +30,20 @@ def get_adaptive_pooling_layer(reduction, drop=0):
         layers.append(nn.Dropout(drop))
 
     return nn.Sequential(*layers)
+
+_ACTIVATIONS_LAYERS = {
+    'relu': nn.ReLU,
+    'lrelu': nn.LeakyReLU,
+    'prelu': nn.PReLU,
+    'selu': nn.SELU,
+}
+
+AVAILABLE_ACTIVATION_LAYERS = list(_ACTIVATIONS_LAYERS)
+
+def get_activation_layer(activation, *args, **kwargs):
+    if activation not in _ACTIVATIONS_LAYERS:
+        raise Exception('Activation not found: ', activation)
+    return _ACTIVATIONS_LAYERS[activation](*args, **kwargs)
 
 
 def _build_linear_layers(input_size, layers_def):

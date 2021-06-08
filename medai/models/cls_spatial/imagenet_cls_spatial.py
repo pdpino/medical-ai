@@ -2,6 +2,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from medai.models.common import (
+    get_activation_layer,
     get_adaptive_pooling_layer,
     load_imagenet_model,
 )
@@ -9,7 +10,7 @@ from medai.models.common import (
 class ImageNetClsSpatialModel(nn.Module):
     def __init__(self, cl_labels, model_name='densenet-121',
                  imagenet=True, freeze=False, gpool='max', dropout=0,
-                 dropout_features=0, **unused_kwargs):
+                 dropout_features=0, activation='relu', **unused_kwargs):
         super().__init__()
         self.features, self.features_size = load_imagenet_model(
             model_name,
@@ -24,8 +25,9 @@ class ImageNetClsSpatialModel(nn.Module):
         self.cl_labels = list(cl_labels)
         self.model_name = model_name
 
-
         self.dropout_features = dropout_features
+
+        self.activation = get_activation_layer(activation)
 
         self.spatial_classifier = nn.Conv2d(
             self.features_size, len(cl_labels), 1, 1, 0,
@@ -38,7 +40,7 @@ class ImageNetClsSpatialModel(nn.Module):
         features = self.features(x)
         # shape: bs, n_features, f-height, f-width
 
-        features = F.relu(features)
+        features = self.activation(features)
 
         if self.dropout_features:
             features = F.dropout2d(features, self.dropout_features, training=self.training)

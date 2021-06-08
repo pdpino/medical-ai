@@ -217,7 +217,7 @@ def attach_metrics_classification(engine, labels, multilabel=True,
 
         if extra_bce:
             bce_loss = Loss(binary_cross_entropy,
-                            output_transform=_transform_remove_loss_and_round,
+                            output_transform=_transform_remove_loss,
                             device=device)
             bce_loss.attach(engine, 'bce')
 

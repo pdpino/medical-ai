@@ -18,7 +18,7 @@ def get_step_fn_cls_spatial(model, optimizer=None, training=True,
         images = data_batch.image.to(device)
         # shape: batch_size, channels=3, height, width
 
-        gt_labels = data_batch.labels.to(device)
+        gt_labels = data_batch.labels.to(device).float()
         # shape(cl_multilabel=True): batch_size, n_labels
 
         gt_masks = data_batch.masks.to(device).float()
@@ -33,17 +33,18 @@ def get_step_fn_cls_spatial(model, optimizer=None, training=True,
             optimizer.zero_grad()
 
         # Forward
-        pred_labels, pred_masks = model(images)
+        pred_labels, pred_masks_original_size = model(images)
         # pred_labels shape: batch_size, n_labels
         # pred_masks shape: batch_size, n_labels, f-height, f-width
 
         # Compute classification loss
-        gt_labels = gt_labels.float()
         cl_loss = cl_loss_fn(pred_labels, gt_labels) # shape: 1
 
         # Resize predicted masks
         masks_size = gt_masks.size()[-2:]
-        pred_masks = interpolate(pred_masks, masks_size, align_corners=False, mode='bilinear')
+        pred_masks = interpolate(
+            pred_masks_original_size, masks_size, align_corners=False, mode='bilinear',
+        )
         # shape: bs, n_labels, height, width
 
         # Compute spatial loss
@@ -80,6 +81,8 @@ def get_step_fn_cls_spatial(model, optimizer=None, training=True,
             'gt_labels': gt_labels,
             'activations': pred_masks,
             'gt_activations': gt_masks,
+            # Used for debugging or demos:
+            'activations_original_size': torch.sigmoid(pred_masks_original_size),
         }
 
     return step_fn
