@@ -4,7 +4,7 @@ import torch
 
 from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATASETS
 from medai.datasets.common import LATEST_REPORTS_VERSION
-from medai.models.checkpoint import load_compiled_model_classification
+from medai.models.checkpoint import load_compiled_model
 from medai.models.classification import create_cnn
 from medai.models.report_generation.dummy.constant import ConstantReport
 from medai.models.report_generation.dummy.common_words import MostCommonWords
@@ -119,7 +119,7 @@ def evaluate_dummy_model(model_name,
 
     elif model_name == 'most-similar-image':
         if similar_cnn_id:
-            compiled_model = load_compiled_model_classification(similar_cnn_id, device=device)
+            compiled_model = load_compiled_model(similar_cnn_id, device=device)
             cnn = compiled_model.model.to(device)
             compiled_model.optimizer = None # Not needed
         else:
@@ -128,7 +128,7 @@ def evaluate_dummy_model(model_name,
         model = MostSimilarImage(cnn, vocab)
         model.eval()
 
-        LOGGER.info('Fitting model...')
+        LOGGER.info('Precalculating feature vectors...')
         model.fit(train_dataloader, device=device)
 
     else:
@@ -150,6 +150,7 @@ def evaluate_dummy_model(model_name,
         free_values=free_values,
         medical_correctness=medical_correctness,
         device=device,
+        check_unclean=False,
     )
 
     LOGGER.info('Evaluated %s', run_id)
@@ -168,6 +169,9 @@ def parse_args():
                         help='Top k selected for common-words and common-sentences')
     parser.add_argument('--cnn-run-name', type=str, default=None,
                         help='MostSimilarImage: cnn run name to use as feature extractor')
+    parser.add_argument('--cnn-run-task', type=str, default='cls',
+                        choices=('cls', 'cls-seg', 'cls-spatial'),
+                        help='MostSimilarImage: cnn run task to load the feature extractor from')
     parser.add_argument('--cnn-name', type=str, default=None,
                         help='MostSimilarImage: CNN name to create')
     parser.add_argument('--imagenet', action='store_true',
@@ -188,11 +192,11 @@ def parse_args():
 
 
     if args.model_name == 'most-similar-image':
-        if args.similar_cnn_id is None and args.cnn_name is None:
+        if args.cnn_run_name is None and args.cnn_name is None:
             parser.error('most-similar-image: needs --cnn-run-name or --cnn-name')
 
     if args.cnn_run_name:
-        args.similar_cnn_id = RunId(args.cnn_run_name, False, 'cls')
+        args.similar_cnn_id = RunId(args.cnn_run_name, False, args.cnn_run_task)
         args.similar_cnn_kwargs = {}
     else:
         args.similar_cnn_id = None

@@ -50,14 +50,11 @@ class MostSimilarImage(nn.Module):
 
     def images_to_features(self, images):
         with torch.no_grad():
-            features = self.cnn(images, features=True)
-            features = self.global_pool(features)
+            features = self.global_pool(self.cnn.features(images))
         return features
 
 
     def forward(self, images, reports=None, free=False, **unused_kwargs):
-        device = images.device
-
         features = self.images_to_features(images)
         # shape: batch_size, features_size
 
@@ -77,8 +74,8 @@ class MostSimilarImage(nn.Module):
         # tensor shape: batch_size, n_words
 
         if reports is not None and not free:
-            n_words_target = reports.size()[1]
-            n_words_current = output_reports.size()[1]
+            n_words_target = reports.size(1)
+            n_words_current = output_reports.size(1)
 
             if n_words_current > n_words_target:
                 output_reports = output_reports[:, :n_words_target]
@@ -90,7 +87,5 @@ class MostSimilarImage(nn.Module):
 
         output_reports = one_hot(output_reports, num_classes=self.vocab_size).float()
         # shape: batch_size, n_words, vocab_size
-
-        output_reports = output_reports.to(device)
 
         return output_reports, distances

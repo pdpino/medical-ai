@@ -67,3 +67,14 @@ def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
         target_model.spatial_classifier.load_state_dict(
             pretrained_model.spatial_classifier.state_dict(),
         )
+
+
+def freeze_cnn(cnn):
+    frozen_layers = []
+
+    for name, param in cnn.named_parameters():
+        param.requires_grad = False
+        frozen_layers.append(name)
+
+    LOGGER.info('Froze %d cnn layers', len(frozen_layers))
+    LOGGER.debug('Frozen layers: %s', frozen_layers)

@@ -35,6 +35,7 @@ from medai.models.checkpoint import (
     save_metadata,
     create_cnn_rg,
 )
+from medai.models import freeze_cnn
 from medai.losses.schedulers import create_lr_sch_handler
 from medai.losses.optimizers import create_optimizer
 from medai.tensorboard import TBWriter
@@ -457,6 +458,8 @@ def train_from_scratch(run_name,
         run_name += f'_precnn-{cnn_run_id.short_clean_name}'
     else:
         run_name += f'_{cnn_model_name}'
+    if cnn_freeze:
+        run_name += '_cnn-freeze'
     if not norm_by_sample:
         run_name += '_normD'
     if image_size != 256:
@@ -579,6 +582,8 @@ def train_from_scratch(run_name,
         cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
         # HACK: kind of hacky solution to support both CLS and CLS-SEG tasks
         cnn_kwargs['task'] = cnn_run_id.task
+        if cnn_freeze:
+            freeze_cnn(cnn)
     else:
         # Create new
         cnn_kwargs = {
@@ -759,7 +764,7 @@ def parse_args():
     cnn_group.add_argument('-noig', '--no-imagenet', action='store_true',
                           help='If present, dont use imagenet pretrained weights')
     cnn_group.add_argument('-frz', '--freeze', action='store_true',
-                          help='If present, freeze base cnn parameters (only train FC layers)')
+                          help='If present, freeze base cnn parameters')
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                           help='Run name of a pretrained CNN')
     cnn_group.add_argument('-cp-task', '--cnn-pretrained-task', type=str, default='cls',
