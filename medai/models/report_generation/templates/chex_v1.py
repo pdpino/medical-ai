@@ -1,4 +1,10 @@
-# NOTE: sentences not present in GT have been tested with chexpert
+"""Templates chex-v1.
+
+Chosen sentences from the dataset to represent each disease.
+
+Some sentences do not appear explicitly in the dataset as GT,
+but have been tested with chexpert.
+"""
 
 TEMPLATES_CHEXPERT_v1 = {
     'Cardiomegaly': {

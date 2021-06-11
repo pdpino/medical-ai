@@ -84,9 +84,16 @@ def _get_custom_env():
 # TODO: make this public?? is used outside of here
 def _concat_df_matrix(df, results, suffix=None):
     """Concats a DF with a matrix."""
+    n_in = len(df)
     labels = labels_with_suffix(suffix)
-    return pd.concat([df, pd.DataFrame(results, columns=labels)],
-                     axis=1, join='inner')
+    result = pd.concat(
+        [df, pd.DataFrame(results, columns=labels)], axis=1, join='inner',
+    )
+
+    n_out = len(result)
+    assert n_in == n_out, f'Concat failed: in={n_in} vs out={n_out}'
+
+    return result
 
 
 # TODO: use a more appropiate name
