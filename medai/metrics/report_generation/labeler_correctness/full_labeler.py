@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import pandas as pd
 import numpy as np
 
 from medai.datasets.common import CHEXPERT_LABELS
@@ -12,6 +11,8 @@ from medai.utils.timer import Timer
 
 
 class FullLabeler(ABC):
+    # TODO: reconcile LightLabeler and FullLabeler with the HolisticLabeler stuff from chexpert.py
+
     name = 'some-metric'
     diseases = ['dis1', 'dis2']
 
@@ -87,11 +88,8 @@ class ChexpertFullLabeler(FullLabeler):
     diseases = CHEXPERT_LABELS
 
     def _label_reports(self, reports):
-        _column_name = 'reports'
-
-        reports_df = pd.DataFrame(reports, columns=[_column_name])
         labels = chexpert.apply_labeler_to_column(
-            reports_df, _column_name,
+            reports,
             fill_empty=-2, fill_uncertain=-1,
             quiet=True,
             caller_id='full-labeler',

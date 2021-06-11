@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 import logging
-import pandas as pd
 import numpy as np
 
 from medai.datasets.common import CHEXPERT_LABELS
@@ -13,6 +12,8 @@ from medai.utils.nlp import (
 from medai.utils.timer import Timer
 
 LOGGER = logging.getLogger(__name__)
+
+# TODO: reconcile LightLabeler and FullLabeler with the HolisticLabeler stuff from chexpert.py
 
 class CacheHitCounter:
     def __init__(self):
@@ -218,11 +219,8 @@ class ChexpertLightLabeler(LightLabeler):
     support_idxs = 13
 
     def _label_reports(self, reports):
-        _column_name = 'sentences'
-
-        reports_df = pd.DataFrame(reports, columns=[_column_name])
         labels = chexpert.apply_labeler_to_column(
-            reports_df, _column_name,
+            reports,
             fill_empty=-2, fill_uncertain=-1,
             quiet=True,
             caller_id='light-labeler',

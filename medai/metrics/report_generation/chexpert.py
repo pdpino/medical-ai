@@ -1,12 +1,17 @@
 import csv
 import os
-import math
 import subprocess
 import logging
 import pandas as pd
 import numpy as np
 
-from medai.datasets.common import CHEXPERT_LABELS
+from medai.metrics.report_generation.labeler import (
+    HolisticLabeler,
+    CacheLookupLabeler,
+    NBatchesLabeler,
+    AvoidDuplicatedLabeler,
+)
+from medai.datasets.common import CHEXPERT_DISEASES
 from medai.datasets.iu_xray import DATASET_DIR as IU_DIR
 from medai.datasets.mimic_cxr import DATASET_DIR as MIMIC_DIR
 from medai.utils import TMP_DIR
@@ -27,11 +32,11 @@ LOGGER = logging.getLogger(__name__)
 def labels_with_suffix(suffix):
     """Returns the chexpert labels with a suffix appended to each."""
     if not suffix:
-        return list(CHEXPERT_LABELS)
-    return [f'{label}-{suffix}' for label in CHEXPERT_LABELS]
+        return list(CHEXPERT_DISEASES)
+    return [f'{label}-{suffix}' for label in CHEXPERT_DISEASES]
 
 
-def _load_gt_labels(df, dataset_name):
+def _load_gt_df(dataset_name, fill_uncertain=1, fill_empty=0):
     gt_labels_filepath = os.path.join(
         MIMIC_DIR if 'mimic' in dataset_name else IU_DIR,
         'reports', 'reports_with_chexpert_labels.csv',
@@ -40,25 +45,31 @@ def _load_gt_labels(df, dataset_name):
         raise Exception('Ground truth labels not found: ', gt_labels_filepath)
 
     # Load CSV
-    gt_with_labels = pd.read_csv(gt_labels_filepath, index_col=0)
-    gt_with_labels.replace(-2, 0, inplace=True)
-    gt_with_labels.replace(-1, 1, inplace=True)
+    gt_with_labels = pd.read_csv(gt_labels_filepath)
+    gt_with_labels = gt_with_labels.replace({
+        -2: fill_empty,
+        -1: fill_uncertain,
+    })
+    return gt_with_labels
 
+
+def _fetch_gt_labels(target_df, gt_with_labels):
+    """Given a target_df and a gt_df, get the chexpert-labels for the target reports."""
     # Assure it has all necessary reports
-    target_reports = set(df['filename'])
+    target_reports = set(target_df['filename'])
     saved_reports = set(gt_with_labels['filename'])
     if not target_reports.issubset(saved_reports):
-        # import pdb
-        # pdb.set_trace()
         missing = saved_reports.difference(target_reports)
         raise Exception(f'GT missing {len(missing)} reports')
 
     # Merge on filenames
-    merged = df.merge(gt_with_labels, how='left', on='filename')
+    merged = target_df.merge(gt_with_labels, how='left', on='filename')
+
+    assert len(merged) == len(target_df), \
+        f'Size mismatch: {len(merged)} vs {len(target_df)}'
 
     # Return only np.array with labels
-    labels = CHEXPERT_LABELS
-    return merged[labels].to_numpy()
+    return merged[CHEXPERT_DISEASES].to_numpy().astype(np.int8)
 
 
 def _get_custom_env():
@@ -69,6 +80,7 @@ def _get_custom_env():
 
     return custom_env
 
+
 # TODO: make this public?? is used outside of here
 def _concat_df_matrix(df, results, suffix=None):
     """Concats a DF with a matrix."""
@@ -77,13 +89,14 @@ def _concat_df_matrix(df, results, suffix=None):
                      axis=1, join='inner')
 
 
+# TODO: use a more appropiate name
 @with_lock(TMP_FOLDER, 'caller_id', raise_error=True)
-def apply_labeler_to_column(dataframe, column_name,
-                            fill_empty=None, fill_uncertain=None,
+def apply_labeler_to_column(reports,
+                            fill_empty=-2, fill_uncertain=None,
                             quiet=False, caller_id='main'):
     """Apply chexpert-labeler to a column of a dataframe."""
-    # Grab reports
-    reports_only = dataframe[column_name]
+    # Pass reports to a CSV
+    reports_only = pd.DataFrame(reports)
 
     # Tmp folder can be removed afterwards
     os.makedirs(TMP_FOLDER, exist_ok=True)
@@ -100,7 +113,7 @@ def apply_labeler_to_column(dataframe, column_name,
 
     try:
         if not quiet:
-            LOGGER.info('Labelling %s: %s reports...', column_name, f'{len(reports_only):,}')
+            LOGGER.info('Labelling %s reports...', f'{len(reports_only):,}')
         subprocess.run(
             cmd, shell=True, check=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -123,91 +136,44 @@ def apply_labeler_to_column(dataframe, column_name,
         # -1 are Uncertain, mark as positive
         out_df = out_df.replace(-1, fill_uncertain)
 
-    return out_df[CHEXPERT_LABELS].to_numpy()
+    return out_df[CHEXPERT_DISEASES].to_numpy().astype(np.int8)
 
 
-def _apply_labeler_to_column_in_batches(dataframe, column_name, n_batches=5, **kwargs):
-    if n_batches <= 1:
-        return apply_labeler_to_column(dataframe, column_name, **kwargs)
-
-    n_samples = len(dataframe)
-
-    LOGGER.info(
-        'Splitted in n_batches=%d of approx %s reports each',
-        n_batches, math.ceil(n_samples / n_batches),
-    )
-
-    batches = np.array_split(dataframe, n_batches)
-
-    result = np.concatenate([
-        apply_labeler_to_column(df, column_name, **kwargs)
-        for df in batches
-    ], axis=0)
-
-    assert result.shape == (n_samples, 14), f'Wrong result by batches: {result.shape}'
-
-    return result
-
-
-def apply_labeler_to_df(df, caller_id='main',
-                        batches=None, avoid_duplicated=True, dataset_name='iu-x-ray'):
+def apply_labeler_to_df(df, caller_id='main', batches=None, dataset_name='iu-x-ray'):
     """Calculates chexpert labels for a set of GT and generated reports.
 
     Args:
         df -- DataFrame with columns 'filename', 'generated'
     """
     # Load labels for ground truth
-    ground_truth = _load_gt_labels(df, dataset_name)
+    gt_df = _load_gt_df(dataset_name, fill_empty=0, fill_uncertain=1)
+    ground_truth = _fetch_gt_labels(df, gt_df)
 
     # Concat GT in main dataframe
     df = _concat_df_matrix(df, ground_truth, 'gt')
 
-    kwargs = {
-        'fill_empty': 0,
-        'fill_uncertain': 1,
-        'caller_id': caller_id,
-    }
+    # Create labeler
+    labeler = ChexpertLabeler(fill_empty=0, fill_uncertain=1, caller_id=caller_id)
+    labeler = CacheLookupLabeler(labeler, gt_df)
+    labeler = NBatchesLabeler(labeler, batches)
+    labeler = AvoidDuplicatedLabeler(labeler)
 
-    if avoid_duplicated:
-        # Calculate labels for unique generated
-        n_samples = len(df)
-
-        unique_reports = df['generated'].unique()
-        # np.array of shape: n_unique_reports
-
-        n_unique_reports = len(unique_reports)
-
-        if batches is None:
-            batch_default_limit = 35000
-            if n_unique_reports > batch_default_limit:
-                batches = math.ceil(n_unique_reports / batch_default_limit)
-            else:
-                batches = 1
-
-
-        LOGGER.info(
-            'Reduced duplicated reports: from %s to %s unique',
-            f'{n_samples:,}',
-            f'{n_unique_reports:,}',
-        )
-
-        df_unique = pd.DataFrame(unique_reports, columns=['gen-unique'])
-
-        unique_generated = _apply_labeler_to_column_in_batches(
-            df_unique, 'gen-unique', n_batches=batches, **kwargs,
-        )
-        # shape: n_unique_reports, n_labels
-
-        df_unique = _concat_df_matrix(df_unique, unique_generated, 'gen')
-
-        df = df.merge(df_unique, how='inner', left_on='generated', right_on='gen-unique')
-
-        del df['gen-unique']
-
-        assert len(df) == n_samples, f'Merge failed amounts: final={len(df)} original={n_samples}'
-    else:
-        # Calculate labels for all generated
-        generated = apply_labeler_to_column(df, 'generated', **kwargs)
-        df = _concat_df_matrix(df, generated, 'gen')
-
+    # Label generated reports
+    gen_reports = df['generated'].tolist()
+    generated = labeler(gen_reports)
+    df = _concat_df_matrix(df, generated, 'gen')
     return df
+
+
+class ChexpertLabeler(HolisticLabeler):
+    diseases = CHEXPERT_DISEASES
+
+    def __init__(self, **kwargs):
+        super().__init__(None)
+
+        self.kwargs = kwargs
+
+    def forward(self, reports):
+        labels = apply_labeler_to_column(reports, **self.kwargs)
+
+        return labels

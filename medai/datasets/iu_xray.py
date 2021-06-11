@@ -212,7 +212,7 @@ class IUXRayDataset(Dataset):
         # Load Dataframe
         path = os.path.join(self.reports_dir,
                             'reports_with_chexpert_labels.csv')
-        self.labels_df = pd.read_csv(path, index_col=0)
+        self.labels_df = pd.read_csv(path)
 
         # Transform uncertains and none to 0
         self.labels_df = self.labels_df.replace({

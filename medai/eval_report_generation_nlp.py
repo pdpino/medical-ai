@@ -32,8 +32,8 @@ class RougeLScorer:
 
 def _split_reports_normal_abnormal():
     fpath = os.path.join(DATASET_DIR, 'reports', 'reports_with_chexpert_labels.csv')
-    reports_gt = pd.read_csv(fpath, index_col=0)
-    reports_gt = reports_gt.replace([-1, -2], 0)
+    reports_gt = pd.read_csv(fpath)
+    reports_gt = reports_gt.replace({-1: 1, -2: 0})
     reports_gt = reports_gt[['filename', 'No Finding']]
 
     def _get_filenames_with_finding(value):

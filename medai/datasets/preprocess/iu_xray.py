@@ -155,7 +155,7 @@ def preprocess_iu_x_ray(version, greater_values=[0, 5, 10], override=False):
 def create_sentences_with_chexpert_labels():
     df_sentences = load_sentences_metadata(REPORTS_DIR)
 
-    labels = apply_labeler_to_column(df_sentences, 'sentence',
+    labels = apply_labeler_to_column(list(df_sentences['sentence']),
                                      fill_empty=-2, fill_uncertain=-1,
                                      caller_id='iu-preprocess-chexpert')
 
