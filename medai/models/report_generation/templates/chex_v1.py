@@ -21,7 +21,7 @@ TEMPLATES_CHEXPERT_v1 = {
     },
     'Lung Opacity': {
         0: 'the lungs are free of focal airspace disease',
-        1: 'one or more airspace opacities can be seen', # Not present in GT sentences
+        1: 'one or more airspace opacities are seen', # Not present in GT sentences
     },
     'Edema': {
         0: 'no pulmonary edema',

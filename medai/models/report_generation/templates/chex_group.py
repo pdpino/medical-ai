@@ -18,6 +18,7 @@ _LUNG_RELATED_DISEASES = (
     'Pleural Other',
 )
 GROUPS_v1 = [
+    # The first two are put here just to preserve this order
     (
         ('Cardiomegaly',),
         0, 'the heart is normal in size',
@@ -37,5 +38,20 @@ GROUPS_v1 = [
     (
         ('Pneumothorax', 'Pleural Effusion'),
         0, 'no pleural effusion or pneumothorax',
+    ),
+]
+
+GROUPS_v2 = [
+    (
+        ('Cardiomegaly', 'Enlarged Cardiomediastinum'),
+        0, 'the heart size and mediastinal silhouette are within normal limits',
+    ),
+    (
+        _LUNG_RELATED_DISEASES,
+        0, 'the lungs are clear',
+    ),
+    (
+        ('Pneumothorax', 'Pleural Effusion', 'Lung Opacity'),
+        0, 'there is no pneumothorax or pleural effusion . no focal airspace disease',
     ),
 ]
