@@ -34,7 +34,7 @@ class HolisticLabeler:
 
         expected = (len(reports), len(self.diseases))
         assert labels.shape == expected, \
-            f'{class_name} output size do not match: {labels.shape} vs {expected}'
+            f'{class_name} output size do not match: out={labels.shape} vs expect={expected}'
 
         return labels
 

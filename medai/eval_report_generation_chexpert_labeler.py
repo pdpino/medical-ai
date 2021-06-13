@@ -47,6 +47,8 @@ def _calculate_metrics(df):
     try:
         roc_auc = roc_auc_score(ground_truth, generated, average=None)
     except ValueError as e:
+        # FIXME: calculate independently for each disease,
+        # so if one disease fails, the other values can be computed anyway
         LOGGER.warning(e)
         roc_auc = np.array([-1]*len(CHEXPERT_LABELS))
 
@@ -71,6 +73,13 @@ def _calculate_metrics(df):
     return acc, precision, recall, f1, roc_auc, pr_auc
 
 
+def _non_null_average(array):
+    non_null_values = array[array != -1]
+    if len(non_null_values) == 0:
+        return 0
+    return non_null_values.mean().item()
+
+
 def _calculate_metrics_dict(df):
     """Calculates metrics for all dataset_types (train, val, test)."""
     all_metrics = {}
@@ -81,10 +90,11 @@ def _calculate_metrics_dict(df):
 
     def _add_to_results(metrics, array, prefix):
         # Add mean value to dict
-        metrics[prefix] = array.mean()
+        metrics[prefix] = _non_null_average(array)
 
         # Add mean value without NF
-        metrics[f'{prefix}-woNF'] = np.ma.array(array, mask=ignore_no_finding_mask).mean()
+        array_woNF = np.ma.array(array, mask=ignore_no_finding_mask)
+        metrics[f'{prefix}-woNF'] = _non_null_average(array_woNF)
 
         # Add values for each label
         array = array.tolist() # Avoid numpy-not-serializable issues
