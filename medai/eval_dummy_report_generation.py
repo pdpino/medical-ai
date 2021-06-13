@@ -40,6 +40,7 @@ def _is_hierarchical(model_name):
 @timeit_main(LOGGER)
 def evaluate_dummy_model(model_name,
                          dataset_name='iu-x-ray',
+                         reports_version=LATEST_REPORTS_VERSION,
                          batch_size=20,
                          k_first=100,
                          similar_cnn_id=None,
@@ -67,6 +68,8 @@ def evaluate_dummy_model(model_name,
             run_name += f'_size{image_size}'
     if frontal_only:
         run_name += '_front'
+    if reports_version != LATEST_REPORTS_VERSION:
+        run_name += f'_reports-{reports_version}'
 
     run_id = RunId(run_name, debug, 'rg')
 
@@ -84,7 +87,7 @@ def evaluate_dummy_model(model_name,
         'image_size': (image_size, image_size),
         'batch_size': batch_size,
         'frontal_only': frontal_only,
-        'reports_version': LATEST_REPORTS_VERSION,
+        'reports_version': reports_version,
         'do_not_load_image': model_name != 'most-similar-image',
     }
     train_dataloader = prepare_data_report_generation(
@@ -186,6 +189,8 @@ def parse_args():
                         help='If present, do not use medical-correctness metrics')
     parser.add_argument('--cpu', action='store_true',
                         help='Use CPU only')
+    parser.add_argument('--reports-version', type=str, default=LATEST_REPORTS_VERSION,
+                        help='Reports version to use')
     parsers.add_args_free_values(parser)
 
     args = parser.parse_args()
@@ -224,6 +229,7 @@ if __name__ == '__main__':
     evaluate_dummy_model(
         ARGS.model_name,
         dataset_name=ARGS.dataset,
+        reports_version=ARGS.reports_version,
         batch_size=ARGS.batch_size,
         norm_by_sample=ARGS.norm_by_sample,
         k_first=ARGS.k_first,

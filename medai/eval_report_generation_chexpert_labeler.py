@@ -2,7 +2,6 @@ import os
 import json
 import argparse
 import logging
-import pprint
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
@@ -17,7 +16,14 @@ from medai.datasets.common import CHEXPERT_LABELS
 from medai.metrics import load_rg_outputs
 from medai.metrics.report_generation import chexpert
 from medai.utils.files import get_results_folder
-from medai.utils import timeit_main, config_logging, get_timestamp, RunId, parsers
+from medai.utils import (
+    timeit_main,
+    config_logging,
+    get_timestamp,
+    RunId,
+    parsers,
+    print_rg_metrics,
+)
 
 LOGGER = logging.getLogger('medai.rg.eval.chexpert')
 
@@ -175,7 +181,9 @@ def evaluate_run(run_id,
     LOGGER.info('Saved to file: %s', chexpert_metrics_path)
 
     if not quiet:
-        LOGGER.info(pprint.pformat(metrics))
+        print_rg_metrics(metrics, ignore=CHEXPERT_LABELS)
+
+    LOGGER.info('Finished run: %s', run_id)
 
 
 @timeit_main(LOGGER)

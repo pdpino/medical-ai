@@ -1,8 +1,11 @@
+import logging
 import re
 import torch
 
 from medai.datasets.common import CHEXPERT_DISEASES
 from medai.utils.nlp import END_OF_SENTENCE_IDX, END_IDX
+
+LOGGER = logging.getLogger(__name__)
 
 class WordMatcher:
     """Abstract class for matchers."""
@@ -181,8 +184,16 @@ def patterns_to_matcher(patterns, vocab):
         return AnyWordMatcher(targets)
 
     if isinstance(patterns, AllWordsPattern):
-        words = [vocab[word] for word in patterns]
-        return AllWordsMatcher(words)
+        words_idx = [vocab.get(word, -1) for word in patterns]
+
+        absent_words = [
+            word
+            for word, idx in zip(patterns, words_idx)
+            if idx == -1
+        ]
+        if absent_words:
+            LOGGER.warning('AllWordsMatcher: exact-words not found in vocab: %s', absent_words)
+        return AllWordsMatcher(words_idx)
 
     if isinstance(patterns, AllGroupsPattern):
         return MatcherGroupAll([

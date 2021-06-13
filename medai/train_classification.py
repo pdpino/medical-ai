@@ -345,6 +345,7 @@ def train_from_scratch(run_name,
                        device='cuda',
                        seed=None,
                        hw_options={},
+                       dryrun=False,
                        ):
     """Train a model from scratch."""
     # Default values
@@ -420,6 +421,8 @@ def train_from_scratch(run_name,
         run_name += '_noshuffle'
     if image_size != 256:
         run_name += f'_size{image_size}'
+    if frontal_only:
+        run_name += '_front'
     if n_epochs == 0:
         run_name += '_e0'
     run_name += f'_lr{lr}'
@@ -596,6 +599,7 @@ def train_from_scratch(run_name,
         tb_kwargs=tb_kwargs,
         device=device,
         hw_options=hw_options,
+        dryrun=dryrun,
         **other_train_kwargs,
     )
 
@@ -632,6 +636,7 @@ def parse_args():
                         help='Factor to multiply hint-loss')
     parser.add_argument('--seed', type=int, default=1234,
                         help='Set a seed (initial run only)')
+    parser.add_argument('--dont-save', action='store_true', help='Do not save stuff')
 
     parsers.add_args_cnn(parser)
 
@@ -815,4 +820,5 @@ if __name__ == '__main__':
             device=DEVICE,
             seed=ARGS.seed,
             hw_options=HW_OPTIONS,
+            dryrun=ARGS.dont_save,
             )

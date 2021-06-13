@@ -17,12 +17,15 @@ from medai.utils.nlp import (
 def _get_this_folder():
     return os.path.dirname(os.path.realpath(__file__))
 
-def _get_vocab_fname(name, greater_than=None):
-    fname = name
+def _get_vocab_folder(reports_dir, reports_version):
+    return os.path.join(reports_dir, 'vocab', reports_version)
+
+def _get_vocab_fname(reports_dir, reports_version, greater_than=None):
+    fname = 'vocab'
     if greater_than is not None and greater_than > 0:
-        fname = f'{name}.greater{greater_than}'
-    fname = f'{fname}.vocab.json'
-    return os.path.join(_get_this_folder(), fname)
+        fname = f'{fname}.greater{greater_than}'
+    fname = f'{fname}.json'
+    return os.path.join(reports_dir, 'vocab', reports_version, fname)
 
 def _get_syn_fname(name):
     return os.path.join(
@@ -46,8 +49,8 @@ def _assert_correlative_ids(vocab):
     assert n_ids == n_unique_ids, f'{err}, duplicated failed: {n_ids} vs {n_unique_ids}'
 
 
-def load_vocab(name, greater_than=None):
-    filepath = _get_vocab_fname(name, greater_than)
+def load_vocab(reports_dir, reports_version, greater_than=None):
+    filepath = _get_vocab_fname(reports_dir, reports_version, greater_than)
 
     if not os.path.isfile(filepath):
         raise Exception('Vocabulary not found: ', filepath)
@@ -61,8 +64,8 @@ def load_vocab(name, greater_than=None):
     return vocab
 
 
-def _save_vocab(name, vocab, greater_than=None):
-    filepath = _get_vocab_fname(name, greater_than)
+def _save_vocab(reports_dir, reports_version, vocab, greater_than=None):
+    filepath = _get_vocab_fname(reports_dir, reports_version, greater_than)
 
     _assert_correlative_ids(vocab)
 
@@ -91,7 +94,12 @@ def _compute_vocab(reports, token_appearances, greater_than=0):
     return word_to_idx
 
 
-def save_vocabs(name, reports_dict, token_appearances, greater_values):
+def save_vocabs(reports_dir, reports_version, reports_dict, token_appearances, greater_values):
+    if not isinstance(greater_values, (list, tuple)):
+        greater_values = (greater_values,)
+
+    os.makedirs(_get_vocab_folder(reports_dir, reports_version), exist_ok=True)
+
     for greater_than in greater_values:
         vocab = _compute_vocab(
             (r['clean_text'].split() for r in reports_dict.values()),
@@ -99,7 +107,7 @@ def save_vocabs(name, reports_dict, token_appearances, greater_values):
             greater_than,
         )
 
-        _save_vocab(name, vocab, greater_than)
+        _save_vocab(reports_dir, reports_version, vocab, greater_than)
 
 
 

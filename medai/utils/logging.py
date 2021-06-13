@@ -1,9 +1,9 @@
 import os
 import re
 import logging
+from pprint import pprint
 
 LOGGER = logging.getLogger(__name__)
-
 
 class CustomFormatter(logging.Formatter):
     """Custom logging Formatter.
@@ -101,3 +101,19 @@ def print_hw_options(device, args):
     }
     info_str = ' '.join(f'{k}={v}' for k, v in d.items())
     LOGGER.info('Using: %s', info_str)
+
+
+def print_rg_metrics(metrics, ignore=None):
+    def _filter_metric(metric_name):
+        if ignore is not None:
+            return all(text not in metric_name for text in ignore)
+        return True
+
+    to_print_metrics = {}
+    for split, mets in metrics.items():
+        to_print_metrics[split] = {
+            k: v
+            for k, v in mets.items()
+            if _filter_metric(k)
+        }
+    pprint(to_print_metrics)

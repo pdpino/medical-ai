@@ -291,7 +291,7 @@ def attach_metric_cm(engine, labels, multilabel=True, device='cuda'):
     if multilabel:
         _attach_binary_metrics(engine, labels, 'cm', ConfusionMatrix,
                                get_transform_fn=_get_transform_cm_multilabel,
-                               metric_args=(2,), include_macro=False,
+                               metric_args=(2,), include_macro=False, device=device,
                                )
     else:
         cm = ConfusionMatrix(

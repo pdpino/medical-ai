@@ -354,6 +354,7 @@ def train_from_scratch(run_name,
                        decoder_name='lstm',
                        dropout_recursive=0,
                        dropout_out=0,
+                       reports_version=LATEST_REPORTS_VERSION,
                        att_double_bias=False,
                        supervise_attention=False,
                        supervise_sentences=False,
@@ -460,6 +461,8 @@ def train_from_scratch(run_name,
         run_name += f'_{cnn_model_name}'
     if cnn_freeze:
         run_name += '_cnn-freeze'
+    if reports_version != LATEST_REPORTS_VERSION:
+        run_name += f'_reports-{reports_version}'
     if not norm_by_sample:
         run_name += '_normD'
     if image_size != 256:
@@ -544,7 +547,7 @@ def train_from_scratch(run_name,
         'masks': enable_masks,
         'frontal_only': frontal_only,
         'vocab_greater': vocab_greater,
-        'reports_version': LATEST_REPORTS_VERSION,
+        'reports_version': reports_version,
         'sentence_embeddings': supervise_sentences,
     }
     dataset_train_kwargs = {
@@ -755,6 +758,8 @@ def parse_args():
                             help='Normalize each sample (instead of by dataset stats)')
     data_group.add_argument('--vocab-greater', type=int, default=None,
                             help='Only keep tokens with more than k appearances')
+    data_group.add_argument('--reports-version', type=str, default=LATEST_REPORTS_VERSION,
+                            help='Specify an reports-version')
 
 
     cnn_group = parser.add_argument_group('CNN')
@@ -926,6 +931,7 @@ if __name__ == '__main__':
         train_from_scratch(get_timestamp(),
                            dataset_name=ARGS.dataset,
                            decoder_name=ARGS.decoder,
+                           reports_version=ARGS.reports_version,
                            supervise_attention=ARGS.supervise_att,
                            supervise_sentences=ARGS.supervise_sent,
                            dropout_recursive=ARGS.dropout_recursive,

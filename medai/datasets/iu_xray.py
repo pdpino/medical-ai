@@ -84,13 +84,14 @@ class IUXRayDataset(Dataset):
         )
 
         # Load reports
+        self.reports_version = reports_version
         reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME.format(reports_version))
         with open(reports_fname, 'r') as f:
             reports = list(json.load(f).values())
 
         # Filter by train, val, test
         if dataset_type != 'all':
-            list_fname = os.path.join(self.reports_dir, f'{dataset_type}.txt')
+            list_fname = os.path.join(DATASET_DIR, 'splits', f'{dataset_type}.txt')
             with open(list_fname, 'r') as f:
                 reports_from_split = set(l.strip() for l in f.readlines())
             reports = [rep for rep in reports if rep['filename'] in reports_from_split]
@@ -164,7 +165,7 @@ class IUXRayDataset(Dataset):
         if vocab is not None:
             self.word_to_idx = vocab
         else:
-            self.word_to_idx = load_vocab('iu_xray', vocab_greater)
+            self.word_to_idx = load_vocab(self.reports_dir, self.reports_version, vocab_greater)
 
         self.n_unique_reports = len(reports)
 

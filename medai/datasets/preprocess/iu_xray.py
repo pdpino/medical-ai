@@ -53,7 +53,7 @@ def load_raw_reports(first_clean=True):
 
     return reports_dict
 
-def clean_reports(reports_dict):
+def clean_reports(reports_dict, impression_fallback=True):
     token_appearances = Counter()
     errors = defaultdict(list)
 
@@ -70,13 +70,15 @@ def clean_reports(reports_dict):
             continue
 
         text = findings
-        if findings is None and impression is None:
+        if findings is None and impression_fallback:
+            text = impression
+
+        if text is None:
             errors['text-none'].append(filename)
             continue
 
         if findings is None:
             errors['findings-none'].append(filename)
-            text = impression
         elif impression is None:
             errors['impression-none'].append(filename)
 
@@ -134,18 +136,18 @@ def _add_image_info(reports_dict):
     return reports_dict
 
 
-def preprocess_iu_x_ray(version, greater_values=[0, 5, 10], override=False):
+def preprocess_iu_x_ray(version, greater_values=[0, 5, 10], override=False, **kwargs):
     assert_reports_not_exist(REPORTS_DIR, version, override)
 
     reports_dict = load_raw_reports()
 
-    reports_dict, token_appearances, errors = clean_reports(reports_dict)
+    reports_dict, token_appearances, errors = clean_reports(reports_dict, **kwargs)
 
     reports_dict = _add_image_info(reports_dict)
 
     save_clean_reports(REPORTS_DIR, reports_dict, version)
 
-    save_vocabs('iu_xray', reports_dict, token_appearances, greater_values)
+    save_vocabs(REPORTS_DIR, version, reports_dict, token_appearances, greater_values)
 
     split_sentences_and_save_csv(REPORTS_DIR, reports_dict)
 

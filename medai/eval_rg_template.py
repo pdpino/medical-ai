@@ -1,12 +1,12 @@
 import argparse
 import logging
 import numbers
-from pprint import pprint
 import torch
 from torch.utils.data.dataset import Subset
 from ignite.engine import Engine
 
 from medai.datasets import prepare_data_report_generation
+from medai.datasets.common import LATEST_REPORTS_VERSION
 from medai.metrics import save_results, are_results_saved
 from medai.metrics.classification.optimize_threshold import load_optimal_threshold
 from medai.metrics.report_generation import (
@@ -30,6 +30,7 @@ from medai.utils import (
     timeit_main,
     RunId,
     get_timestamp,
+    print_rg_metrics,
 )
 
 LOGGER = logging.getLogger('medai.rg.eval')
@@ -231,6 +232,7 @@ def evaluate_run(cl_run_id,
                  override=False,
                  quiet=False,
                  order='best',
+                 reports_version=LATEST_REPORTS_VERSION,
                  ):
     """Evaluates a saved run."""
     # Load CL model
@@ -258,6 +260,8 @@ def evaluate_run(cl_run_id,
     if order:
         run_name += f'-ord{order}'
     run_name += f'_cnn-{cl_run_id.short_clean_name}_{cnn_name}'
+    if reports_version != LATEST_REPORTS_VERSION:
+        run_name += f'_reports-{reports_version}'
     run_id = RunId(run_name, debug, 'rg')
 
     LOGGER.info('Evaluating RG-template run %s', run_id)
@@ -278,6 +282,7 @@ def evaluate_run(cl_run_id,
         'max_samples': max_samples,
         'masks': False,
         'sentence_embeddings': False,
+        'reports_version': reports_version,
     }
 
     # Create dataloaders
@@ -304,6 +309,7 @@ def evaluate_run(cl_run_id,
     # Save model metadata
     metadata = {
         'rg_templates_kwargs': rg_templates_kwargs,
+        'reports_version': reports_version,
     }
     save_metadata(metadata, run_id)
 
@@ -319,7 +325,9 @@ def evaluate_run(cl_run_id,
     )
 
     if not quiet:
-        pprint(metrics)
+        print_rg_metrics(metrics, ignore=diseases)
+
+    LOGGER.info('Finished run: %s', run_id)
 
 
 def parse_args():
@@ -349,12 +357,14 @@ def parse_args():
                         help='Do not print metrics to stdout')
     parser.add_argument('--order', type=str, default='best',
                         help='Default order to use')
+    parser.add_argument('--reports-version', type=str, default=LATEST_REPORTS_VERSION,
+                        help='Specify an reports-version')
 
     parsers.add_args_hw(parser, num_workers=4)
 
     args = parser.parse_args()
 
-    args.cl_run_id = RunId(args.run_name, not args.no_debug, args.task)
+    args.cl_run_id = RunId(args.run_name, False, args.task)
 
     return args
 
@@ -381,4 +391,5 @@ if __name__ == '__main__':
                  batch_size=ARGS.batch_size,
                  quiet=ARGS.quiet,
                  order=ARGS.order,
+                 reports_version=ARGS.reports_version,
                  )

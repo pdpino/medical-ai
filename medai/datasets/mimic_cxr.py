@@ -44,6 +44,13 @@ _BROKEN_IMAGES = set([
     'p19/p19839145/s54889255/f674e474-817bb713-8f16c90c-608cf869-2829cae7.jpg',
 ])
 
+def _resolve_reports_version(version):
+    if version == 'v4-1':
+        # This version only changed in IU
+        return 'v4'
+    return version
+
+
 class MIMICCXRDataset(Dataset):
     organs = list(JSRT_ORGANS)
     dataset_name = 'mimic-cxr'
@@ -138,7 +145,7 @@ class MIMICCXRDataset(Dataset):
 
         # Prepare reports for getter calls
         self._preprocess_reports(
-            reports_version,
+            _resolve_reports_version(reports_version),
             studies=set(self.master_df['study_id']),
             vocab=vocab,
             vocab_greater=vocab_greater,
@@ -225,7 +232,7 @@ class MIMICCXRDataset(Dataset):
         if vocab is not None:
             self.word_to_idx = vocab
         else:
-            self.word_to_idx = load_vocab('mimic_cxr', vocab_greater)
+            self.word_to_idx = load_vocab(self.reports_dir, reports_version, vocab_greater)
 
         # Compute final reports array
         self.reports = dict()

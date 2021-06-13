@@ -127,7 +127,7 @@ def preprocess_mimic_cxr(version, greater_values=[0, 5, 10], override=False):
 
     save_clean_reports(REPORTS_DIR, reports_dict, version)
 
-    save_vocabs('mimic_cxr', reports_dict, token_appearances, greater_values)
+    save_vocabs(REPORTS_DIR, version, reports_dict, token_appearances, greater_values)
 
     add_report_len_to_master_df(reports_dict, errors)
 
