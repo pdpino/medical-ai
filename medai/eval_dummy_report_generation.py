@@ -6,7 +6,10 @@ from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATA
 from medai.datasets.common import LATEST_REPORTS_VERSION
 from medai.models.checkpoint import load_compiled_model
 from medai.models.classification import create_cnn
-from medai.models.report_generation.dummy.constant import ConstantReport
+from medai.models.report_generation.dummy.constant import (
+    ConstantReport,
+    AVAILABLE_CONSTANT_VERSIONS,
+)
 from medai.models.report_generation.dummy.common_words import MostCommonWords
 from medai.models.report_generation.dummy.common_sentences import MostCommonSentences
 from medai.models.report_generation.dummy.random import RandomReport
@@ -42,6 +45,7 @@ def evaluate_dummy_model(model_name,
                          dataset_name='iu-x-ray',
                          reports_version=LATEST_REPORTS_VERSION,
                          batch_size=20,
+                         constant_version='iu',
                          k_first=100,
                          similar_cnn_id=None,
                          similar_cnn_kwargs={},
@@ -58,6 +62,9 @@ def evaluate_dummy_model(model_name,
     run_name = f'{get_timestamp()}_{dataset_name}_dummy-{model_name}'
     if 'common-' in model_name:
         run_name += f'-{str(k_first)}'
+    if model_name == 'constant':
+        if constant_version != 'iu':
+            run_name += f'-{constant_version}'
     if model_name == 'most-similar-image':
         if similar_cnn_id:
             run_name += f'_{similar_cnn_id.short_clean_name}'
@@ -109,7 +116,7 @@ def evaluate_dummy_model(model_name,
 
     # Choose model
     if model_name == 'constant':
-        model = ConstantReport(vocab)
+        model = ConstantReport(vocab, version=constant_version)
 
     elif model_name == 'common-words':
         model = MostCommonWords(train_dataset, k_first)
@@ -170,6 +177,9 @@ def parse_args():
                         help='Batch size to use')
     parser.add_argument('-k', '--k-first', type=int, default=100,
                         help='Top k selected for common-words and common-sentences')
+    parser.add_argument('--constant-version', type=str, default='iu',
+                        choices=AVAILABLE_CONSTANT_VERSIONS,
+                        help='Constant: version to use')
     parser.add_argument('--cnn-run-name', type=str, default=None,
                         help='MostSimilarImage: cnn run name to use as feature extractor')
     parser.add_argument('--cnn-run-task', type=str, default='cls',
@@ -230,6 +240,7 @@ if __name__ == '__main__':
         ARGS.model_name,
         dataset_name=ARGS.dataset,
         reports_version=ARGS.reports_version,
+        constant_version=ARGS.constant_version,
         batch_size=ARGS.batch_size,
         norm_by_sample=ARGS.norm_by_sample,
         k_first=ARGS.k_first,

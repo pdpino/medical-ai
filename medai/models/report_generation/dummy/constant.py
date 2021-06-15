@@ -4,15 +4,29 @@ from torch.nn.functional import one_hot
 
 from medai.utils.nlp import END_IDX, PAD_IDX
 
-DUMMY_REPORT = '''the heart is normal in size . the mediastinum is unremarkable .
+_IU_DUMMY_REPORT = """the heart is normal in size . the mediastinum is unremarkable .
 the lungs are clear .
 there is no pneumothorax or pleural effusion . no focal airspace disease .
-no pleural effusion or pneumothorax . END'''
+no pleural effusion or pneumothorax . END"""
+_MIMIC_DUMMY_REPORT = 'no acute cardiopulmonary process . END'
+_MIMIC_DUMMY_REPORT_2 = """heart size is normal . mediastinum is normal .
+lungs are clear . there is no pleural effusion or pneumothorax . no focal consolidation . END"""
+
+
+_CONSTANT_REPORTS = {
+    'iu': _IU_DUMMY_REPORT,
+    'mimic': _MIMIC_DUMMY_REPORT,
+    'mimic-v2': _MIMIC_DUMMY_REPORT_2,
+}
+
+AVAILABLE_CONSTANT_VERSIONS = list(_CONSTANT_REPORTS)
 
 class ConstantReport(nn.Module):
     """Returns a constant report."""
-    def __init__(self, vocab, report=DUMMY_REPORT):
+    def __init__(self, vocab, version='iu'):
         super().__init__()
+
+        report = _CONSTANT_REPORTS[version]
 
         self.report = [vocab[word] for word in report.split()]
         self.vocab_size = len(vocab)
