@@ -2,8 +2,10 @@
 
 Chosen sentences from the dataset to represent each disease.
 
-Some sentences do not appear explicitly in the dataset as GT,
-but have been tested with chexpert.
+- Some sentences do not appear explicitly in the dataset as GT,
+    but have been tested with chexpert.
+- Noisy version uses the same sentences, but adds an adjective to each
+    positive sentence. Uses the most common adjective from the sentences.
 """
 
 TEMPLATES_CHEXPERT_v1 = {
@@ -59,6 +61,63 @@ TEMPLATES_CHEXPERT_v1 = {
     'Support Devices': {
         0: '', # Empty on purpose
         1: 'a device is seen', # Not present in GT sentences
+    },
+}
+
+
+TEMPLATES_CHEXPERT_v1_noisy = {
+    'Cardiomegaly': {
+        0: 'heart size is normal',
+        1: 'the heart is mild enlarged',
+    },
+    'Enlarged Cardiomediastinum': {
+        0: 'the mediastinal contour is normal',
+        1: 'the cardiomediastinal silhouette is prominent enlarged',
+    },
+    'Lung Lesion': {
+        0: 'no pulmonary nodules or mass lesions identified',
+        1: 'there are small right pulmonary nodules and a calcified mass in the left upper lobe',
+    },
+    'Lung Opacity': {
+        0: 'the lungs are free of focal airspace disease',
+        1: 'left upper lobe airspace opacities are seen',
+    },
+    'Edema': {
+        0: 'no pulmonary edema',
+        1: 'mild interstitial pulmonary edema is seen',
+    },
+    'Consolidation': {
+        0: 'no focal consolidation',
+        1: 'there is focal consolidation in the left lower lobe',
+    },
+    'Pneumonia': {
+        0: 'no pneumonia',
+        1: 'there is evidence of right lower lobe pneumonia',
+    },
+    'Atelectasis': {
+        # most negative sentences are paired with other diseases
+        0: 'no atelectasis',
+        1: 'appearance suggest atelectasis in the left lung base',
+    },
+    'Pneumothorax': {
+        0: 'no pneumothorax is seen',
+        1: 'there is a small right pneumothorax',
+    },
+    'Pleural Effusion': {
+        0: 'no pleural effusion',
+        1: 'small right pleural effusion is seen',
+    },
+    'Pleural Other': {
+        0: 'no fibrosis',
+        1: 'mild left biapical pleural thickening is present',
+    },
+    'Fracture': {
+        0: 'no fracture is seen',
+        1: 'old left rib fracture is identified',
+    },
+    'Support Devices': {
+        0: '', # Empty on purpose
+        1: 'right sided device is seen',
     },
 }
 

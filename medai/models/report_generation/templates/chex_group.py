@@ -5,6 +5,9 @@
     (such as chex-v1).
 - Achieves better NLP than chex-v1 (more similar to constant-model), and the same chex values.
 """
+from medai.datasets.common import CHEXPERT_DISEASES
+
+ACTUAL_DISEASES = list(CHEXPERT_DISEASES[1:])
 
 _LUNG_RELATED_DISEASES = (
     'Lung Lesion',
@@ -53,5 +56,28 @@ GROUPS_v2 = [
     (
         ('Pneumothorax', 'Pleural Effusion', 'Lung Opacity'),
         0, 'there is no pneumothorax or pleural effusion . no focal airspace disease',
+    ),
+]
+
+GROUPS_mimic_v1 = [
+    (
+        ACTUAL_DISEASES,
+        0, 'no acute cardiopulmonary process',
+    ),
+]
+
+GROUPS_mimic_v2 = [
+    (
+        ACTUAL_DISEASES,
+        0, 'no acute cardiopulmonary process',
+    ),
+    (
+        ('Pneumonia', 'Edema', 'Pleural Effusion'),
+        0, 'no pneumonia , edema , or effusion',
+    ),
+    (
+        ('Cardiomegaly', 'Pneumothorax', 'Pleural Effusion'),
+        0,
+        'heart size is normal . mediastinum is normal . lungs are clear . there is no pleural effusion or pneumothorax',
     ),
 ]

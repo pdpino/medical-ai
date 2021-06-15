@@ -11,6 +11,10 @@ from medai.utils import partialclass
 
 _TEMPLATE_SETS = {
     'chex-v1': partialclass(StaticTemplateRGModel, templates=chex_v1.TEMPLATES_CHEXPERT_v1),
+    'chex-v1-noisy': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1_noisy,
+    ),
     'chex-v2': partialclass(StaticTemplateRGModel, templates=chex_v2.TEMPLATES_CHEXPERT_v2),
     'chex-v3': partialclass(StaticTemplateRGModel, templates=chex_v3.TEMPLATES_CHEXPERT_v3),
     'chex-v1-grouped': partialclass(
@@ -22,6 +26,16 @@ _TEMPLATE_SETS = {
         GroupedTemplateRGModel,
         templates=chex_v1.TEMPLATES_CHEXPERT_v1,
         groups=chex_group.GROUPS_v2,
+    ),
+    'm-chex-grouped-v1': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1,
+        groups=chex_group.GROUPS_mimic_v1,
+    ),
+    'm-chex-grouped-v2': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1,
+        groups=chex_group.GROUPS_mimic_v2,
     ),
 }
 
