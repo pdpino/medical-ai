@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from medai.datasets.common import (
     BatchItem,
     CHEXPERT_LABELS,
+    COATT_LABELS,
     JSRT_ORGANS,
     UP_TO_DATE_MASKS_VERSION,
     LATEST_REPORTS_VERSION,
@@ -205,21 +206,32 @@ class IUXRayDataset(Dataset):
 
     def _preprocess_labels(self, labels=None):
         # Choose labels to use
+        load_from = 'chexpert'
+
         if labels is None:
             self.labels = list(CHEXPERT_LABELS)
+        elif labels == 'coatt-labels' or labels == ['coatt-labels']:
+            # HACKy way to solve this!
+            self.labels = list(COATT_LABELS)
+            load_from = 'coatt'
         else:
             self.labels = [l for l in labels if l in CHEXPERT_LABELS]
 
-        # Load Dataframe
-        path = os.path.join(self.reports_dir,
-                            'reports_with_chexpert_labels.csv')
-        self.labels_df = pd.read_csv(path)
+        if load_from == 'chexpert':
+            # Load Dataframe
+            path = os.path.join(self.reports_dir,
+                                'reports_with_chexpert_labels.csv')
+            self.labels_df = pd.read_csv(path)
 
-        # Transform uncertains and none to 0
-        self.labels_df = self.labels_df.replace({
-            -1: 1, # uncertain values, assumed positive
-            -2: 0, # No mention, assumed negative
-        })
+            # Transform uncertains and none to 0
+            self.labels_df = self.labels_df.replace({
+                -1: 1, # uncertain values, assumed positive
+                -2: 0, # No mention, assumed negative
+            })
+        elif load_from == 'coatt':
+            path = os.path.join(DATASET_DIR, 'coatt-labels',
+                                'metadata.csv')
+            self.labels_df = pd.read_csv(path)
 
         # Save in a more convenient storage for __getitem__
         self.labels_by_report = dict()
@@ -233,6 +245,7 @@ class IUXRayDataset(Dataset):
             #     labels[0] = 1
 
             self.labels_by_report[filename] = labels
+
 
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a

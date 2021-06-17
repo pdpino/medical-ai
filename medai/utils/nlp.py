@@ -272,7 +272,7 @@ def attach_unclean_report_checker(engine, check=True, terminate=True):
 
     LOGGER.info('Attaching unclean-report-checker')
 
-    _UNALLOWED_TOKENS = set([END_IDX, PAD_IDX])
+    _UNALLOWED_TOKENS = set([END_IDX, PAD_IDX, START_IDX])
 
     @engine.on(Events.ITERATION_COMPLETED)
     def _check_unallowed_tokens(engine):

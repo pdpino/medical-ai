@@ -1,10 +1,12 @@
 import logging
 
 from medai.models.checkpoint import load_compiled_model
+from medai.utils.files import RunId
 
 LOGGER = logging.getLogger(__name__)
 
-def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
+def load_pretrained_weights_cnn_(target_model, pretrained,
+                                 features=True,
                                  cls_weights=False, seg_weights=False,
                                  spatial_weights=False,
                                  device='cuda'):
@@ -12,23 +14,31 @@ def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
 
     Works for cls and cls-seg models
     """
-    if pretrained_run_id is None:
+    if pretrained is None:
         return
 
     _info = {
-        'run': pretrained_run_id.short_name,
-        'task': pretrained_run_id.task,
-        'dataset': pretrained_run_id.get_dataset_name(),
+        'features': features,
         'cls': cls_weights,
         'seg': seg_weights,
         'spatial': spatial_weights,
     }
+
+    if isinstance(pretrained, RunId):
+        pretrained_model = load_compiled_model(pretrained, device=device).model
+        _info.update({
+            'run': pretrained.short_name,
+            'task': pretrained.task,
+            'dataset': pretrained.get_dataset_name(),
+        })
+    else:
+        # Assume is a model
+        pretrained_model = pretrained
+
     LOGGER.info(
         'Using pretrained model: %s',
         ' '.join(f"{k}={v}" for k, v in _info.items()),
     )
-
-    pretrained_model = load_compiled_model(pretrained_run_id, device=device).model
 
     def _check_weights_exist(key):
         prev_has = hasattr(pretrained_model, key)
@@ -40,7 +50,7 @@ def load_pretrained_weights_cnn_(target_model, pretrained_run_id,
         return prev_has and target_has
 
     # Copy features
-    if _check_weights_exist('features'):
+    if features and _check_weights_exist('features'):
         target_model.features.load_state_dict(pretrained_model.features.state_dict())
 
     if cls_weights and _check_weights_exist('classifier'):

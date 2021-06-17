@@ -1,5 +1,10 @@
 import logging
-import functools
+
+from medai.models.classification import create_cnn
+from medai.models.cls_seg import create_cls_seg_model
+
+from medai.models.report_generation.coatt import CoAttModel
+from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.report_generation.decoder_lstm import LSTMDecoder
 from medai.models.report_generation.decoder_lstm_v2 import LSTMDecoderV2
 from medai.models.report_generation.decoder_lstm_att import LSTMAttDecoder
@@ -95,4 +100,38 @@ def create_decoder(decoder_name, **kwargs):
 
     model = ModelClass(**kwargs)
 
+    return model
+
+
+def create_cnn_rg(task='cls', **kwargs):
+    if task == 'cls':
+        return create_cnn(**kwargs)
+    if task == 'cls-seg':
+        return create_cls_seg_model(**kwargs)
+
+    raise Exception('CNN task not supported: ', task)
+
+
+def create_rg_model(name, **model_kwargs):
+    if name == 'coatt':
+        model = CoAttModel(**model_kwargs)
+    else:
+        # Create CNN
+        cnn_kwargs = model_kwargs.get('cnn_kwargs', None)
+        assert cnn_kwargs, 'CNN kwargs are not present in metadata'
+
+        if 'task' not in cnn_kwargs:
+            # HACK: hotfix for backward compatibility
+            if 'cls-seg' in cnn_kwargs['model_name']:
+                task = 'cls-seg'
+            else:
+                task = 'cls'
+            cnn_kwargs['task'] = task
+        cnn = create_cnn_rg(**cnn_kwargs)
+
+        # Create Decoder
+        decoder = create_decoder(**model_kwargs['decoder_kwargs'])
+
+        # Create CNN2Seq model and optimizer
+        model = CNN2Seq(cnn, decoder)
     return model

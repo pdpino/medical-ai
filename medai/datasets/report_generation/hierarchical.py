@@ -23,6 +23,7 @@ def create_hierarchical_dataloader(dataset, include_masks=False,
     def _collate_fn(batch_tuples):
         images = []
         reports = []
+        labels = []
         masks = []
         sentence_embeddings = []
         report_fnames = []
@@ -36,6 +37,8 @@ def create_hierarchical_dataloader(dataset, include_masks=False,
             images.append(tup.image)
             report_fnames.append(tup.report_fname)
             image_fnames.append(tup.image_fname)
+            if isinstance(tup.labels, (list, tuple, torch.Tensor)):
+                labels.append(tup.labels)
 
             # Collate report
             report = tup.report # shape(list): n_words
@@ -77,6 +80,12 @@ def create_hierarchical_dataloader(dataset, include_masks=False,
         images = torch.stack(images)
         # shape: batch_size, channels, height, width
 
+        if labels:
+            labels = torch.stack(labels)
+            # shape: batch_size, n_labels
+        else:
+            labels = -1
+
         reports = pad_sequence(padded_reports, batch_first=True)
         # shape: batch_size, n_sentences, n_words
 
@@ -105,12 +114,15 @@ def create_hierarchical_dataloader(dataset, include_masks=False,
             sentence_embeddings = None
 
         # Compute stops
+        # Stops array contains a 0 if it has to continue (i.e. a valid sentence comes)
+        # or a 1 if it has to stop (the report ended)
         stops = [torch.zeros(report.size(0)) for report in padded_reports]
         stops = pad_sequence(stops, batch_first=True, padding_value=1)
         # shape: batch_size, n_sentences
 
         return BatchRGItems(
             images=images,
+            labels=labels,
             reports=reports,
             stops=stops,
             report_fnames=report_fnames,

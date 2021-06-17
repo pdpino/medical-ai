@@ -19,8 +19,7 @@ from medai.metrics.report_generation.writer import (
 )
 from medai.models.report_generation import is_decoder_hierarchical
 from medai.models.checkpoint import load_compiled_model_report_generation
-from medai.training.report_generation.flat import get_step_fn_flat
-from medai.training.report_generation.hierarchical import get_step_fn_hierarchical
+from medai.training.report_generation import get_step_fn_getter
 from medai.utils import (
     print_hw_options,
     parsers,
@@ -45,6 +44,7 @@ def _evaluate_model_in_dataloader(
         att_vs_masks=False,
         free=False,
         check_unclean=True,
+        model_name='lstm',
         device='cuda'):
     """Evaluate a report-generation model on a dataloader."""
     dataset = dataloader.dataset
@@ -53,10 +53,7 @@ def _evaluate_model_in_dataloader(
 
     vocab = dataset.get_vocab()
 
-    if hierarchical:
-        get_step_fn = get_step_fn_hierarchical
-    else:
-        get_step_fn = get_step_fn_flat
+    get_step_fn = get_step_fn_getter(model_name)
 
     engine = Engine(get_step_fn(model,
                                 training=False,
@@ -101,6 +98,7 @@ def evaluate_model_and_save(
         n_epochs=1,
         free_values=[False, True],
         check_unclean=True,
+        model_name='lstm',
         ):
     """Evaluates a model in ."""
     evaluate_kwargs = {
@@ -111,6 +109,7 @@ def evaluate_model_and_save(
         'supervise_attention': supervise_attention,
         'n_epochs': n_epochs,
         'check_unclean': check_unclean,
+        'model_name': model_name,
     }
 
     for free_value in free_values:
@@ -178,8 +177,8 @@ def evaluate_run(run_id,
     metadata = compiled_model.metadata
 
     # Decide hierarchical
-    decoder_name = metadata['decoder_kwargs']['decoder_name']
-    hierarchical = is_decoder_hierarchical(decoder_name)
+    model_name = metadata['model_kwargs']['name']
+    hierarchical = is_decoder_hierarchical(model_name)
     # Load data kwargs
     dataset_kwargs = metadata.get('dataset_kwargs', None)
     if dataset_kwargs is None:
@@ -227,6 +226,7 @@ def evaluate_run(run_id,
         n_epochs=n_epochs,
         free_values=free_values,
         check_unclean=check_unclean,
+        model_name=model_name,
     )
 
 

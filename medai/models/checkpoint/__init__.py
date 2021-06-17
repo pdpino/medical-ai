@@ -14,11 +14,10 @@ from ignite.handlers import Checkpoint, DiskSaver
 from medai.losses.optimizers import create_optimizer
 from medai.losses.schedulers import create_lr_sch_handler
 from medai.models.classification import create_cnn
-from medai.models.report_generation import create_decoder
+from medai.models.report_generation import create_rg_model
 from medai.models.segmentation import create_fcn
 from medai.models.cls_spatial import create_cls_spatial_model
 from medai.models.detection import create_detection_seg_model
-from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.cls_seg import create_cls_seg_model
 from medai.models.checkpoint.compiled_model import CompiledModel
 from medai.utils.files import get_checkpoint_folder
@@ -191,15 +190,6 @@ def load_compiled_model(run_id, **kwargs):
     return load_fn(run_id, **kwargs)
 
 
-def create_cnn_rg(task='cls', **kwargs):
-    if task == 'cls':
-        return create_cnn(**kwargs)
-    if task == 'cls-seg':
-        return create_cls_seg_model(**kwargs)
-
-    raise Exception('CNN task not supported: ', task)
-
-
 def load_compiled_model_report_generation(run_id,
                                           device='cuda',
                                           multiple_gpu=False,
@@ -216,23 +206,9 @@ def load_compiled_model_report_generation(run_id,
     # Load metadata
     metadata = _load_meta(folder, run_id)
 
-    # Create CNN
-    cnn_kwargs = metadata.get('cnn_kwargs', None)
-    assert cnn_kwargs, 'CNN kwargs are not present in metadata'
-    if 'task' not in cnn_kwargs:
-        # HACK: hotfix for backward compatibility
-        if 'cls-seg' in cnn_kwargs['model_name']:
-            task = 'cls-seg'
-        else:
-            task = 'cls'
-        cnn_kwargs['task'] = task
-    cnn = create_cnn_rg(**cnn_kwargs)
+    # Create model
+    model = create_rg_model(**metadata['model_kwargs']).to(device)
 
-    # Create Decoder
-    decoder = create_decoder(**metadata['decoder_kwargs'])
-
-    # Create CNN2Seq model and optimizer
-    model = CNN2Seq(cnn, decoder).to(device)
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
         model = nn.DataParallel(model)

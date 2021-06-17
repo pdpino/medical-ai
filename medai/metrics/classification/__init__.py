@@ -142,6 +142,7 @@ def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
                            get_transform_fn=None,
                            include_macro=True,
                            metric_args=(),
+                           include_individual=True,
                            device='cuda'):
     """Attaches one metric per label to an engine."""
     metrics = []
@@ -152,7 +153,8 @@ def _attach_binary_metrics(engine, labels, metric_name, MetricClass,
             transform_fn = _get_transform_one_label(index, use_round=use_round)
 
         metric = MetricClass(*metric_args, output_transform=transform_fn, device=device)
-        metric.attach(engine, f'{metric_name}_{disease}')
+        if include_individual:
+            metric.attach(engine, f'{metric_name}_{disease}')
         metrics.append(metric)
 
     if include_macro:
@@ -207,6 +209,12 @@ def attach_metrics_classification(engine, labels, multilabel=True,
     Note: most multilabel metrics are treated as binary,
         i.e. the metrics are computed separately for each label.
     """
+    if len(labels) > 20:
+        include_individual = False
+        LOGGER.info('Not attaching individual metrics (n_labels=%d)', len(labels))
+    else:
+        include_individual = True
+
     if multilabel:
         # acc = MultilabelAccuracy(output_transform=_transform_remove_loss_and_round, device=device)
         # acc.attach(engine, 'acc')
@@ -234,17 +242,16 @@ def attach_metrics_classification(engine, labels, multilabel=True,
         # _attach_binary_metrics(engine, labels, 'prec', Precision, True, device=device)
         # _attach_binary_metrics(engine, labels, 'recall', Recall, True, device=device)
         # _attach_binary_metrics(engine, labels, 'spec', Specificity, True, device=device)
-        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric,
-                               use_round=False, device=device)
-        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric,
-                               use_round=False, device=device)
-    else:
-        if len(labels) > 20:
-            include_individual = False
-            LOGGER.info('Not attaching individual metrics (n_labels=%d)', len(labels))
-        else:
-            include_individual = True
 
+        kwargs = {
+            'use_round': False,
+            'device': device,
+            'include_individual': include_individual,
+        }
+
+        _attach_binary_metrics(engine, labels, 'roc_auc', RocAucMetric, **kwargs)
+        _attach_binary_metrics(engine, labels, 'pr_auc', PRAucMetric, **kwargs)
+    else:
         acc = Accuracy(output_transform=_transform_remove_loss, device=device)
         acc.attach(engine, 'acc')
 

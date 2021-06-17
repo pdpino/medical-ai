@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from medai.utils.nlp import PAD_IDX, END_OF_SENTENCE_IDX, END_IDX
+from medai.utils.nlp import PAD_IDX, END_OF_SENTENCE_IDX, END_IDX, START_IDX
 from medai.losses.out_of_target import OutOfTargetSumLoss
 
 
@@ -66,7 +66,7 @@ def _flatten_gen_reports(generated_words, stops_prediction, threshold=0.5):
         report = report[dot_positions <= 1]
         # shape: n_words_before_dot
 
-        report = report[(report != END_IDX) & (report != PAD_IDX)]
+        report = report[(report != END_IDX) & (report != PAD_IDX) & (report != START_IDX)]
         # shape: n_clean_words
 
         texts.append(report.tolist())

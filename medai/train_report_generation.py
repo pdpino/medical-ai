@@ -24,6 +24,7 @@ from medai.models.report_generation import (
     create_decoder,
     AVAILABLE_DECODERS,
     DEPRECATED_DECODERS,
+    create_cnn_rg,
 )
 from medai.models.report_generation.word_embedding import AVAILABLE_PRETRAINED_EMBEDDINGS
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
@@ -33,14 +34,12 @@ from medai.models.checkpoint import (
     load_compiled_model,
     load_compiled_model_report_generation,
     save_metadata,
-    create_cnn_rg,
 )
 from medai.models import freeze_cnn
 from medai.losses.schedulers import create_lr_sch_handler
 from medai.losses.optimizers import create_optimizer
 from medai.tensorboard import TBWriter
-from medai.training.report_generation.flat import get_step_fn_flat
-from medai.training.report_generation.hierarchical import get_step_fn_hierarchical
+from medai.training.report_generation import get_step_fn_getter
 from medai.utils import (
     get_timestamp,
     duration_to_str,
@@ -68,6 +67,7 @@ def _get_print_metrics(additional_metrics,
                        supervise_attention=False,
                        supervise_sentences=False,
                        medical_correctness=False,
+                       is_coatt=False,
                        med_kwargs={},
                        ):
     print_metrics = []
@@ -77,6 +77,8 @@ def _get_print_metrics(additional_metrics,
         print_metrics.append('att_loss')
     if supervise_sentences:
         print_metrics.append('sentence_loss')
+    if is_coatt:
+        print_metrics.append('tag_loss')
 
     if len(print_metrics) == 0:
         print_metrics.append('loss')
@@ -122,6 +124,7 @@ def train_model(run_id,
                 checkpoint_metric=None,
                 device='cuda',
                 hw_options={},
+                **extra_kwargs,
                ):
     # Prepare run stuff
     LOGGER.info('Training run: %s', run_id)
@@ -133,11 +136,9 @@ def train_model(run_id,
     # Unwrap stuff
     model, optimizer, lr_sch_handler = compiled_model.get_elements()
 
-    # Flat vs hierarchical step_fn
-    if hierarchical:
-        get_step_fn = get_step_fn_hierarchical
-    else:
-        get_step_fn = get_step_fn_flat
+    # Decide step_fn
+    model_name = compiled_model.metadata['model_kwargs']['name']
+    get_step_fn = get_step_fn_getter(model_name)
 
     step_kwargs = {
         'supervise_attention': supervise_attention,
@@ -147,11 +148,13 @@ def train_model(run_id,
         'lambda_att': lambda_att,
         'lambda_sent': lambda_sent,
         'device': device,
+        **extra_kwargs,
     }
     loss_attacher_kwargs = {
         'hierarchical': hierarchical,
         'supervise_attention': supervise_attention,
         'supervise_sentences': supervise_sentences,
+        'is_coatt': model_name == 'coatt',
         'device': device,
     }
 
@@ -210,6 +213,7 @@ def train_model(run_id,
             supervise_attention=supervise_attention,
             supervise_sentences=supervise_sentences,
             medical_correctness=medical_correctness,
+            is_coatt=model_name == 'coatt',
             med_kwargs=med_kwargs,
         ),
     )
@@ -532,7 +536,6 @@ def train_from_scratch(run_name,
         if hidden_size != 100:
             raise Exception('Hidden size must be 100 if supervise_sentences=True')
 
-
     # Load data
     image_size = (image_size, image_size)
     enable_masks = supervise_attention
@@ -573,7 +576,6 @@ def train_from_scratch(run_name,
         dataset_type='val',
         **dataset_kwargs,
     )
-
 
     # Create CNN
     if cnn_run_id:
@@ -650,17 +652,18 @@ def train_from_scratch(run_name,
 
     # Save metadata
     metadata = {
-        'cnn_kwargs': cnn_kwargs,
-        'decoder_kwargs': decoder_kwargs,
+        'model_kwargs': {
+            'name': decoder_name,
+            'cnn_kwargs': cnn_kwargs,
+            'decoder_kwargs': decoder_kwargs,
+        },
         'opt_kwargs': opt_kwargs,
         'lr_sch_kwargs': lr_sch_kwargs,
         'dataset_kwargs': dataset_kwargs,
         'dataset_train_kwargs': dataset_train_kwargs,
-        # 'vocab': vocab, # save space, is already saved in the dataset_kwargs
         'image_size': image_size,
         'hparams': {
             'pretrained_cnn': cnn_run_id.to_dict() if cnn_run_id else None,
-            # 'batch_size': batch_size,
         },
         'other_train_kwargs': other_train_kwargs,
         'seed': seed,

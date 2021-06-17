@@ -22,6 +22,7 @@ _shorter_names = {
     'hamming': 'ham',
     'hint_loss': 'hint',
     'seg_loss': 'seg',
+    'tag_loss': 'tag',
     'spatial_loss': 'spatial',
     'word_loss': 'word',
     'stop_loss': 'stop',
