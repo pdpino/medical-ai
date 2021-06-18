@@ -1,3 +1,4 @@
+import logging
 import torch
 from torch import nn
 from torch.nn.functional import one_hot
@@ -12,14 +13,35 @@ _MIMIC_DUMMY_REPORT = 'no acute cardiopulmonary process . END'
 _MIMIC_DUMMY_REPORT_2 = """heart size is normal . mediastinum is normal .
 lungs are clear . there is no pleural effusion or pneumothorax . no focal consolidation . END"""
 
+_MIMIC_DUMMY_REPORT_3 = """in comparison with the study of xxxx , there is little
+change and no evidence of acute cardiopulmonary disease .
+no pneumonia , vascular congestion , or pleural effusion . END"""
+
+_MIMIC_DUMMY_REPORT_4 = """in comparison with the study of xxxx , there is little
+change and no evidence of acute cardiopulmonary disease .
+the heart is normal in size . the mediastinum is unremarkable .
+no pneumonia , vascular congestion , or pleural effusion . END"""
 
 _CONSTANT_REPORTS = {
     'iu': _IU_DUMMY_REPORT,
     'mimic': _MIMIC_DUMMY_REPORT,
     'mimic-v2': _MIMIC_DUMMY_REPORT_2,
+    'mimic-v3': _MIMIC_DUMMY_REPORT_3,
+    'mimic-v4': _MIMIC_DUMMY_REPORT_4,
 }
 
 AVAILABLE_CONSTANT_VERSIONS = list(_CONSTANT_REPORTS)
+
+LOGGER = logging.getLogger(__name__)
+
+def _report_to_list(dummy_report, vocab):
+    dummy_report = dummy_report.split()
+
+    words_not_present = [word for word in dummy_report if word not in vocab]
+    if words_not_present:
+        LOGGER.error('Words from constant model not in vocab, ignoring: %s', words_not_present)
+
+    return [vocab[word] for word in dummy_report if word in vocab]
 
 class ConstantReport(nn.Module):
     """Returns a constant report."""
@@ -28,7 +50,7 @@ class ConstantReport(nn.Module):
 
         report = _CONSTANT_REPORTS[version]
 
-        self.report = [vocab[word] for word in report.split()]
+        self.report = _report_to_list(report, vocab)
         self.vocab_size = len(vocab)
 
         if self.report[-1] != END_IDX:

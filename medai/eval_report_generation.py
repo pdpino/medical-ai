@@ -135,6 +135,8 @@ def evaluate_model_and_save(
 
         save_results(metrics, run_id, suffix=suffix)
 
+    return metrics
+
 
 @timeit_main(LOGGER)
 def evaluate_run(run_id,

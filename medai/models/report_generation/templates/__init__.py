@@ -37,6 +37,33 @@ _TEMPLATE_SETS = {
         templates=chex_v1.TEMPLATES_CHEXPERT_v1,
         groups=chex_group.GROUPS_mimic_v2,
     ),
+    'm-chex-grouped-v3': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1,
+        groups=chex_group.GROUPS_mimic_v3,
+    ),
+    'm-chex-grouped-v3-prefixed': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1,
+        groups=chex_group.GROUPS_mimic_v3_woPREFIX,
+        prefix=chex_group.PREFIX_mimic,
+    ),
+    'm-chex-grouped-v4': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1,
+        groups=chex_group.GROUPS_mimic_v4,
+    ),
+    'm-chex-grouped-v5': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1,
+        groups=chex_group.GROUPS_mimic_v5,
+        prefix=chex_group.PREFIX_mimic_v2,
+    ),
+    'm-chex-grouped-v6': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1,
+        groups=chex_group.GROUPS_mimic_v6,
+    ),
 }
 
 AVAILABLE_TEMPLATE_SETS = list(_TEMPLATE_SETS)

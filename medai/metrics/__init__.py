@@ -59,7 +59,7 @@ def save_results(metrics_dict, run_id,
     LOGGER.info('Saved metrics to %s', filepath)
 
 
-def load_rg_outputs(run_id, free=False):
+def load_rg_outputs(run_id, free=False, labeled=False):
     """Load report-generation output dataframe.
 
     Returns a DataFrame with columns:
@@ -70,7 +70,12 @@ def load_rg_outputs(run_id, free=False):
     results_folder = get_results_folder(run_id)
     suffix = 'free' if free else 'notfree'
 
-    outputs_path = os.path.join(results_folder, f'outputs-{suffix}.csv')
+    if labeled:
+        name = f'outputs-labeled-{suffix}.csv'
+    else:
+        name = f'outputs-{suffix}.csv'
+
+    outputs_path = os.path.join(results_folder, name)
 
     if not os.path.isfile(outputs_path):
         LOGGER.error('Outputs file not found: %s', outputs_path)

@@ -3,7 +3,7 @@ import logging
 import torch
 
 from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATASETS
-from medai.datasets.common import LATEST_REPORTS_VERSION
+from medai.datasets.common import LATEST_REPORTS_VERSION, CHEXPERT_DISEASES
 from medai.models.checkpoint import load_compiled_model
 from medai.models.classification import create_cnn
 from medai.models.report_generation.dummy.constant import (
@@ -21,6 +21,7 @@ from medai.utils import (
     timeit_main,
     parsers,
     print_hw_options,
+    print_rg_metrics,
     RunId,
 )
 
@@ -45,6 +46,7 @@ def evaluate_dummy_model(model_name,
                          dataset_name='iu-x-ray',
                          reports_version=LATEST_REPORTS_VERSION,
                          batch_size=20,
+                         dataset_types=['train', 'val', 'test'],
                          constant_version='iu',
                          k_first=100,
                          similar_cnn_id=None,
@@ -57,6 +59,7 @@ def evaluate_dummy_model(model_name,
                          debug=True,
                          device='cuda',
                          max_samples=None,
+                         quiet=False,
                          ):
     # Run name
     run_name = f'{get_timestamp()}_{dataset_name}_dummy-{model_name}'
@@ -145,14 +148,19 @@ def evaluate_dummy_model(model_name,
         raise Exception(f'Model not recognized: {model_name}')
 
 
+    # FIXME: this will not allow loading other split than train/val/test
     dataloaders = [
-        train_dataloader,
-        val_dataloader,
-        test_dataloader
+        d
+        for d in (
+            train_dataloader,
+            val_dataloader,
+            test_dataloader,
+        )
+        if d.dataset.dataset_type in dataset_types
     ]
 
     # Evaluate
-    evaluate_model_and_save(
+    metrics = evaluate_model_and_save(
         run_id,
         model,
         dataloaders,
@@ -163,6 +171,9 @@ def evaluate_dummy_model(model_name,
         check_unclean=False,
     )
 
+    if not quiet:
+        print_rg_metrics(metrics, ignore=CHEXPERT_DISEASES)
+
     LOGGER.info('Evaluated %s', run_id)
 
 
@@ -171,6 +182,8 @@ def parse_args():
 
     parser.add_argument('model_name', type=str, default=None,
                         choices=_AVAILABLE_DUMMY_MODELS, help='Dummy model to use')
+    parser.add_argument('--eval-in', nargs='*', default=['train', 'val', 'test'],
+                        help='Eval in datasets')
     parser.add_argument('-d', '--dataset', type=str, default='iu-x-ray',
                         help='Batch size', choices=AVAILABLE_REPORT_DATASETS)
     parser.add_argument('-bs', '--batch_size', type=int, default=20,
@@ -199,6 +212,8 @@ def parse_args():
                         help='If present, do not use medical-correctness metrics')
     parser.add_argument('--cpu', action='store_true',
                         help='Use CPU only')
+    parser.add_argument('--quiet', action='store_true',
+                        help='Do not print metrics')
     parser.add_argument('--reports-version', type=str, default=LATEST_REPORTS_VERSION,
                         help='Reports version to use')
     parsers.add_args_free_values(parser)
@@ -239,6 +254,7 @@ if __name__ == '__main__':
     evaluate_dummy_model(
         ARGS.model_name,
         dataset_name=ARGS.dataset,
+        dataset_types=ARGS.eval_in,
         reports_version=ARGS.reports_version,
         constant_version=ARGS.constant_version,
         batch_size=ARGS.batch_size,
@@ -251,4 +267,5 @@ if __name__ == '__main__':
         medical_correctness=not ARGS.no_med,
         device=DEVICE,
         max_samples=ARGS.max_samples,
+        quiet=ARGS.quiet,
     )

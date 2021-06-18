@@ -1,3 +1,5 @@
+import numbers
+
 from medai.utils.nlp import END_OF_SENTENCE_IDX, ReportReader
 
 class BaseTemplateRGModel:
@@ -5,11 +7,13 @@ class BaseTemplateRGModel:
 
     FIXME: class-inheritance may not be ideal here.
     """
-    def __init__(self, diseases=[], vocab={}, templates={}, order=None):
+    def __init__(self, diseases=[], vocab={}, templates={}, order=None, prefix=None):
         self._report_reader = ReportReader(vocab)
         self._vocab = vocab
 
         self.diseases = list(diseases)
+
+        self.prefix = self.str_to_idxs(prefix, force_dot=False) if prefix is not None else None
 
         # Filter given-diseases
         self.templates = dict()
@@ -38,16 +42,19 @@ class BaseTemplateRGModel:
             self.disease_order = [self.diseases.index(d) for d in order]
 
     def check_template_validity(self, template):
+        assert isinstance(template, str), f'Template must be str, got: {type(template)}'
+
         for token in template.split():
             if token not in self._vocab:
                 raise Exception(f'Template token not in vocab: {token}')
 
 
-    def str_to_idxs(self, template):
+    def str_to_idxs(self, template, force_dot=True):
         template_as_idxs = self._report_reader.text_to_idx(template)
 
-        if len(template_as_idxs) == 0 or template_as_idxs[-1] != END_OF_SENTENCE_IDX:
-            template_as_idxs.append(END_OF_SENTENCE_IDX)
+        if force_dot:
+            if len(template_as_idxs) == 0 or template_as_idxs[-1] != END_OF_SENTENCE_IDX:
+                template_as_idxs.append(END_OF_SENTENCE_IDX)
 
         return template_as_idxs
 
@@ -64,6 +71,9 @@ class StaticTemplateRGModel(BaseTemplateRGModel):
             # shape: n_diseases
 
             report = []
+
+            if self.prefix is not None:
+                report.extend(self.prefix)
 
             for disease_index in self.disease_order:
                 pred_value = sample_predictions[disease_index]
@@ -85,7 +95,19 @@ class GroupedTemplateRGModel(BaseTemplateRGModel):
         for group_diseases, target, template in groups:
             self.check_template_validity(template)
 
-            self.groups.append((group_diseases, target, self.str_to_idxs(template)))
+            if isinstance(group_diseases, str):
+                group_diseases = (group_diseases,)
+
+            if isinstance(target, numbers.Number):
+                targets = [target] * len(group_diseases)
+            elif isinstance(target, (list, tuple)):
+                targets = target
+            else:
+                raise Exception(f'Internal error: target type not recognized {type(target)}')
+
+            assert len(targets) == len(group_diseases)
+
+            self.groups.append((group_diseases, targets, self.str_to_idxs(template)))
 
 
     def __call__(self, labels):
@@ -96,12 +118,15 @@ class GroupedTemplateRGModel(BaseTemplateRGModel):
         for sample_predictions in labels:
             report = []
 
+            if self.prefix is not None:
+                report.extend(self.prefix)
+
             # First, fill the report with the groups
             preds_by_disease = dict(zip(self.diseases, sample_predictions))
             covered_diseases = set()
 
-            for group_diseases, target, sentence in self.groups:
-                if all(preds_by_disease[d] == target for d in group_diseases):
+            for group_diseases, targets, sentence in self.groups:
+                if all(preds_by_disease[d] == t for d, t in zip(group_diseases, targets)):
                     report.extend(sentence)
                     for d in group_diseases:
                         covered_diseases.add(d)
