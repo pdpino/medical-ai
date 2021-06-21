@@ -52,8 +52,11 @@ def create_optimizer(model, custom_lr=None, **kwargs):
             )
             names_with_custom_lr.extend(included_params)
 
-            for p in included_params:
-                _log_info[f'lr_{p}'] = lr_value
+            if len(included_params) > 5:
+                _log_info[f'lr_{param_name}_{len(included_params)}layers'] = lr_value
+            else:
+                for p in included_params:
+                    _log_info[f'lr_{p}'] = lr_value
 
         if len(params) == 0:
             # No custom-lr provided

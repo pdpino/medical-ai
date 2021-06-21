@@ -84,7 +84,7 @@ def _flatten_gt_reports(reports):
         list of lists of shape (batch_size, n_words_per_report)
     """
     texts = [
-        report[(report != PAD_IDX).nonzero(as_tuple=True)].tolist()
+        report[((report != PAD_IDX) & (report != START_IDX)).nonzero(as_tuple=True)].tolist()
         for report in reports
     ]
 
@@ -127,7 +127,7 @@ def get_step_fn_hierarchical(model, optimizer=None, training=True,
             optimizer.zero_grad()
 
         # Pass thru the model
-        output_tuple = model(images, reports, free=free,
+        output_tuple = model(images, reports=reports, free=free,
                              max_words=max_words, max_sentences=max_sentences)
         generated_words = output_tuple[0] # batch_size, max_n_sentences, max_n_words, vocab_size
         stop_prediction = output_tuple[1] # batch_size, max_n_sentences

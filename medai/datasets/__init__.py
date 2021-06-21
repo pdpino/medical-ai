@@ -251,6 +251,7 @@ def prepare_data_report_generation(dataset_name=None,
                                    norm_by_sample=False,
                                    reports_version=LATEST_REPORTS_VERSION,
                                    sentence_embeddings=False,
+                                   include_start=False,
                                    **kwargs,
                                    ):
 
@@ -309,6 +310,7 @@ def prepare_data_report_generation(dataset_name=None,
         extra_dataloader_kwargs.update({
             'include_masks': masks,
             'include_sentence_emb': sentence_embeddings,
+            'include_start': include_start,
         })
     dataloader = create_dataloader_fn(dataset,
                                       batch_size=batch_size,

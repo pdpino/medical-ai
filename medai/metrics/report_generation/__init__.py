@@ -114,7 +114,7 @@ def attach_metrics_report_generation(engine, free=False, device='cuda'):
 
 def attach_losses_rg(engine, free=False, hierarchical=False,
                      supervise_attention=False, supervise_sentences=False,
-                     is_coatt=False,
+                     model_name='lstm',
                      device='cuda'):
     if free:
         return
@@ -126,8 +126,8 @@ def attach_losses_rg(engine, free=False, hierarchical=False,
         losses.append('att_loss')
     if supervise_sentences:
         losses.append('sentence_loss')
-    if is_coatt:
-        losses.append('tag_loss')
+    if 'coatt' in model_name:
+        losses.extend(['tag_loss', 'reg_loss'])
     attach_losses(engine, losses, device=device)
 
 

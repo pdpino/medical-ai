@@ -1,8 +1,8 @@
 import logging
-
 from medai.models.classification import create_cnn
 from medai.models.cls_seg import create_cls_seg_model
 
+from medai.models.report_generation.h_coatt import HCoAtt
 from medai.models.report_generation.coatt import CoAttModel
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
 from medai.models.report_generation.decoder_lstm import LSTMDecoder
@@ -39,13 +39,13 @@ DEPRECATED_DECODERS = set([
 ])
 
 def is_decoder_hierarchical(decoder_name):
-    return 'h-lstm' in decoder_name
+    return decoder_name.startswith('h-')
 
 
 def _get_info_str(**kwargs):
     _printable_kwargs = {}
     for k, v in kwargs.items():
-        if k == 'vocab':
+        if k in ('vocab', 'labels'):
             v = len(v)
         elif k == 'embedding_kwargs':
             continue
@@ -113,12 +113,24 @@ def create_cnn_rg(task='cls', **kwargs):
 
 
 def create_rg_model(name, **model_kwargs):
+    def _get_kwarg_and_assert(key):
+        value = model_kwargs.get(key, None)
+        assert value is not None, f'{key} are not present in model_kwargs'
+        return value
+
     if name == 'coatt':
         model = CoAttModel(**model_kwargs)
+    elif name == 'h-coatt':
+        encoder_kwargs = _get_kwarg_and_assert('encoder_kwargs')
+        decoder_kwargs = _get_kwarg_and_assert('decoder_kwargs')
+
+        LOGGER.info('Creating h-coatt-encoder: %s', _get_info_str(**encoder_kwargs))
+        LOGGER.info('Creating h-coatt-decoder: %s', _get_info_str(**decoder_kwargs))
+
+        model = HCoAtt(encoder_kwargs, decoder_kwargs)
     else:
         # Create CNN
-        cnn_kwargs = model_kwargs.get('cnn_kwargs', None)
-        assert cnn_kwargs, 'CNN kwargs are not present in metadata'
+        cnn_kwargs = _get_kwarg_and_assert('cnn_kwargs')
 
         if 'task' not in cnn_kwargs:
             # HACK: hotfix for backward compatibility

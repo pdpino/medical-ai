@@ -1,4 +1,7 @@
-"""Custom step_fn for the CoAtt model."""
+"""Custom step_fn for the CoAtt model.
+
+This function is for the github based model.
+"""
 import logging
 import torch
 from torch import nn

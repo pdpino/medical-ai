@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines # FIXME: reduce lines of this file
 import argparse
 import logging
 import os
@@ -16,6 +17,7 @@ from medai.metrics.report_generation import (
     attach_organ_by_sentence,
 )
 from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
+from medai.models import load_pretrained_weights_cnn_
 from medai.models.classification import (
     AVAILABLE_CLASSIFICATION_MODELS,
 )
@@ -25,6 +27,7 @@ from medai.models.report_generation import (
     AVAILABLE_DECODERS,
     DEPRECATED_DECODERS,
     create_cnn_rg,
+    create_rg_model,
 )
 from medai.models.report_generation.word_embedding import AVAILABLE_PRETRAINED_EMBEDDINGS
 from medai.models.report_generation.cnn_to_seq import CNN2Seq
@@ -67,7 +70,7 @@ def _get_print_metrics(additional_metrics,
                        supervise_attention=False,
                        supervise_sentences=False,
                        medical_correctness=False,
-                       is_coatt=False,
+                       model_name='lstm',
                        med_kwargs={},
                        ):
     print_metrics = []
@@ -77,15 +80,17 @@ def _get_print_metrics(additional_metrics,
         print_metrics.append('att_loss')
     if supervise_sentences:
         print_metrics.append('sentence_loss')
-    if is_coatt:
-        print_metrics.append('tag_loss')
+    if 'coatt' in model_name:
+        print_metrics.extend(['tag_loss', 'reg_loss'])
 
     if len(print_metrics) == 0:
         print_metrics.append('loss')
 
     print_metrics += ['bleu']
 
-    if medical_correctness:
+    if model_name == 'h-coatt':
+        print_metrics.extend(['rougeL', 'ciderD'])
+    elif medical_correctness:
         if med_kwargs.get('metric', '').startswith('lighter'):
             print_metrics.append('lighter-chex_f1')
         else:
@@ -154,7 +159,7 @@ def train_model(run_id,
         'hierarchical': hierarchical,
         'supervise_attention': supervise_attention,
         'supervise_sentences': supervise_sentences,
-        'is_coatt': model_name == 'coatt',
+        'model_name': model_name,
         'device': device,
     }
 
@@ -213,7 +218,7 @@ def train_model(run_id,
             supervise_attention=supervise_attention,
             supervise_sentences=supervise_sentences,
             medical_correctness=medical_correctness,
-            is_coatt=model_name == 'coatt',
+            model_name=model_name,
             med_kwargs=med_kwargs,
         ),
     )
@@ -290,8 +295,7 @@ def resume_training(run_id,
     set_seed_from_metadata(metadata)
 
     # Decide hierarchical
-    decoder_name = metadata['decoder_kwargs']['decoder_name']
-    hierarchical = is_decoder_hierarchical(decoder_name)
+    hierarchical = is_decoder_hierarchical(metadata['model_kwargs']['name'])
 
     # Load data
     dataset_kwargs = metadata.get('dataset_kwargs', None)
@@ -356,6 +360,8 @@ def resume_training(run_id,
 def train_from_scratch(run_name,
                        dataset_name='iu-x-ray',
                        decoder_name='lstm',
+                       labels=None,
+                       mlc_layers=None,
                        dropout_recursive=0,
                        dropout_out=0,
                        reports_version=LATEST_REPORTS_VERSION,
@@ -379,6 +385,7 @@ def train_from_scratch(run_name,
                        medical_correctness=True,
                        med_kwargs={},
                        cnn_run_id=None,
+                       pretrained_cls=False,
                        cnn_model_name='resnet-50',
                        cnn_imagenet=True,
                        cnn_freeze=False,
@@ -457,7 +464,7 @@ def train_from_scratch(run_name,
             run_name += f'_emb-{"-".join(options)}'
     if hidden_size != 100:
         run_name += f'_hs-{hidden_size}'
-    if 'att' in decoder_name and att_double_bias:
+    if '-att' in decoder_name and att_double_bias:
         run_name += '_att-bias2'
     if cnn_run_id:
         run_name += f'_precnn-{cnn_run_id.short_clean_name}'
@@ -465,6 +472,9 @@ def train_from_scratch(run_name,
         run_name += f'_{cnn_model_name}'
     if cnn_freeze:
         run_name += '_cnn-freeze'
+    if mlc_layers and decoder_name == 'h-coatt':
+        _layers = '-'.join(str(l) for l in mlc_layers)
+        run_name += f'_fc-{_layers}'
     if reports_version != LATEST_REPORTS_VERSION:
         run_name += f'_reports-{reports_version}'
     if not norm_by_sample:
@@ -486,14 +496,21 @@ def train_from_scratch(run_name,
             run_name += f'-{augment_label}'
             if augment_class is not None:
                 run_name += f'-cls{augment_class}'
+    if labels is not None:
+        if labels == 'coatt-labels' or labels == ['coatt-labels']:
+            run_name += '_labels210'
+        else:
+            run_name += f'_labels{len(labels)}'
     run_name += f'_lr{lr}'
     if custom_lr is not None:
-        lr_emb = custom_lr.get('word_embeddings')
-        if lr_emb is not None:
-            run_name += f'_lr-emb{lr_emb}'
-        lr_att = custom_lr.get('attention')
-        if lr_att is not None:
-            run_name += f'_lr-att{lr_att}'
+        def _custom_lr_name(key, short_name):
+            value = custom_lr.get(key, None)
+            if value is not None:
+                return f'_lr-{short_name}{value}'
+            return ''
+        run_name += _custom_lr_name('word_embeddings', 'emb')
+        run_name += _custom_lr_name('attention', 'att')
+        run_name += _custom_lr_name('encoder', 'enc')
     if weight_decay != 0:
         run_name += f'_wd{weight_decay}'
 
@@ -514,6 +531,9 @@ def train_from_scratch(run_name,
 
     if frontal_only and not supervise_attention: # If supervise attention, frontal_only is implied
         run_name += '_front'
+
+    if checkpoint_metric in ('bleu', 'rougeL', 'ciderD'):
+        run_name += f'_best-{checkpoint_metric}'
 
     # Is deprecated
     if decoder_name in DEPRECATED_DECODERS:
@@ -542,6 +562,7 @@ def train_from_scratch(run_name,
     dataset_kwargs = {
         'dataset_name': dataset_name,
         'hierarchical': hierarchical,
+        'labels': labels,
         'max_samples': max_samples,
         'norm_by_sample': norm_by_sample,
         'image_size': image_size,
@@ -552,6 +573,7 @@ def train_from_scratch(run_name,
         'vocab_greater': vocab_greater,
         'reports_version': reports_version,
         'sentence_embeddings': supervise_sentences,
+        'include_start': decoder_name == 'h-coatt',
     }
     dataset_train_kwargs = {
         'sort_samples': sort_samples,
@@ -570,53 +592,84 @@ def train_from_scratch(run_name,
         **dataset_train_kwargs,
     )
     vocab = train_dataloader.dataset.get_vocab()
-    dataset_kwargs['vocab'] = vocab
+    # dataset_kwargs['vocab'] = vocab
 
     val_dataloader = prepare_data_report_generation(
         dataset_type='val',
         **dataset_kwargs,
     )
 
-    # Create CNN
-    if cnn_run_id:
-        # Load pretrained
-        compiled_cnn = load_compiled_model(
-            cnn_run_id, device=device, multiple_gpu=False, # gpus are handled in CNN2Seq!
-        )
-        cnn = compiled_cnn.model
-        cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
-        # HACK: kind of hacky solution to support both CLS and CLS-SEG tasks
-        cnn_kwargs['task'] = cnn_run_id.task
-        if cnn_freeze:
-            freeze_cnn(cnn)
-    else:
-        # Create new
-        cnn_kwargs = {
-            'model_name': cnn_model_name,
-            'labels': [], # headless
-            'imagenet': cnn_imagenet,
-            'freeze': cnn_freeze,
-            'task': 'cls',
+    if decoder_name == 'h-coatt':
+        model_kwargs = {
+            'name': decoder_name,
+            'encoder_kwargs': {
+                'cnn_name': cnn_model_name,
+                'imagenet': cnn_imagenet,
+                'n_tags': len(train_dataloader.dataset.labels),
+                'mlc_layers': mlc_layers,
+            },
+            'decoder_kwargs': {
+                'vocab': vocab,
+            },
         }
-        cnn = create_cnn_rg(**cnn_kwargs).to(device)
+        model = create_rg_model(**model_kwargs).to(device)
 
-    # Create decoder
-    decoder_kwargs = {
-        'decoder_name': decoder_name,
-        'vocab': vocab,
-        'embedding_size': embedding_size,
-        'embedding_kwargs': embedding_kwargs,
-        'hidden_size': hidden_size,
-        'features_size': cnn.features_size,
-        'teacher_forcing': teacher_forcing,
-        'dropout_recursive': dropout_recursive,
-        'dropout_out': dropout_out,
-        'double_bias': att_double_bias,
-    }
-    decoder = create_decoder(**decoder_kwargs).to(device)
+        if cnn_run_id:
+            load_pretrained_weights_cnn_(
+                model.encoder, cnn_run_id, features=True,
+                cls_weights=pretrained_cls,
+            )
 
-    # Full model
-    model = CNN2Seq(cnn, decoder).to(device)
+        if cnn_freeze:
+            freeze_cnn(model.encoder.features)
+    else:
+        # Create CNN
+        if cnn_run_id:
+            # Load pretrained
+            compiled_cnn = load_compiled_model(
+                cnn_run_id, device=device, multiple_gpu=False, # gpus are handled in CNN2Seq!
+            )
+            cnn = compiled_cnn.model
+            cnn_kwargs = compiled_cnn.metadata.get('model_kwargs', {})
+            # HACK: kind of hacky solution to support both CLS and CLS-SEG tasks
+            cnn_kwargs['task'] = cnn_run_id.task
+            if cnn_freeze:
+                freeze_cnn(cnn)
+        else:
+            # Create new
+            cnn_kwargs = {
+                'model_name': cnn_model_name,
+                'labels': [], # headless
+                'imagenet': cnn_imagenet,
+                'freeze': cnn_freeze,
+                'task': 'cls',
+            }
+            cnn = create_cnn_rg(**cnn_kwargs).to(device)
+
+        # Create decoder
+        decoder_kwargs = {
+            'decoder_name': decoder_name,
+            'vocab': vocab,
+            'embedding_size': embedding_size,
+            'embedding_kwargs': embedding_kwargs,
+            'hidden_size': hidden_size,
+            'features_size': cnn.features_size,
+            'teacher_forcing': teacher_forcing,
+            'dropout_recursive': dropout_recursive,
+            'dropout_out': dropout_out,
+            'double_bias': att_double_bias,
+        }
+        decoder = create_decoder(**decoder_kwargs).to(device)
+
+        # Full model
+        model = CNN2Seq(cnn, decoder).to(device)
+
+        # TODO: use create_rg_model() instead??
+        model_kwargs = {
+            'name': decoder_name,
+            'cnn_kwargs': cnn_kwargs,
+            'decoder_kwargs': decoder_kwargs,
+        }
 
     if multiple_gpu:
         # TODO: use DistributedDataParallel instead
@@ -652,11 +705,7 @@ def train_from_scratch(run_name,
 
     # Save metadata
     metadata = {
-        'model_kwargs': {
-            'name': decoder_name,
-            'cnn_kwargs': cnn_kwargs,
-            'decoder_kwargs': decoder_kwargs,
-        },
+        'model_kwargs': model_kwargs,
         'opt_kwargs': opt_kwargs,
         'lr_sch_kwargs': lr_sch_kwargs,
         'dataset_kwargs': dataset_kwargs,
@@ -730,7 +779,8 @@ def parse_args():
 
     decoder_group = parser.add_argument_group('Decoder')
     decoder_group.add_argument('-dec', '--decoder', type=str,
-                               choices=AVAILABLE_DECODERS, help='Choose Decoder')
+                               choices=AVAILABLE_DECODERS + ['h-coatt'],
+                               help='Choose Decoder')
     decoder_group.add_argument('--supervise-att', action='store_true',
                                help='If present, supervise the attention')
     decoder_group.add_argument('--supervise-sent', action='store_true',
@@ -763,6 +813,8 @@ def parse_args():
                             help='Only keep tokens with more than k appearances')
     data_group.add_argument('--reports-version', type=str, default=LATEST_REPORTS_VERSION,
                             help='Specify an reports-version')
+    data_group.add_argument('--labels', type=str, nargs='+', default=None,
+                            help='Choose labels for the encoder (only useful in some decoders)')
 
 
     cnn_group = parser.add_argument_group('CNN')
@@ -771,12 +823,16 @@ def parse_args():
                           help='Choose base CNN class (create new)')
     cnn_group.add_argument('-noig', '--no-imagenet', action='store_true',
                           help='If present, dont use imagenet pretrained weights')
-    cnn_group.add_argument('-frz', '--freeze', action='store_true',
+    cnn_group.add_argument('-frz', '--cnn-freeze', action='store_true',
                           help='If present, freeze base cnn parameters')
     cnn_group.add_argument('-cp', '--cnn-pretrained', type=str, default=None,
                           help='Run name of a pretrained CNN')
     cnn_group.add_argument('-cp-task', '--cnn-pretrained-task', type=str, default='cls',
                           choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
+    cnn_group.add_argument('--pretrained-cls', action='store_true',
+                          help='Also copy MLC weights (only for h-coatt model)')
+    cnn_group.add_argument('--mlc-layers', type=int, nargs='+', default=None,
+                          help='Add extra MLC layers to h-coatt model')
 
     emb_group = parser.add_argument_group('Word embedding')
     emb_group.add_argument('--emb-pretrained', type=str, default=None,
@@ -794,6 +850,8 @@ def parse_args():
                           help='Custom LR for the word_embedding params')
     lr_group.add_argument('--custom-lr-attention', type=float, default=None,
                           help='Custom LR for the attention params')
+    lr_group.add_argument('--custom-lr-encoder', type=float, default=None,
+                          help='Custom LR for the encoder (h-coatt model)')
     parsers.add_args_lr_sch(parser, scheduler=None, metric=None)
 
     parsers.add_args_early_stopping(parser, metric=None)
@@ -865,8 +923,13 @@ def parse_args():
     # Build custom lr kwargs
     if args.custom_lr_attention is not None:
         if 'att' not in args.decoder:
-            # custom-lr-attention is only available for attention models!
+            LOGGER.warning('--custom-lr-attention is only available for att models')
             args.custom_lr_attention = None
+
+    if args.custom_lr_encoder is not None:
+        if args.decoder != 'h-coatt':
+            LOGGER.warning('--custom-lr-encoder is only available for h-coatt')
+            args.custom_lr_encoder = None
 
     args.custom_lr = {}
     min_lr = []
@@ -883,6 +946,7 @@ def parse_args():
 
     _add_custom_lr_value(args.custom_lr_word_embedding, 'word_embeddings')
     _add_custom_lr_value(args.custom_lr_attention, 'attention')
+    _add_custom_lr_value(args.custom_lr_encoder, 'encoder')
 
     if len(args.custom_lr) > 0:
         if 'min_lr' in args.lr_sch_kwargs:
@@ -893,6 +957,11 @@ def parse_args():
             })
     else:
         args.custom_lr = None
+
+    if args.decoder != 'h-coatt':
+        if args.labels is not None:
+            LOGGER.error('--labels are only useful with h-coatt decoder')
+            args.labels = None
 
 
     return args
@@ -933,7 +1002,9 @@ if __name__ == '__main__':
     else:
         train_from_scratch(get_timestamp(),
                            dataset_name=ARGS.dataset,
+                           labels=ARGS.labels,
                            decoder_name=ARGS.decoder,
+                           mlc_layers=ARGS.mlc_layers,
                            reports_version=ARGS.reports_version,
                            supervise_attention=ARGS.supervise_att,
                            supervise_sentences=ARGS.supervise_sent,
@@ -958,9 +1029,10 @@ if __name__ == '__main__':
                            med_kwargs=ARGS.med_kwargs,
                            image_size=ARGS.image_size,
                            cnn_run_id=ARGS.precnn_run_id,
+                           pretrained_cls=ARGS.pretrained_cls,
                            cnn_model_name=ARGS.cnn,
                            cnn_imagenet=not ARGS.no_imagenet,
-                           cnn_freeze=ARGS.freeze,
+                           cnn_freeze=ARGS.cnn_freeze,
                            max_samples=ARGS.max_samples,
                            early_stopping=ARGS.early_stopping,
                            early_stopping_kwargs=ARGS.early_stopping_kwargs,

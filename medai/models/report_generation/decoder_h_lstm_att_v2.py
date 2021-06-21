@@ -85,7 +85,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
             should_stop = torch.tensor(False, device=device).repeat(batch_size)
         else:
             assert reports is not None, 'Cant pass free=False and reports=None'
-            actual_n_sentences = reports.size()[1]
+            actual_n_sentences = reports.size(1)
             sentences_iterator = range(actual_n_sentences)
             should_stop = None
 
@@ -157,7 +157,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         # REVIEW: re-use this logic with a WordDecoder ???
 
         # topic shape: batch_size, hidden_size
-        batch_size = topic.size()[0]
+        batch_size = topic.size(0)
         device = topic.device
 
         # Build initial state

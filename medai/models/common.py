@@ -87,10 +87,14 @@ def _extract_resnet_50_features(resnet_50):
 def _extract_mobilenet_features(mobilenet):
     return mobilenet.features, 1280
 
+def _extract_vgg19_features(vgg19):
+    return vgg19.features, 512
+
 _LOADERS = {
     'densenet-121': (models.densenet121, _extract_densenet_121_features),
     'resnet-50': (models.resnet50, _extract_resnet_50_features),
     'mobilenet': (models.mobilenet_v2, _extract_mobilenet_features),
+    'vgg-19': (models.vgg19, _extract_vgg19_features),
 }
 
 def load_imagenet_model(model_name, imagenet=True, dropout=0):

@@ -62,8 +62,11 @@ def _evaluate_model_in_dataloader(
                                 device=device))
     attach_unclean_report_checker(engine, check=check_unclean)
     attach_losses_rg(
-        engine, free=free,
-        hierarchical=hierarchical, supervise_attention=supervise_attention,
+        engine,
+        free=free,
+        hierarchical=hierarchical,
+        supervise_attention=supervise_attention,
+        model_name=model_name,
     )
     attach_metrics_report_generation(engine,
                                      free=free,

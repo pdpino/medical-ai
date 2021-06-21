@@ -6,10 +6,10 @@ from torch.nn.functional import pad
 from medai.datasets.common import BatchRGItems
 from medai.datasets.common.sentences2organs import SentenceToOrgans
 from medai.datasets.common.sentences2embeddings import SentenceToEmbeddings
-from medai.utils.nlp import split_sentences_and_pad
+from medai.utils.nlp import split_sentences_and_pad, START_IDX
 
 
-def create_hierarchical_dataloader(dataset, include_masks=False,
+def create_hierarchical_dataloader(dataset, include_start=False, include_masks=False,
                                    include_sentence_emb=False, **kwargs):
     """Creates a dataloader from a images-report dataset with hierarchical sequences.
 
@@ -42,6 +42,8 @@ def create_hierarchical_dataloader(dataset, include_masks=False,
 
             # Collate report
             report = tup.report # shape(list): n_words
+            if include_start:
+                report = [START_IDX] + report
             report = split_sentences_and_pad(report)
             # shape: n_sentences, n_words
 
