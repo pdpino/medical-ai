@@ -11,6 +11,7 @@ from medai.metrics import save_results, are_results_saved
 from medai.metrics.classification.optimize_threshold import load_optimal_threshold
 from medai.metrics.report_generation import (
     attach_metrics_report_generation,
+    print_rg_metrics,
 )
 from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
 from medai.metrics.report_generation.writer import (
@@ -30,7 +31,6 @@ from medai.utils import (
     timeit_main,
     RunId,
     get_timestamp,
-    print_rg_metrics,
 )
 
 LOGGER = logging.getLogger('medai.rg.eval')

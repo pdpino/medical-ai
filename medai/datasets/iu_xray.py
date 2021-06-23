@@ -107,7 +107,7 @@ class IUXRayDataset(Dataset):
         # Keep only max images
         if max_samples is not None:
             last_samples = -1 * max_samples
-            self.reports = self.reports[last_samples:]
+            self.samples = self.samples[last_samples:]
 
         if self.enable_masks:
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
@@ -117,20 +117,20 @@ class IUXRayDataset(Dataset):
         self.do_not_load_report = do_not_load_report
 
     def __len__(self):
-        return len(self.reports)
+        return len(self.samples)
 
     def __getitem__(self, idx):
-        report = self.reports[idx]
+        sample = self.samples[idx]
 
-        report_fname = report['filename']
-        image_fname = report['image_name']
+        report_fname = sample['report_filename']
+        image_fname = sample['image_name']
         image = self._load_image(image_fname)
 
         labels = self.labels_by_report[report_fname]
 
         mask = self.load_mask(image_fname) if self.enable_masks else -1
 
-        report = report['tokens_idxs'] if not self.do_not_load_report else -1
+        report = sample['tokens_idxs'] if not self.do_not_load_report else -1
 
         return BatchItem(
             image=image,
@@ -172,7 +172,7 @@ class IUXRayDataset(Dataset):
         self.n_unique_reports = len(reports)
 
         # Compute final reports array
-        self.reports = []
+        self.samples = []
         for report in reports:
             filename = report['filename']
 
@@ -192,18 +192,15 @@ class IUXRayDataset(Dataset):
                 if image['broken']:
                     continue
 
-                self.reports.append({
-                    'filename': filename,
+                self.samples.append({
+                    'report_filename': filename,
                     'tokens_idxs': tokens_idxs,
                     'image_name': image['id'],
                     # 'position': position, # Use this for debugging
                 })
 
         if sort_samples:
-            self.reports = sorted(self.reports, key=lambda x:len(x['tokens_idxs']))
-
-        # Reports are repeated to match n_images
-        self.n_images = len(self.reports)
+            self.samples = sorted(self.samples, key=lambda x:len(x['tokens_idxs']))
 
     def _preprocess_labels(self, labels=None):
         # Choose labels to use
@@ -253,7 +250,6 @@ class IUXRayDataset(Dataset):
 
             self.labels_by_report[filename] = labels
 
-
     def get_labels_presence_for(self, target_label):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
             label for each sample.
@@ -269,12 +265,15 @@ class IUXRayDataset(Dataset):
 
         return [
             (index, filename_to_label[report['filename']])
-            for index, report in enumerate(self.reports)
+            for index, report in enumerate(self.samples)
         ]
 
     def get_presence_for_no_finding(self):
         return self.get_labels_presence_for('No Finding')
 
     ### API for dummy models
-    def iter_reports_only(self):
-        return self.reports
+    def get_reports_by_id(self):
+        return {
+            sample['image_name']: sample['tokens_idxs']
+            for sample in self.samples
+        }

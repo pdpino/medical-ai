@@ -214,6 +214,7 @@ def create_report_dataset_subset(dataset, max_n_words=None, max_n_sentences=None
     if max_n_words is None and max_n_sentences is None:
         return dataset
 
+    # FIXME: dataset.reports is no longer used!!
     stats = [
         (idx, len(report['tokens_idxs']), count_sentences(report['tokens_idxs']))
         for idx, report in enumerate(dataset.reports)

@@ -8,6 +8,6 @@ def get_step_fn_getter(model_name):
         return get_step_fn_coatt
     if model_name == 'h-coatt':
         return get_step_fn_h_coatt
-    if model_name.startswith('h-'):
+    if model_name.startswith('h-') or model_name == 'common-sentences':
         return get_step_fn_hierarchical
     return get_step_fn_flat

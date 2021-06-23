@@ -3,13 +3,6 @@ from torch import nn
 from torch.nn.functional import pad, one_hot
 from torch.nn.utils.rnn import pad_sequence
 
-def _extract_reports(dataset):
-    return [
-        # pylint: disable=not-callable
-        torch.tensor(report['tokens_idxs'])
-        for report in dataset.iter_reports_only()
-    ]
-
 class MostSimilarImage(nn.Module):
     """Returns the report from the most similar image.
 

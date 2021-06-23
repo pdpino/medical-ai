@@ -4,30 +4,39 @@ from torch import nn
 from torch.nn.functional import pad, one_hot
 from torch.nn.utils.rnn import pad_sequence
 
+
+def _assert_reports_amount(dataset, reports_by_id):
+    """Assert that iter_reports_only() method returns the correct amount of reports."""
+    n_dataset = len(dataset)
+    n_reports_only = len(reports_by_id)
+    if n_dataset != n_reports_only:
+        raise Exception(
+            f'Random received wrong reports amount: expected={n_dataset}, got={n_reports_only}',
+        )
+
+
 class RandomReport(nn.Module):
     """Returns a random report from a dataset."""
     def __init__(self, dataset):
         super().__init__()
 
-        self.reports = dataset.reports
-        self._prepare_for_random_selection()
+        self._prepare_for_random_selection(dataset)
 
         self.vocab_size = len(dataset.get_vocab())
 
-    def _prepare_for_random_selection(self):
-        if isinstance(self.reports, (list, tuple)):
-            self.report_choices = range(len(self.reports))
-        elif isinstance(self.reports, dict):
-            self.report_choices = list(self.reports.keys())
-        else:
-            raise Exception(f'dataset.reports type not recognized: {type(self.reports)}')
+    def _prepare_for_random_selection(self, dataset):
+        self.reports_by_id = dataset.get_reports_by_id()
+        assert isinstance(self.reports_by_id, dict)
+        _assert_reports_amount(dataset, self.reports_by_id)
+
+        self.report_choices = list(self.reports_by_id.keys())
 
     def _get_random_reports(self, n_reports):
         idxs_chosen = random.choices(self.report_choices, k=n_reports)
 
         reports = [
             # pylint: disable=not-callable
-            torch.tensor(self.reports[idx]['tokens_idxs'])
+            torch.tensor(self.reports_by_id[idx])
             for idx in idxs_chosen
         ]
         return reports

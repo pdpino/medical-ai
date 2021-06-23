@@ -1,6 +1,5 @@
 import argparse
 import logging
-from pprint import pprint
 import torch
 from torch.utils.data.dataset import Subset
 from ignite.engine import Engine
@@ -12,6 +11,7 @@ from medai.metrics.report_generation import (
     attach_attention_vs_masks,
     attach_losses_rg,
     attach_organ_by_sentence,
+    print_rg_metrics,
 )
 from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
 from medai.metrics.report_generation.writer import (
@@ -141,7 +141,7 @@ def evaluate_model_and_save(
         save_results(metrics, run_id, suffix=suffix)
 
         if not quiet:
-            pprint(metrics)
+            print_rg_metrics(metrics)
 
     return metrics
 

@@ -1,9 +1,12 @@
 import operator
 import logging
+from pprint import pprint
 import numpy as np
 from torch.nn.functional import interpolate
-from ignite.metrics import RunningAverage, MetricsLambda
+from ignite.metrics import MetricsLambda
 
+
+from medai.datasets.common.constants import CHEXPERT_DISEASES
 from medai.metrics import attach_losses
 from medai.metrics.segmentation.iou import IoU
 from medai.metrics.segmentation.iobb import IoBB
@@ -137,3 +140,24 @@ def attach_organ_by_sentence(engine, vocab, should_attach=True, device='cuda'):
 
     metric = OrganBySentence(vocab, output_transform=get_flat_reports, device=device)
     metric.attach(engine, 'organ-acc')
+
+
+def print_rg_metrics(metrics, ignore=CHEXPERT_DISEASES, splits='test'):
+    def _filter_metric(metric_name):
+        if ignore is not None:
+            return all(text not in metric_name for text in ignore)
+        return True
+
+    if isinstance(splits, str):
+        splits = (splits,)
+
+    to_print_metrics = {}
+    for split, mets in metrics.items():
+        if splits is not None and split not in splits:
+            continue
+        to_print_metrics[split] = {
+            k: v
+            for k, v in mets.items()
+            if _filter_metric(k)
+        }
+    pprint(to_print_metrics)

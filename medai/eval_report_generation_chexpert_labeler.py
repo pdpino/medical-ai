@@ -14,7 +14,7 @@ from sklearn.metrics import (
 
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.metrics import load_rg_outputs
-from medai.metrics.report_generation import chexpert
+from medai.metrics.report_generation import chexpert, print_rg_metrics
 from medai.utils.files import get_results_folder
 from medai.utils import (
     timeit_main,
@@ -22,7 +22,6 @@ from medai.utils import (
     get_timestamp,
     RunId,
     parsers,
-    print_rg_metrics,
 )
 
 LOGGER = logging.getLogger('medai.rg.eval.chexpert')

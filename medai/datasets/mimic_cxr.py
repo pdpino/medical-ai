@@ -166,6 +166,11 @@ class MIMICCXRDataset(Dataset):
                 len(self.organs),
             )
 
+        if not set(self.master_df['study_id']).issubset(self._reports):
+            _missing_reports = set(self._reports) - set(self.master_df['study_id'])
+            raise Exception(
+                f'Not all reports from DF are processed! {len(_missing_reports)}',
+            )
 
     def __len__(self):
         return len(self.master_df)
@@ -182,7 +187,7 @@ class MIMICCXRDataset(Dataset):
         if self.do_not_load_report:
             tokens = -1
         else:
-            report = self.reports[study_id]
+            report = self._reports[study_id]
             tokens = report['tokens_idxs']
 
         # Load image
@@ -235,7 +240,7 @@ class MIMICCXRDataset(Dataset):
             self.word_to_idx = load_vocab(self.reports_dir, reports_version, vocab_greater)
 
         # Compute final reports array
-        self.reports = dict()
+        self._reports = dict()
         for study_id in studies:
             report = reports_master_dict[str(study_id)]
 
@@ -247,7 +252,7 @@ class MIMICCXRDataset(Dataset):
                 for token in tokens
                 if token in self.word_to_idx
             ]
-            self.reports[study_id] = {
+            self._reports[study_id] = {
                 'clean_text': clean_text,
                 'tokens_idxs': tokens_idxs,
             }
@@ -259,6 +264,7 @@ class MIMICCXRDataset(Dataset):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
             label for each sample.
         """
+        # FIXME: self._reports is by report-filename, not by image-filename!!
         if isinstance(target_label, int):
             target_label = self.labels[target_label]
 
@@ -269,7 +275,7 @@ class MIMICCXRDataset(Dataset):
 
         return [
             (index, filename_to_label[report['filename']])
-            for index, report in enumerate(self.reports)
+            for index, report in enumerate(self._reports)
         ]
 
     def get_presence_for_no_finding(self):
@@ -297,5 +303,8 @@ class MIMICCXRDataset(Dataset):
         return rows.index
 
     ### API for dummy models
-    def iter_reports_only(self):
-        return self.reports.values()
+    def get_reports_by_id(self):
+        return {
+            idx: self._reports[study_id]['tokens_idxs']
+            for idx, study_id in enumerate(self.master_df['study_id'])
+        }

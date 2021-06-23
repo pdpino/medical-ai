@@ -11,8 +11,8 @@ from medai.utils.nlp import split_sentences_and_pad
 def _get_stats(dataset):
     sentence_appearances = Counter()
     sentence_counts = Counter()
-    for report in dataset.iter_reports_only():
-        report = split_sentences_and_pad(report['tokens_idxs'])
+    for item in dataset:
+        report = split_sentences_and_pad(item.report)
         sentence_counts[len(report)] += 1
         for sentence in report:
             sentence = sentence.tolist()

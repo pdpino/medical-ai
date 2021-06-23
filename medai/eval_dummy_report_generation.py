@@ -3,7 +3,7 @@ import logging
 import torch
 
 from medai.datasets import prepare_data_report_generation, AVAILABLE_REPORT_DATASETS
-from medai.datasets.common import LATEST_REPORTS_VERSION, CHEXPERT_DISEASES
+from medai.datasets.common import LATEST_REPORTS_VERSION
 from medai.models.checkpoint import load_compiled_model
 from medai.models.classification import create_cnn
 from medai.models.report_generation.dummy.constant import (
@@ -21,7 +21,6 @@ from medai.utils import (
     timeit_main,
     parsers,
     print_hw_options,
-    print_rg_metrics,
     RunId,
 )
 
@@ -86,12 +85,12 @@ def evaluate_dummy_model(model_name,
     LOGGER.info('Evaluating %s', run_id)
 
     # Decide hierarchical
-    is_hierarchical = _is_hierarchical(model_name)
+    hierarchical = _is_hierarchical(model_name)
 
     # Load datasets
     dataset_kwargs = {
         'dataset_name': dataset_name,
-        'hierarchical': is_hierarchical,
+        'hierarchical': hierarchical,
         'max_samples': max_samples,
         'norm_by_sample': norm_by_sample,
         'image_size': (image_size, image_size),
@@ -160,19 +159,18 @@ def evaluate_dummy_model(model_name,
     ]
 
     # Evaluate
-    metrics = evaluate_model_and_save(
+    evaluate_model_and_save(
         run_id,
         model,
         dataloaders,
-        hierarchical=is_hierarchical,
+        hierarchical=hierarchical,
         free_values=free_values,
         medical_correctness=medical_correctness,
         device=device,
         check_unclean=False,
+        quiet=quiet,
+        model_name=model_name,
     )
-
-    if not quiet:
-        print_rg_metrics(metrics, ignore=CHEXPERT_DISEASES)
 
     LOGGER.info('Evaluated %s', run_id)
 

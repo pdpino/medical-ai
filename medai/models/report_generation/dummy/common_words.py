@@ -9,8 +9,8 @@ def _get_stats(dataset):
     word_appearances = defaultdict(lambda: 0)
     reports_lens = Counter()
 
-    for report in dataset.iter_reports_only():
-        report = report['tokens_idxs']
+    for item in dataset:
+        report = item.report
         for word in report:
             word_appearances[word] += 1
         reports_lens[len(report)] += 1
