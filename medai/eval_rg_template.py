@@ -198,24 +198,43 @@ _BEST_CHEXPERT_ORDER = [
     'Fracture',
 ]
 
+_BEST_CHEXPERT_ORDER_v2 = [
+    # Support devices is moved to the end
+    'Cardiomegaly',
+    'Enlarged Cardiomediastinum',
+    'Consolidation',
+    'Lung Opacity',
+    'Atelectasis',
+    'Pleural Effusion',
+    'Pleural Other',
+    'Pneumonia',
+    'Pneumothorax',
+    'Edema',
+    'Lung Lesion',
+    'Fracture',
+    'Support Devices',
+]
+
 def _get_disease_order(order, dataset_name, diseases):
     if not order or order.lower() == 'none':
         return None
 
     if dataset_name in ('iu-x-ray', 'mini-mimic', 'mimic-cxr'):
-        ordered_diseases = _BEST_CHEXPERT_ORDER
-        if set(diseases) != set(ordered_diseases):
+        if set(diseases) != set(_BEST_CHEXPERT_ORDER):
             raise Exception('Using different set of diseases: ', diseases)
     else:
         raise Exception(f'Order not implemented for dataset {dataset_name}')
 
     if order == 'best':
-        return ordered_diseases
-    elif order == 'worst':
+        return _BEST_CHEXPERT_ORDER
+    if order == 'worst':
+        ordered_diseases = list(_BEST_CHEXPERT_ORDER)
         ordered_diseases.reverse()
         return ordered_diseases
-    else:
-        raise Exception(f'Order not recognized: {order}')
+    if order == 'best-v2':
+        return _BEST_CHEXPERT_ORDER_v2
+
+    raise Exception(f'Order not recognized: {order}')
 
 
 @timeit_main(LOGGER)
