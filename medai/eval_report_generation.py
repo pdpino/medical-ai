@@ -159,6 +159,7 @@ def evaluate_run(run_id,
                  override=False,
                  check_unclean=True,
                  quiet=False,
+                 load_mode='best',
                  ):
     """Evaluates a saved run."""
     LOGGER.info('Evaluating %s', run_id)
@@ -180,9 +181,9 @@ def evaluate_run(run_id,
             return
 
     # Load model
-    compiled_model = load_compiled_model_report_generation(run_id,
-                                                           device=device,
-                                                           multiple_gpu=multiple_gpu)
+    compiled_model = load_compiled_model_report_generation(
+        run_id, device=device, multiple_gpu=multiple_gpu, mode=load_mode,
+    )
 
     # Metadata contains all configuration
     metadata = compiled_model.metadata
@@ -271,6 +272,8 @@ def parse_args():
                         help='If present, use (runtime) medical-correctness metrics')
     parser.add_argument('--skip-check-unclean', action='store_true',
                         help='If present, do not check for unclean reports in the outputs')
+    parser.add_argument('--load-mode', type=str, default='best',
+                        help='Pick a load mode (best/save/<metric>)')
 
     parsers.add_args_free_values(parser)
     parsers.add_args_hw(parser, num_workers=4)
@@ -305,4 +308,5 @@ if __name__ == '__main__':
         batch_size=ARGS.batch_size,
         check_unclean=not ARGS.skip_check_unclean,
         quiet=ARGS.quiet,
+        load_mode=ARGS.load_mode,
     )

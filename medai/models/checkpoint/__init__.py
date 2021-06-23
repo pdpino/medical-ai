@@ -1,6 +1,5 @@
 """Provide checkpoint save/load functionality."""
 import os
-import re
 import json
 import logging
 from functools import partial
@@ -20,43 +19,11 @@ from medai.models.cls_spatial import create_cls_spatial_model
 from medai.models.detection import create_detection_seg_model
 from medai.models.cls_seg import create_cls_seg_model
 from medai.models.checkpoint.compiled_model import CompiledModel
+from medai.models.checkpoint.filenames import get_checkpoint_filepath
 from medai.utils.files import get_checkpoint_folder
 
 
 LOGGER = logging.getLogger(__name__)
-
-_CHECKPOINT_EPOCH_REGEX = re.compile(r'_\d+')
-
-def _get_checkpoint_fname_epoch(fname):
-    epoch = _CHECKPOINT_EPOCH_REGEX.search(fname)
-    if not epoch:
-        # Not a checkpoint file
-        return -1
-
-    epoch = epoch.group(0).strip('_')
-    return int(epoch)
-
-
-def _get_latest_filepath(folder):
-    files = [
-        (_get_checkpoint_fname_epoch(fname), fname)
-        for fname in os.listdir(folder)
-        if fname.endswith('.pt')
-    ]
-
-    if len(files) == 0:
-        raise Exception('Model filepath empty:', folder)
-
-    latest_epoch, latest_fname = max(files)
-
-    if latest_epoch == -1:
-        raise Exception('Model filepath not found: ', files)
-
-    LOGGER.debug(
-        'Loading from latest epoch: %d, out of epochs: %s',
-        latest_epoch, [f[0] for f in files],
-    )
-    return os.path.join(folder, latest_fname)
 
 
 def _load_meta(folder, run_id):
@@ -102,6 +69,7 @@ def _load_compiled_model_base(run_id,
                               multiple_gpu=False,
                               constructor=None,
                               assert_task=None,
+                              mode='best',
                               ):
     """Load a compiled model."""
     assert constructor is not None
@@ -135,7 +103,7 @@ def _load_compiled_model_base(run_id,
     compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
 
     # Filepath for the latest checkpoint
-    filepath = _get_latest_filepath(folder)
+    filepath = get_checkpoint_filepath(folder, mode=mode)
 
     # Actually load data
     checkpoint = torch.load(filepath, map_location=device)
@@ -193,8 +161,11 @@ def load_compiled_model(run_id, **kwargs):
 def load_compiled_model_report_generation(run_id,
                                           device='cuda',
                                           multiple_gpu=False,
+                                          mode='best',
                                           ):
     """Loads a report-generation CNN2Seq model."""
+    # TODO: reuse _load_compiled_model_base instead, as the other tasks
+
     assert run_id.task == 'rg'
 
     # Folder contains all pertaining files
@@ -225,7 +196,7 @@ def load_compiled_model_report_generation(run_id,
     compiled_model = CompiledModel(run_id, model, optimizer, lr_sch_handler, metadata)
 
     # Filepath for the latest checkpoint
-    filepath = _get_latest_filepath(folder)
+    filepath = get_checkpoint_filepath(folder, mode=mode)
 
     # Actually load data
     checkpoint = torch.load(filepath, map_location=device)
@@ -246,7 +217,11 @@ def attach_checkpoint_saver(run_id,
         LOGGER.warning('Checkpoint dry run: not saving model to disk')
         return
 
-    if metric is not None:
+    def _get_score_kwargs(metric):
+        """Given a metric, return extra-kwargs to save a checkpoint with the best metric value."""
+        if metric is None:
+            return {}
+
         _SHOULD_IGNORE_WARNING_METRICS = metric.startswith('chex_')
 
         def score_fn(unused_engine):
@@ -261,26 +236,49 @@ def attach_checkpoint_saver(run_id,
                 value = -value
             return value
 
-        early_kwargs = {
+        return {
             'score_function': score_fn,
             'score_name': metric,
             'greater_or_equal': True,
         }
-        LOGGER.info('Saving checkpoint by best "%s" value', metric)
+
+    if not isinstance(metric, (list, tuple)):
+        options = [metric]
     else:
-        LOGGER.warning('Model checkpoint is not saved by best metric value (not provided)')
-        early_kwargs = {}
+        options = metric
+
+    # Always save last checkpoint (for now)
+    if None not in options:
+        options.append(None)
+
+    if len(options) == 0:
+        LOGGER.error('Not saving any checkpoints!')
+        return
+
+    if options == [None,]:
+        LOGGER.warning(
+            'Model checkpoint is not saved by best metric-value (only LAST saved)',
+        )
+    else:
+        LOGGER.info(
+            'Saving checkpoints by best/last: %s',
+            [o if o is not None else 'LAST' for o in options]
+        )
+
 
     initial_epoch = compiled_model.get_current_epoch()
-
     folderpath = get_checkpoint_folder(run_id, save_mode=True)
-    checkpoint = Checkpoint(
-        compiled_model.to_save_checkpoint(),
-        DiskSaver(folderpath, require_empty=False, atomic=False),
-        global_step_transform=lambda _a, _b: trainer.state.epoch + initial_epoch,
-        **early_kwargs,
-    )
 
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint)
+    for option in options:
+        early_kwargs = _get_score_kwargs(option)
+
+        checkpoint = Checkpoint(
+            compiled_model.to_save_checkpoint(),
+            DiskSaver(folderpath, require_empty=False, atomic=False),
+            global_step_transform=lambda _a, _b: trainer.state.epoch + initial_epoch,
+            **early_kwargs,
+        )
+
+        trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpoint)
 
     return

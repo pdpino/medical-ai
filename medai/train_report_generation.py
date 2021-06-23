@@ -534,9 +534,6 @@ def train_from_scratch(run_name,
     if frontal_only and not supervise_attention: # If supervise attention, frontal_only is implied
         run_name += '_front'
 
-    if checkpoint_metric in ('bleu', 'rougeL', 'ciderD'):
-        run_name += f'_best-{checkpoint_metric}'
-
     # Is deprecated
     if decoder_name in DEPRECATED_DECODERS:
         raise Exception(f'RG model is deprecated: {decoder_name}')
@@ -776,7 +773,7 @@ def parse_args():
                         help='Lambda for sent loss')
     parser.add_argument('--skip-organ-by-sentence', action='store_true',
                         help='If present, do not attach organ-by-sentence metrics')
-    parser.add_argument('--checkpoint-metric', type=str, default=None,
+    parser.add_argument('--checkpoint-metric', type=str, default=None, nargs='+',
                         help='If present, save checkpoints with best value')
 
     decoder_group = parser.add_argument_group('Decoder')
