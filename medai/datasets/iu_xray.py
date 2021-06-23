@@ -9,6 +9,7 @@ from medai.datasets.common import (
     BatchItem,
     CHEXPERT_LABELS,
     COATT_LABELS,
+    IU_MTI_TAGS,
     JSRT_ORGANS,
     UP_TO_DATE_MASKS_VERSION,
     LATEST_REPORTS_VERSION,
@@ -214,6 +215,9 @@ class IUXRayDataset(Dataset):
             # HACKy way to solve this!
             self.labels = list(COATT_LABELS)
             load_from = 'coatt'
+        elif labels == 'mti' or labels == ['mti']:
+            self.labels = list(IU_MTI_TAGS)
+            load_from = 'mti'
         else:
             self.labels = [l for l in labels if l in CHEXPERT_LABELS]
 
@@ -231,6 +235,9 @@ class IUXRayDataset(Dataset):
         elif load_from == 'coatt':
             path = os.path.join(DATASET_DIR, 'coatt-labels',
                                 'metadata.csv')
+            self.labels_df = pd.read_csv(path)
+        elif load_from == 'mti':
+            path = os.path.join(DATASET_DIR, 'mti-tags.csv')
             self.labels_df = pd.read_csv(path)
 
         # Save in a more convenient storage for __getitem__
@@ -251,6 +258,7 @@ class IUXRayDataset(Dataset):
         """Returns a list of tuples (idx, 0/1) indicating presence/absence of a
             label for each sample.
         """
+        # FIXME: labels_df is by report-filename, not by image-filename!!
         if isinstance(target_label, int):
             target_label = self.labels[target_label]
 

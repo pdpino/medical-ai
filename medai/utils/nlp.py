@@ -239,7 +239,7 @@ def split_sentences_text(report, end_token=END_OF_SENTENCE_TOKEN):
 
     assert isinstance(report, list), 'Report must be a list or str'
 
-    if report[-1] != end_token:
+    if len(report) > 0 and report[-1] != end_token:
         report.append(end_token)
 
     sentences = []

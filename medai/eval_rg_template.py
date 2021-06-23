@@ -182,25 +182,25 @@ def _get_threshold(cl_run_id, mode, diseases, device='cuda'):
     ]).to(device)
 
 
+_BEST_CHEXPERT_ORDER = [
+    'Cardiomegaly',
+    'Enlarged Cardiomediastinum',
+    'Consolidation',
+    'Lung Opacity',
+    'Atelectasis',
+    'Support Devices',
+    'Pleural Effusion',
+    'Pleural Other',
+    'Pneumonia',
+    'Pneumothorax',
+    'Edema',
+    'Lung Lesion',
+    'Fracture',
+]
+
 def _get_disease_order(order, dataset_name, diseases):
     if not order or order.lower() == 'none':
         return None
-
-    _BEST_CHEXPERT_ORDER = [
-        'Cardiomegaly',
-        'Enlarged Cardiomediastinum',
-        'Consolidation',
-        'Lung Opacity',
-        'Atelectasis',
-        'Support Devices',
-        'Pleural Effusion',
-        'Pleural Other',
-        'Pneumonia',
-        'Pneumothorax',
-        'Edema',
-        'Lung Lesion',
-        'Fracture',
-    ]
 
     if dataset_name in ('iu-x-ray', 'mini-mimic', 'mimic-cxr'):
         ordered_diseases = _BEST_CHEXPERT_ORDER

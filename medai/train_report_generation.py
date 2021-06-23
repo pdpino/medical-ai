@@ -499,6 +499,8 @@ def train_from_scratch(run_name,
     if labels is not None:
         if labels == 'coatt-labels' or labels == ['coatt-labels']:
             run_name += '_labels210'
+        elif labels == 'mti' or labels == ['mti']:
+            run_name += '_labels-mti'
         else:
             run_name += f'_labels{len(labels)}'
     run_name += f'_lr{lr}'

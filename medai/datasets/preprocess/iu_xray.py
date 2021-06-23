@@ -53,7 +53,46 @@ def load_raw_reports(first_clean=True):
 
     return reports_dict
 
-def clean_reports(reports_dict, impression_fallback=True):
+
+def _report_meta_to_text(report, errors, impression_fallback=True,
+                         concat_if=False, concat_fi=False):
+    filename = report['filename']
+
+    n_images = len(report['images'])
+    if n_images == 0:
+        errors['no-images'].append(filename)
+        return None
+
+    findings = report['findings']
+    impression = report['impression']
+
+    if findings is None:
+        errors['findings-none'].append(filename)
+    elif impression is None:
+        errors['impression-none'].append(filename)
+
+    if concat_if or concat_fi:
+        # Concatenate impression + findings
+        if concat_if:
+            to_concat = [impression, findings]
+        else:
+            to_concat = [findings, impression]
+        text = ' . '.join(t for t in to_concat if t is not None)
+
+    else:
+        # Use findings, optionally fallback to impression
+        text = findings
+        if findings is None and impression_fallback:
+            text = impression
+
+    if not text:
+        errors['text-none'].append(filename)
+        return None
+
+    return text
+
+
+def clean_reports(reports_dict, **kwargs):
     token_appearances = Counter()
     errors = defaultdict(list)
 
@@ -61,26 +100,10 @@ def clean_reports(reports_dict, impression_fallback=True):
 
     for report in reports_dict.values():
         filename = report['filename']
-        findings = report['findings']
-        impression = report['impression']
-
-        n_images = len(report['images'])
-        if n_images == 0:
-            errors['no-images'].append(filename)
-            continue
-
-        text = findings
-        if findings is None and impression_fallback:
-            text = impression
+        text = _report_meta_to_text(report, errors, **kwargs)
 
         if text is None:
-            errors['text-none'].append(filename)
             continue
-
-        if findings is None:
-            errors['findings-none'].append(filename)
-        elif impression is None:
-            errors['impression-none'].append(filename)
 
         # Clean and tokenize text
         tokens = []

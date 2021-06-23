@@ -128,6 +128,8 @@ class CacheLookupLabeler(HolisticLabeler):
 
 class NBatchesLabeler(HolisticLabeler):
     """Calls the child labeler splitting the reports in n-batches."""
+    LIMIT_PER_BATCH = 10000
+
     def __init__(self, labeler, batches=None):
         super().__init__(labeler)
 
@@ -135,9 +137,8 @@ class NBatchesLabeler(HolisticLabeler):
 
     def redecide_n_batches(self, n_reports):
         if self.n_batches is None:
-            batch_default_limit = 35000
-            if n_reports > batch_default_limit:
-                self.n_batches = math.ceil(n_reports / batch_default_limit)
+            if n_reports > self.LIMIT_PER_BATCH:
+                self.n_batches = math.ceil(n_reports / self.LIMIT_PER_BATCH)
             else:
                 self.n_batches = 1
 

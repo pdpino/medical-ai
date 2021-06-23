@@ -1,5 +1,6 @@
 import argparse
 import logging
+from pprint import pprint
 import torch
 from torch.utils.data.dataset import Subset
 from ignite.engine import Engine
@@ -102,6 +103,7 @@ def evaluate_model_and_save(
         free_values=[False, True],
         check_unclean=True,
         model_name='lstm',
+        quiet=False,
         ):
     """Evaluates a model in ."""
     evaluate_kwargs = {
@@ -138,6 +140,9 @@ def evaluate_model_and_save(
 
         save_results(metrics, run_id, suffix=suffix)
 
+        if not quiet:
+            pprint(metrics)
+
     return metrics
 
 
@@ -153,6 +158,7 @@ def evaluate_run(run_id,
                  max_samples=None,
                  override=False,
                  check_unclean=True,
+                 quiet=False,
                  ):
     """Evaluates a saved run."""
     LOGGER.info('Evaluating %s', run_id)
@@ -232,6 +238,7 @@ def evaluate_run(run_id,
         free_values=free_values,
         check_unclean=check_unclean,
         model_name=model_name,
+        quiet=quiet,
     )
 
 
@@ -256,6 +263,8 @@ def parse_args():
     #                     help='If present, normalize each sample (instead of using dataset stats)')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
+    parser.add_argument('--quiet', action='store_true',
+                        help='Do not print metrics to stdout')
     parser.add_argument('--override', action='store_true',
                         help='Whether to override previous results')
     parser.add_argument('--use-med', action='store_true',
@@ -283,18 +292,17 @@ if __name__ == '__main__':
 
     print_hw_options(DEVICE, ARGS)
 
-    evaluate_run(run_id=RunId(ARGS.run_name, not ARGS.no_debug, 'rg'),
-                 free_values=ARGS.free_values,
-                 dataset_types=ARGS.eval_in,
-                 multiple_gpu=ARGS.multiple_gpu,
-                 device=DEVICE,
-                 medical_correctness=ARGS.use_med,
-                 n_epochs=ARGS.epochs,
-                 max_samples=ARGS.max_samples,
-                 override=ARGS.override,
-                 batch_size=ARGS.batch_size,
-                 check_unclean=not ARGS.skip_check_unclean,
-                #  frontal_only=ARGS.frontal_only,
-                #  image_size=ARGS.image_size,
-                #  norm_by_sample=ARGS.norm_by_sample,
-                 )
+    evaluate_run(
+        run_id=RunId(ARGS.run_name, not ARGS.no_debug, 'rg'),
+        free_values=ARGS.free_values,
+        dataset_types=ARGS.eval_in,
+        multiple_gpu=ARGS.multiple_gpu,
+        device=DEVICE,
+        medical_correctness=ARGS.use_med,
+        n_epochs=ARGS.epochs,
+        max_samples=ARGS.max_samples,
+        override=ARGS.override,
+        batch_size=ARGS.batch_size,
+        check_unclean=not ARGS.skip_check_unclean,
+        quiet=ARGS.quiet,
+    )
