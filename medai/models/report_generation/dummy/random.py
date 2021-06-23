@@ -31,29 +31,29 @@ class RandomReport(nn.Module):
 
         self.report_choices = list(self.reports_by_id.keys())
 
-    def _get_random_reports(self, n_reports):
+    def _get_random_reports(self, n_reports, device='cuda'):
         idxs_chosen = random.choices(self.report_choices, k=n_reports)
 
         reports = [
             # pylint: disable=not-callable
-            torch.tensor(self.reports_by_id[idx])
+            torch.tensor(self.reports_by_id[idx], device=device)
             for idx in idxs_chosen
         ]
         return reports
 
     def forward(self, images, reports=None, free=False, **unused_kwargs):
-        batch_size = images.size()[0]
+        batch_size = images.size(0)
         device = images.device
 
-        output_reports = self._get_random_reports(batch_size)
+        output_reports = self._get_random_reports(batch_size, device=device)
         # list of lists
 
         output_reports = pad_sequence(output_reports, batch_first=True)
         # tensor of shape batch_size, n_words
 
         if reports is not None and not free:
-            n_words_target = reports.size()[1]
-            n_words_current = output_reports.size()[1]
+            n_words_target = reports.size(1)
+            n_words_current = output_reports.size(1)
 
             if n_words_current >= n_words_target:
                 output_reports = output_reports[:, :n_words_target]
@@ -65,7 +65,5 @@ class RandomReport(nn.Module):
 
         output_reports = one_hot(output_reports, num_classes=self.vocab_size).float()
         # shape: batch_size, n_words, vocab_size
-
-        output_reports = output_reports.to(device)
 
         return (output_reports,)
