@@ -212,7 +212,12 @@ def attach_checkpoint_saver(run_id,
                             metric=None,
                             dryrun=False,
                             ):
-    """Attach a Checkpoint handler to a validator to persist to disk a CompiledModel."""
+    """Attach a Checkpoint handler to a validator to persist to disk a CompiledModel.
+
+    By default:
+    - if metric(s) is (are) provided, only will save best models (not saving last model)
+    - if no metrics provided, will save last model
+    """
     if dryrun:
         LOGGER.warning('Checkpoint dry run: not saving model to disk')
         return
@@ -247,13 +252,8 @@ def attach_checkpoint_saver(run_id,
     else:
         options = metric
 
-    # Always save last checkpoint (for now)
-    if None not in options:
-        options.append(None)
-
     if len(options) == 0:
-        LOGGER.error('Not saving any checkpoints!')
-        return
+        options.append(None)
 
     if options == [None,]:
         LOGGER.warning(
