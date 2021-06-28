@@ -907,6 +907,13 @@ def parse_args():
             debug=False, # NOTE: Even when debugging, --no-debug pre-cnns are more common
             task=args.cnn_pretrained_task,
         )
+        # Warning if pre-trained on a different dataset
+        pre_dataset = args.precnn_run_id.get_dataset_name()
+        if pre_dataset != args.dataset:
+            LOGGER.warning(
+                'Using CNN pretrained on a different dataset: pre=%s vs current=%s',
+                pre_dataset, args.dataset,
+            )
     else:
         args.precnn_run_id = None
 
