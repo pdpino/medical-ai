@@ -65,6 +65,7 @@ def _patterns_to_matcher(patterns, vocab):
 class AbnormalityLabeler:
     """Label reports using a Keyword approach, using patterns to detect negation."""
     name = 'some-name'
+    metric_name = 'some-metric-name'
     diseases = ['dis1', 'dis2']
     patterns = {}
 
@@ -79,12 +80,17 @@ class AbnormalityLabeler:
     def __init__(self, vocab, device='cuda'):
         self._device = device
 
+        self._check_patterns_valid()
+
         self.negation_matcher = _patterns_to_matcher(self.patterns['neg'], vocab)
 
         self.disease_matchers = [
             _patterns_to_matcher(self.patterns[disease], vocab)
             for disease in self.diseases
         ]
+
+    def _check_patterns_valid(self):
+        assert 'neg' in self.patterns, 'No pattern for negation!'
 
     def _reset_matchers(self):
         self.negation_matcher.reset()
@@ -99,27 +105,22 @@ class AbnormalityLabeler:
             matcher.update(word)
 
     def _close_matchers(self):
-        negation = self.negation_matcher.close()
-        forced_zero = 1 - negation
+        negate = int(self.negation_matcher.close() == 1)
 
-        # pylint: disable=not-callable
-        return torch.tensor([
-            min(matcher.close(), forced_zero)
-            for matcher in self.disease_matchers
-        ], dtype=torch.uint8, device=self._device)
+        labels = []
+        for matcher in self.disease_matchers:
+            result = matcher.close() # All matchers must be closed
+            if negate and result == 1:
+                result = 0
 
-    def __call__(self, reports):
-        return self.label_reports(reports)
-
-    def label_reports(self, reports):
-        return torch.stack([
-            self.label_report(report)
-            for report in reports
-        ], dim=0)
-        # shape: n_reports, n_labels
+            labels.append(result)
+        return torch.CharTensor(labels, device=self._device)
 
     def label_report(self, report):
-        labels = torch.zeros(len(self.diseases), dtype=torch.uint8, device=self._device)
+        if isinstance(report, str):
+            report = report.split()
+
+        labels = torch.CharTensor([-2] * len(self.diseases), device=self._device)
 
         self._reset_matchers()
 
@@ -139,3 +140,15 @@ class AbnormalityLabeler:
             labels = torch.maximum(self._close_matchers(), labels)
 
         return labels
+
+    def label_reports(self, reports):
+        assert isinstance(reports, list), f'reports must be a list, got {type(reports)}'
+
+        return torch.stack([
+            self.label_report(report)
+            for report in reports
+        ], dim=0)
+        # shape: n_reports, n_labels
+
+    def __call__(self, reports):
+        return self.label_reports(reports)
