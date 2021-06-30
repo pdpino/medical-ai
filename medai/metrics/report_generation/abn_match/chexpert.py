@@ -12,7 +12,6 @@ from medai.metrics.report_generation.abn_match.matchers import (
 from medai.metrics.report_generation.abn_match.labeler import AbnormalityLabeler
 
 _CHEXPERT_PATTERNS = {
-    'neg': r'\b(no|without|free|not|removed|negative|clear|resolved)\b',
     'Enlarged Cardiomediastinum': AnyGroupPattern(
         AllGroupsPattern(r'cardiomediastinum|\bmediastinum|mediastinal', r'large|prominen|widen'),
         AllGroupsPattern('hilar', 'contour', r'large|prominen'),
@@ -38,7 +37,7 @@ _CHEXPERT_PATTERNS = {
         AllWordsPattern('cavitary', 'lesion'),
     ),
     'Lung Opacity': AnyGroupPattern(
-        r'opaci|infilitrate|infiltration|reticulation|scar',
+        r'opaci|infiltrate|infiltration|reticulation|scar',
         AllGroupsPattern(r'interstitial|reticular', r'marking|pattern|lung'),
         AllGroupsPattern(r'air[\s\-]*space', 'disease'),
         AllWordsPattern('parenchymal', 'scarring'),

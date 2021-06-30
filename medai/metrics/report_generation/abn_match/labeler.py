@@ -2,7 +2,7 @@ import logging
 import re
 import torch
 
-from medai.utils.nlp import END_OF_SENTENCE_IDX, END_IDX
+from medai.utils.nlp import END_OF_SENTENCE_IDX, END_IDX, END_OF_SENTENCE_TOKEN, END_TOKEN
 from medai.metrics.report_generation.abn_match import matchers
 
 LOGGER = logging.getLogger(__name__)
@@ -19,47 +19,77 @@ LOGGER = logging.getLogger(__name__)
 # if there is a negation already. This may make things even faster!
 
 
-def _resolve_regex_to_word_idxs(pattern, vocab):
+def _resolve_regex_to_word_idxs(pattern, vocab, use_idx=True):
     assert isinstance(pattern, str)
     re_pattern = re.compile(pattern)
     matched_words = [
-        idx
+        idx if use_idx else word
         for word, idx in vocab.items()
         if re_pattern.search(word)
     ]
 
     return matched_words
 
-def _patterns_to_matcher(patterns, vocab):
+def _patterns_to_matcher(patterns, vocab, use_idx=True):
     if isinstance(patterns, str):
-        targets = _resolve_regex_to_word_idxs(patterns, vocab)
+        targets = _resolve_regex_to_word_idxs(patterns, vocab, use_idx=use_idx)
+        if len(targets) == 0:
+            LOGGER.warning('Pattern matched no words from the vocab: %s', patterns)
         return matchers.AnyWordMatcher(targets)
 
     if isinstance(patterns, matchers.AllWordsPattern):
-        words_idx = [vocab.get(word, -1) for word in patterns]
+        targets = []
+        absent_words = []
+        for word in patterns:
+            idx = vocab.get(word, -1)
+            if idx == -1:
+                absent_words.append(word)
+            targets.append(idx if use_idx else word)
 
-        absent_words = [
-            word
-            for word, idx in zip(patterns, words_idx)
-            if idx == -1
-        ]
         if absent_words:
             LOGGER.warning('AllWordsMatcher: exact-words not found in vocab: %s', absent_words)
-        return matchers.AllWordsMatcher(words_idx)
+        return matchers.AllWordsMatcher(targets)
+
+    if isinstance(patterns, matchers.BodyPartStatusPattern):
+        assert len(patterns) == 3
+
+        return matchers.BodyPartStatusMatcher(*[
+            _patterns_to_matcher(pattern, vocab, use_idx)
+            for pattern in patterns
+        ])
+
 
     if isinstance(patterns, matchers.AllGroupsPattern):
-        return matchers.MatcherGroupAll([
-            _patterns_to_matcher(pattern, vocab)
-            for pattern in patterns
-        ])
+        MatcherClass = matchers.MatcherGroupAll
+    elif isinstance(patterns, matchers.AnyGroupPattern):
+        MatcherClass = matchers.MatcherGroupAny
+    else:
+        raise Exception(f'Internal error: pattern type not understood {type(patterns)}')
 
-    if isinstance(patterns, matchers.AnyGroupPattern):
-        return matchers.MatcherGroupAny([
-            _patterns_to_matcher(pattern, vocab)
-            for pattern in patterns
-        ])
+    return MatcherClass([
+        _patterns_to_matcher(pattern, vocab, use_idx)
+        for pattern in patterns
+    ])
 
-    raise Exception(f'Internal error: pattern type not understood {type(patterns)}')
+
+
+_NEG_PATTERN = r'\b(no|without|free|not|removed|negative|clear|resolved)\b'
+
+
+class PunctuationHandler:
+    def __init__(self, use_idx=True):
+        if use_idx:
+            self._is_end = lambda x: x == END_IDX
+            self._is_end_of_sentence = lambda x: x == END_OF_SENTENCE_IDX
+        else:
+            self._is_end = lambda x: x == END_TOKEN
+            self._is_end_of_sentence = lambda x: x == END_OF_SENTENCE_TOKEN
+
+    def is_end(self, token):
+        return self._is_end(token)
+
+    def is_end_of_sentence(self, token):
+        return self._is_end_of_sentence(token)
 
 
 class AbnormalityLabeler:
@@ -77,20 +107,23 @@ class AbnormalityLabeler:
     use_timer = False
     use_cache = False
 
-    def __init__(self, vocab, device='cuda'):
+    def __init__(self, vocab, use_idx=True, device='cuda'):
         self._device = device
 
         self._check_patterns_valid()
 
-        self.negation_matcher = _patterns_to_matcher(self.patterns['neg'], vocab)
+        self.punctuation_handler = PunctuationHandler(use_idx)
+
+        self.negation_matcher = _patterns_to_matcher(_NEG_PATTERN, vocab, use_idx)
 
         self.disease_matchers = [
-            _patterns_to_matcher(self.patterns[disease], vocab)
+            _patterns_to_matcher(self.patterns[disease], vocab, use_idx)
             for disease in self.diseases
         ]
 
     def _check_patterns_valid(self):
-        assert 'neg' in self.patterns, 'No pattern for negation!'
+        for value in self.patterns.values():
+            assert isinstance(value, (str, matchers.Patterns))
 
     def _reset_matchers(self):
         self.negation_matcher.reset()
@@ -126,10 +159,10 @@ class AbnormalityLabeler:
 
         is_closed = False
         for word in report:
-            if word == END_IDX:
+            if self.punctuation_handler.is_end(word):
                 break
 
-            if word == END_OF_SENTENCE_IDX:
+            if self.punctuation_handler.is_end_of_sentence(word):
                 labels = torch.maximum(self._close_matchers(), labels)
                 is_closed = True
             else:
