@@ -214,6 +214,7 @@ class LightLabeler(ABC):
 class ChexpertLightLabeler(LightLabeler):
     name = 'chexpert'
     diseases = CHEXPERT_LABELS
+    metric_name = 'chex'
 
     no_finding_idx = 0
     support_idxs = 13
@@ -231,6 +232,7 @@ class ChexpertLightLabeler(LightLabeler):
 class DummyLabeler(LightLabeler):
     """Use it for debugging!!."""
     name = 'dummy'
+    metric_name = 'dummy'
     diseases = CHEXPERT_LABELS
 
     no_finding_idx = 0

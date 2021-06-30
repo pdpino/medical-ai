@@ -13,7 +13,7 @@ from medai.metrics.report_generation.labeler_correctness.light_labeler import (
 from medai.metrics.report_generation.labeler_correctness.labeler_timer import LabelerTimerMetric
 from medai.metrics.report_generation.labeler_correctness.cache import LABELER_CACHE_DIR
 from medai.metrics.report_generation.labeler_correctness.hit_counter_metric import HitCounterMetric
-from medai.metrics.report_generation.labeler_correctness.lighter_labeler import (
+from medai.metrics.report_generation.abn_match.chexpert import (
     ChexpertLighterLabeler,
 )
 from medai.metrics.report_generation.transforms import get_flat_reports
@@ -27,9 +27,9 @@ _LOCK_FOLDER = LABELER_CACHE_DIR
 _LOCK_NAME = 'medical-correctness-cache'
 
 _LABELER_CLASSES = {
-    'dummy': ('dummy', DummyLabeler),
-    'lighter-chexpert': ('lighter-chex', ChexpertLighterLabeler),
-    'light-chexpert': ('chex', ChexpertLightLabeler),
+    'dummy': DummyLabeler,
+    'lighter-chexpert': ChexpertLighterLabeler,
+    'light-chexpert': ChexpertLightLabeler,
 }
 
 AVAILABLE_MED_LABELERS = list(_LABELER_CLASSES)
@@ -160,7 +160,7 @@ def attach_medical_correctness(trainer, validator, vocab,
 
     if metric not in _LABELER_CLASSES:
         raise Exception(f'Metric not found {metric}')
-    labeler_name, LabelerClass = _LABELER_CLASSES[metric]
+    LabelerClass = _LABELER_CLASSES[metric]
 
     if metric == 'dummy':
         LOGGER.warning('Attaching DUMMY med metrics!!')
@@ -190,7 +190,7 @@ def attach_medical_correctness(trainer, validator, vocab,
             usage = val_usage
 
         labeler = LabelerClass(vocab)
-        _attach_labeler(engine, labeler, labeler_name, device=device, usage=usage)
+        _attach_labeler(engine, labeler, labeler.metric_name, device=device, usage=usage)
 
     if needs_lock:
         def _release_locks(engine, err=None):
