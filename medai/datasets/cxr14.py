@@ -183,7 +183,8 @@ class CXR14Dataset(Dataset):
         image_fname = row[0]
 
         # Extract labels
-        labels = torch.ByteTensor(row[self.labels])
+        # pylint: disable=not-callable
+        labels = torch.tensor(row[self.labels], dtype=torch.uint8)
 
         image_fpath = os.path.join(self.image_dir, image_fname)
         image = load_image(image_fpath, self.image_format)

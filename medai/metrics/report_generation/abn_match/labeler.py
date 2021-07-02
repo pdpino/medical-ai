@@ -110,7 +110,7 @@ class AbnormalityLabeler:
     def __init__(self, vocab, use_idx=True, device='cuda'):
         self._device = device
 
-        self._check_patterns_valid()
+        self.__check_patterns_valid()
 
         self.punctuation_handler = PunctuationHandler(use_idx)
 
@@ -121,9 +121,17 @@ class AbnormalityLabeler:
             for disease in self.diseases
         ]
 
-    def _check_patterns_valid(self):
+    def __check_patterns_valid(self):
         for value in self.patterns.values():
             assert isinstance(value, (str, matchers.Patterns))
+
+    def __init_array(self, array):
+        # pylint: disable=not-callable
+        return torch.tensor(
+            array,
+            dtype=torch.int8,
+            device=self._device,
+        )
 
     def _reset_matchers(self):
         self.negation_matcher.reset()
@@ -147,13 +155,13 @@ class AbnormalityLabeler:
                 result = 0
 
             labels.append(result)
-        return torch.CharTensor(labels, device=self._device)
+        return self.__init_array(labels)
 
     def label_report(self, report):
         if isinstance(report, str):
             report = report.split()
 
-        labels = torch.CharTensor([-2] * len(self.diseases), device=self._device)
+        labels = self.__init_array([-2] * len(self.diseases))
 
         self._reset_matchers()
 
@@ -171,6 +179,8 @@ class AbnormalityLabeler:
 
         if not is_closed:
             labels = torch.maximum(self._close_matchers(), labels)
+
+        labels[labels == -2] = 0
 
         return labels
 

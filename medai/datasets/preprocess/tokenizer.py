@@ -39,36 +39,50 @@ def remove_repeated_garbage(tokens):
 
 
 _TYPOS = {
-    'telehpone': 'telephone',
     'addedd': 'added',
     'antibioic': 'antibiotic',
+    'asdiscussed': ('as', 'discussed'),
+    'betweeen': 'between',
+    'cardkiopulmonary': 'cardiopulmonary',
+    'clinnically': 'clinically',
+    'consolidatio': 'consolidation',
     'conven8tional': 'conven8tional',
+    'cut=rrent': 'current',
+    'dgenerative': 'degenerative',
+    'differntial': 'differential',
+    'histoplasmoma': 'histoplasmosis',
+    'howeve': 'however',
+    'iscussed': 'discussed',
+    'lessl': 'less',
+    'litttle': 'little',
+    'lkiely': 'likely',
+    'mildf': 'mild',
+    'morel': 'more',
+    'neertheless': 'nevertheless',
+    'pacification': 'opacification',
+    'pneumothorace': 'pneumothorax',
     'possiblle': 'possible',
     'possiby': 'possibly',
-    'lkiely': 'likely',
-    'clinnically': 'clinically',
-    'cardkiopulmonary': 'cardiopulmonary',
-    'differntial': 'differential',
-    'dgenerative': 'degenerative',
     'possibilitiy': 'possibility',
-    'mildf': 'mild',
-    'litttle': 'little',
     'proces': 'process',
-    'pacification': 'opacification',
-    'cut=rrent': 'current',
-    'neertheless': 'nevertheless',
-    'morel': 'more',
-    'lessl': 'less',
     'represet': 'represent',
-    'iscussed': 'discussed',
-    'wered': 'were',
-    'asdiscussed': ('as', 'discussed'),
-    'howeve': 'however',
-    'consolidatio': 'consolidation',
-    'betweeen': 'between',
+    'telehpone': 'telephone',
     'vasculaturity': 'vascularity',
-    'histoplasmoma': 'histoplasmosis',
+    'wered': 'were',
 }
+# New ones:
+# 'opacityfor': ('opacity', 'for'),
+# 'radioopacity': 'radiopacity',
+# opacificationis: opacification, is
+# opacifiction: opacification
+# opacifcation: opacification
+# opacifaction: opacification
+# opacificaiton: opacification
+# opacitycan: opacity, can
+# opacitites: opacities
+# opacit: opacity
+# opacitiy: opacity
+# opacify: opacity
 
 _ENDS_WITH_PUNCTUATION = re.compile(r'([A-Za-z]+)[\-_\.]+\Z')
 _STARTS_WITH_PUNCTUATION = re.compile(r'\A[\-_\.]+([A-Za-z]+)')
@@ -180,9 +194,14 @@ def _text_to_tokens(text):
     text = re.sub(r'[,=]\.', ' . ', text)
     text = re.sub(r'\.\/', ' / ', text)
 
+    # Remove ofuscator
+    # text = re.sub('xxxx', ' ', text)
+
     tokens = []
     for token in text.split():
         token = clean_token(token)
+        if not token:
+            continue
         if isinstance(token, (tuple, list)):
             tokens.extend(token)
         elif isinstance(token, str):
@@ -192,7 +211,22 @@ def _text_to_tokens(text):
     tokens = remove_initial_punctuation(tokens)
     tokens = remove_repeated_garbage(tokens)
 
+    # Avoid empty tokens! # REVIEW: does this work?
+    tokens = [t for t in tokens if len(t) > 0]
+
     # TODO: simple stemming?
+    # TODO: improve tokenizer:
+    # "NUMBER %"
+    # "near number %." (dot is next to the other token)
+    #
+    # TODO: Check punctutaion: left-parenthesis should be a dot?
+    # """no focal consolidation , pneumothorax ,
+    # or large pleural effusion identified ( blunting of costophrenic recesses bilaterally
+    # may represent small effusions or pleural thickening / scar ."""
+    #
+    # TODO: check wrong images?
+    # IU: "there are midfoot degenerative changes..."
+    # IU: "...appearance of the orthopedic"
 
     # Assure ending dot
     if len(tokens) >= 1 and tokens[-1] != '.':

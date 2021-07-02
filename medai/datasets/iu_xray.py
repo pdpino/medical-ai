@@ -241,7 +241,8 @@ class IUXRayDataset(Dataset):
         self.labels_by_report = dict()
         for _, row in self.labels_df.iterrows():
             filename = row['filename']
-            labels = torch.ByteTensor(row[self.labels])
+            # pylint: disable=not-callable
+            labels = torch.tensor(row[self.labels], dtype=torch.uint8)
 
             # # If all labels are 0 --> set no-findings==1
             # # (notice no-findings and support-devices are ignored)

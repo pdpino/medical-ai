@@ -146,7 +146,8 @@ class ChexpertDataset(Dataset):
         image_fname = row['Path']
 
         # Extract labels
-        labels = torch.ByteTensor(row[self.labels])
+        # pylint: disable=not-callable
+        labels = torch.tensor(row[self.labels], dtype=torch.uint8)
 
         # Load image
         image_fpath = os.path.join(self.image_dir, image_fname)

@@ -11,7 +11,7 @@ from tqdm.auto import tqdm
 import pandas as pd
 
 from medai.datasets.common.sentences2organs.compute import save_sentences_with_organs
-from medai.datasets.preprocess.tokenize import text_to_tokens
+from medai.datasets.preprocess.tokenizer import text_to_tokens
 from medai.datasets.preprocess.common import (
     assert_reports_not_exist,
     save_clean_reports,
@@ -32,18 +32,19 @@ def load_raw_reports_df():
     reports_df = pd.read_csv(fpath, header=None, names=['study', 'text'])
     reports_df.dropna(axis=0, inplace=True, how='any')
 
-    # As a fallback, load sectioned DF,
+    # Also load sectioned_df
     fpath = os.path.join(REPORTS_DIR, 'mimic_cxr_sectioned.csv')
     sectioned_df = pd.read_csv(fpath)
     # Columns: study, impression, findings, last_paragraph, comparison
 
     # Merge with original
-    reports_df = reports_df.merge(sectioned_df, how='left', on='study')
+    reports_df = reports_df.merge(sectioned_df, how='outer', on='study')
 
     return reports_df
 
+_TARGET_KEYS = ['text', 'findings', 'impression', 'last_paragraph', 'comparison']
 
-def clean_reports(reports_df):
+def clean_reports(reports_df, target_keys=_TARGET_KEYS):
     errors = defaultdict(list)
     token_appearances = Counter()
 
@@ -59,12 +60,15 @@ def clean_reports(reports_df):
         text = ''
         tokens = []
         # Try with different values
-        for key in ['text', 'findings', 'impression', 'last_paragraph', 'comparison']:
+        for key in target_keys:
             if key not in row:
                 continue
 
             text = row[key]
             tokens = text_to_tokens(text, IGNORE_TOKENS)
+
+            if len(tokens) == 1 and tokens[0] == '.':
+                continue
 
             if tokens:
                 break
@@ -117,13 +121,13 @@ def add_report_len_to_master_df(reports_dict, errors):
     master_df.to_csv(fpath, index=False)
 
 
-def preprocess_mimic_cxr(version, greater_values=[0, 5, 10], override=False):
+def preprocess_mimic_cxr(version, greater_values=[0, 5, 10], override=False, **kwargs):
     """Preprocess reports, saves reports and vocabularies as JSON."""
     assert_reports_not_exist(REPORTS_DIR, version, override)
 
     reports_df = load_raw_reports_df()
 
-    reports_dict, token_appearances, errors = clean_reports(reports_df)
+    reports_dict, token_appearances, errors = clean_reports(reports_df, **kwargs)
 
     save_clean_reports(REPORTS_DIR, reports_dict, version)
 

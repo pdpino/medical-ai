@@ -9,7 +9,7 @@ import json
 from collections import defaultdict, Counter
 
 from medai.datasets.common.sentences2organs.compute import save_sentences_with_organs
-from medai.datasets.preprocess.tokenize import text_to_tokens
+from medai.datasets.preprocess.tokenizer import text_to_tokens
 from medai.datasets.preprocess.common import (
     assert_reports_not_exist,
     save_clean_reports,

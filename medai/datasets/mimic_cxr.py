@@ -134,15 +134,6 @@ class MIMICCXRDataset(Dataset):
         # Ignore broken images
         self.master_df = self.master_df.loc[~self.master_df['image_fpath'].isin(_BROKEN_IMAGES)]
 
-        if sort_samples:
-            self.master_df = self.master_df.sort_values('report_length', ascending=True)
-
-        # Keep only max images
-        if max_samples is not None:
-            self.master_df = self.master_df.tail(max_samples)
-
-        self.master_df.reset_index(drop=True, inplace=True)
-
         # Prepare reports for getter calls
         self._preprocess_reports(
             _resolve_reports_version(reports_version),
@@ -150,6 +141,20 @@ class MIMICCXRDataset(Dataset):
             vocab=vocab,
             vocab_greater=vocab_greater,
         )
+
+        # Keep only studies from reports-version
+        self.master_df = self.master_df.loc[self.master_df['study_id'].isin(set(self._reports))]
+
+        # Sort samples
+        if sort_samples:
+            self.master_df = self.master_df.sort_values('report_length', ascending=True)
+
+        # Keep only max images
+        if max_samples is not None:
+            self.master_df = self.master_df.tail(max_samples)
+
+        # Reset the index, after all the modifications
+        self.master_df.reset_index(drop=True, inplace=True)
 
         self.do_not_load_image = do_not_load_image
         self.do_not_load_report = do_not_load_report
@@ -194,7 +199,8 @@ class MIMICCXRDataset(Dataset):
         image = self._load_image(image_fpath)
 
         # Extract labels
-        labels = torch.ByteTensor(row[self.labels])
+        # pylint: disable=not-callable
+        labels = torch.tensor(row[self.labels], dtype=torch.uint8)
 
         # Load masks
         masks = self.load_masks(image_fpath) if self.enable_masks else -1

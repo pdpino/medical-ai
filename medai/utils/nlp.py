@@ -161,7 +161,8 @@ def remove_garbage_tokens(report):
         report without PAD_IDX and END_IDX, as list
     """
     if isinstance(report, (tuple, list)):
-        report = torch.LongTensor(report)
+        # pylint: disable=not-callable
+        report = torch.tensor(report, dtype=torch.long)
 
     if report is None or len(report) == 0:
         return []

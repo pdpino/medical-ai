@@ -102,7 +102,8 @@ class CovidSiimDataset(Dataset):
         image_fpath = f'{row["image_fpath"]}.png'
 
         # Extract labels
-        labels = torch.ByteTensor(row[self.labels])
+        # pylint: disable=not-callable
+        labels = torch.tensor(row[self.labels], dtype=torch.uint8)
 
         # Load image
         image_fpath = os.path.join(self.image_dir, image_fpath)
