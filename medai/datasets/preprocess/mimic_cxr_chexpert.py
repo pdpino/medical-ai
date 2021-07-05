@@ -13,7 +13,7 @@ from medai.metrics.report_generation.labeler import (
 )
 from medai.utils import config_logging, timeit_main
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger('medai.preprocess.mimic.chexpert')
 
 def _load_study_to_filepath():
     master_df = pd.read_csv(os.path.join(DATASET_DIR, 'master_metadata.csv'))
@@ -66,7 +66,7 @@ def label_reports_and_save(max_samples=None):
 
     # Apply labeler
     labeler = ChexpertLabeler(
-        fill_empty=-2, fill_uncertain=-1, caller_id='mimic-preprocess',
+        fill_empty=-2, fill_uncertain=-1, caller_id='mimic-preprocess-chexpert',
     )
     labeler = NBatchesLabeler(labeler)
     labeler = AvoidDuplicatedLabeler(labeler)
@@ -85,6 +85,7 @@ def label_reports_and_save(max_samples=None):
     df = df[['filename', 'Reports', *labeler.diseases]]
 
     df.to_csv(out_fpath, index=False)
+    LOGGER.info('Saved Chexpert labels to %s', out_fpath)
 
 
 
