@@ -37,6 +37,7 @@ class TrainingClsAUC(TrainingProcess):
         parser.add_argument('--pretrained-task', type=str, default='cls',
                             choices=('cls', 'cls-seg'), help='Task to choose the CNN from')
         parser.add_argument('--cnn-freeze', action='store_true', help='Freeze features')
+        parser.add_argument('--fc-random', action='store_true', help='Start with a random FC layer')
 
         parser.add_argument('--label', type=str, default='Cardiomegaly',
                             help='Label to use for training (with 1 label only)')
@@ -60,6 +61,9 @@ class TrainingClsAUC(TrainingProcess):
         if self.args.cnn_freeze:
             run_name += '_cnn-freeze'
 
+        if self.args.fc_random:
+            run_name += '_fc-random'
+
         return run_name
 
     def _create_model(self):
@@ -74,9 +78,13 @@ class TrainingClsAUC(TrainingProcess):
 
         self.model_kwargs = {
             'cnn_freeze': self.args.cnn_freeze,
+            'fc_random': self.args.fc_random,
         }
         if self.args.cnn_freeze:
             freeze_cnn(self.model.features)
+
+        if self.args.fc_random:
+            self.model.classifier.reset_parameters()
 
         # TODO: move this calculation to the dataset??
         dataset = self.train_dataloader.dataset
