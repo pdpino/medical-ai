@@ -241,9 +241,9 @@ def add_args_activation(parser, activation='relu'):
                         choices=AVAILABLE_ACTIVATION_LAYERS, help='Choose activations')
 
 
-def add_args_images(parser, image_format='RGB'):
+def add_args_images(parser, image_format='RGB', image_size=512):
     images_group = parser.add_argument_group('Images params')
-    images_group.add_argument('--image-size', type=int, default=512,
+    images_group.add_argument('--image-size', type=int, default=image_size,
                               help='Image size in pixels')
     images_group.add_argument('--frontal-only', action='store_true',
                               help='Use only frontal images')

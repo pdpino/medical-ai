@@ -42,7 +42,7 @@ class TrainingProcess(abc.ABC):
     key_metric = 'roc_auc'
     default_es_metric = None
     default_lr_metric = None
-    checkpoint_metric = None
+    default_checkpoint_metric = None
     default_num_workers = 2
     prepare_data_fn = staticmethod(prepare_data_classification)
 
@@ -52,7 +52,10 @@ class TrainingProcess(abc.ABC):
     allow_augmenting = True
     allow_sampling = True
 
+    allow_resume = True
+
     default_image_format = 'RGB'
+    default_image_size = 512
 
 
     def __init__(self):
@@ -115,8 +118,14 @@ class TrainingProcess(abc.ABC):
                             help='Whether to shuffle or not the samples when training')
         parser.add_argument('--dont-save', action='store_true',
                             help='If present, do not save model checkpoints to disk')
+        parser.add_argument('--checkpoint-metric', type=str, default=self.default_checkpoint_metric,
+                            help='Change checkpoint metric')
 
-        parsers.add_args_images(parser, image_format=self.default_image_format)
+        parsers.add_args_images(
+            parser,
+            image_format=self.default_image_format,
+            image_size=self.default_image_size,
+        )
         parsers.add_args_lr(parser, lr=0.0001)
         parsers.add_args_lr_sch(
             parser,
@@ -186,6 +195,8 @@ class TrainingProcess(abc.ABC):
         start_time = time.time()
 
         if self.args.resume:
+            if not self.allow_resume:
+                raise Exception('Resuming not allowed')
             self.resume_training()
         else:
             self.train_from_scratch()
@@ -264,7 +275,7 @@ class TrainingProcess(abc.ABC):
         return run_name
 
     def _fill_run_name_checkpoint(self, run_name):
-        if self.checkpoint_metric is None:
+        if not self.args.checkpoint_metric:
             run_name += '_notbest'
 
         return run_name
@@ -530,7 +541,7 @@ class TrainingProcess(abc.ABC):
             self.compiled_model,
             self.trainer,
             self.validator,
-            metric=self.checkpoint_metric,
+            metric=self.args.checkpoint_metric,
             dryrun=self.args.dryrun or self.args.dont_save,
         )
 

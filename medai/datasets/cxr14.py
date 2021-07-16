@@ -43,6 +43,7 @@ _DATASET_MEAN = 0.5058
 _DATASET_STD = 0.232
 
 _ORIGINAL_IMAGE_SIZE = 1024
+# FIXME: this is not the correct image size for all images!!
 
 def _calculate_bbox_scale(image_size):
     height, width = image_size
@@ -62,7 +63,7 @@ class CXR14Dataset(Dataset):
     def __init__(self, dataset_type='train', labels=None, max_samples=None,
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
                  masks=False, images_version=None, masks_version=UP_TO_DATE_MASKS_VERSION,
-                 xrv_norm=False, seg_multilabel=True,
+                 xrv_norm=False, seg_multilabel=True, bboxes=False,
                  **unused_kwargs):
         super().__init__()
 
@@ -169,6 +170,7 @@ class CXR14Dataset(Dataset):
             if not os.path.isdir(self.masks_dir):
                 raise Exception(f'Masks do not exist! {self.masks_dir}')
 
+        self.enable_bboxes = bboxes
         self.bbox_scale = _calculate_bbox_scale(self.image_size)
 
     def __len__(self):
@@ -214,6 +216,8 @@ class CXR14Dataset(Dataset):
 
     def get_bboxes(self, image_name):
         # REVIEW: precompute this?
+        if not self.enable_bboxes:
+            return -1, -1
 
         # Load raw bboxes
         raw_bboxes = self.bboxes_by_image.get(image_name, {})

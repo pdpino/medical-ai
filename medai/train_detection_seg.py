@@ -37,7 +37,7 @@ class TrainingDetectionSeg(TrainingProcess):
     key_metric = 'iou'
     default_es_metric = None
     default_lr_metric = None
-    checkpoint_metric = 'iou'
+    default_checkpoint_metric = 'iou'
 
 
     def _add_additional_args(self, parser):

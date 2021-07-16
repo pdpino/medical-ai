@@ -28,7 +28,7 @@ class TrainingClsSeg(TrainingProcess):
     key_metric = 'pr_auc'
     default_es_metric = None
     default_lr_metric = None
-    checkpoint_metric = 'pr_auc'
+    default_checkpoint_metric = 'pr_auc'
 
 
     def _add_additional_args(self, parser):
