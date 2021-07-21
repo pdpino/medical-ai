@@ -10,6 +10,7 @@ from medai.models.classification import (
     mobilenet,
     tiny_res_scan,
     tiny_densenet,
+    efficientnet,
 )
 from medai.models.classification.load_imagenet import ImageNetModel
 
@@ -30,6 +31,7 @@ _MODELS_DEF = {
     'tiny-res-scan': tiny_res_scan.TinyResScanCNN,
     'tiny-densenet': tiny_densenet.TinyDenseNetCNN,
     'small-densenet': tiny_densenet.SmallDenseNetCNN,
+    'effnet': efficientnet.EfficientNet,
 }
 
 _DEPRECATED_CNNS = set([
@@ -43,6 +45,7 @@ _MODELS_WITH_DROPOUT_IMPLEMENTED = (
     'tiny-densenet',
     'small-densenet',
     'densenet-121-v2',
+    'effnet',
 )
 
 def _get_printable_kwargs(kwargs):
