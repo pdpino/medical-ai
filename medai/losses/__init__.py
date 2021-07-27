@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from medai.datasets.common import CXR14_POS_WEIGHTS
+from medai.datasets.common import CXR14_POS_WEIGHTS, CHEXPERT_POS_WEIGHTS
 from medai.losses.focal import FocalLoss
 from medai.losses.wbce import WeigthedBCELoss, WeigthedBCEByDiseaseLoss
 from medai.losses.out_of_target import OutOfTargetSumLoss
@@ -19,6 +19,7 @@ AVAILABLE_LOSSES = list(_CLS_LOSS_CLASSES)
 
 POS_WEIGHTS_BY_DATASET = {
     'cxr14': CXR14_POS_WEIGHTS,
+    'chexpert': CHEXPERT_POS_WEIGHTS,
 }
 
 def get_loss_function(loss_name, **loss_kwargs):

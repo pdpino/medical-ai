@@ -26,6 +26,7 @@ CXR14_DISEASES = [
     'Hernia',
 ]
 
+# Calculated by dividing neg_samples // pos_samples
 CXR14_POS_WEIGHTS = [
     9,
     50,
@@ -41,6 +42,23 @@ CXR14_POS_WEIGHTS = [
     67,
     37,
     600,
+]
+
+CHEXPERT_POS_WEIGHTS = [
+    10, # No-Finding
+    9,
+    5,
+    22,
+    1,
+    2,
+    4,
+    8,
+    2,
+    8,
+    1,
+    43,
+    23,
+    1, # Support-devices
 ]
 
 ORGAN_BACKGROUND = 'background'

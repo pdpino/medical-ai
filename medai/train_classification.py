@@ -707,8 +707,16 @@ def parse_args():
     elif args.loss_name == 'bce' and args.bce_pos_weight:
         if args.dataset not in POS_WEIGHTS_BY_DATASET:
             parser.error(f'bce-pos-weights not available for dataset {args.dataset}')
+        pos_weight = POS_WEIGHTS_BY_DATASET[args.dataset]
+
+        if args.dataset == 'chexpert' and args.labels is not None:
+            if len(args.labels) == 13:
+                pos_weight = pos_weight[1:]
+            else:
+                # FIXME: this should be handled elsewhere??
+                parser.error('Pos-weight case not handled')
         args.loss_kwargs = {
-            'pos_weight': POS_WEIGHTS_BY_DATASET[args.dataset],
+            'pos_weight': pos_weight,
         }
     else:
         args.loss_kwargs = {}
