@@ -64,6 +64,7 @@ class CXR14Dataset(Dataset):
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
                  masks=False, images_version=None, masks_version=UP_TO_DATE_MASKS_VERSION,
                  xrv_norm=False, seg_multilabel=True, bboxes=False,
+                 crop_center=None,
                  **unused_kwargs):
         super().__init__()
 
@@ -72,10 +73,11 @@ class CXR14Dataset(Dataset):
 
         self.dataset_type = dataset_type
         self.image_format = image_format
-        self.image_size = image_size
+        self.image_size = image_size if crop_center is None else (crop_center, crop_center)
         self.transform = get_default_image_transform(
             self.image_size,
             norm_by_sample=norm_by_sample,
+            crop_center=crop_center,
             mean=_DATASET_MEAN,
             std=_DATASET_STD,
             xrv_norm=xrv_norm,
@@ -161,14 +163,13 @@ class CXR14Dataset(Dataset):
                 image_size,
                 self.seg_multilabel,
                 len(self.organs),
+                crop_center=crop_center,
             )
 
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
 
-            assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
+            assert os.path.isdir(self.masks_dir), f'Masks {self.masks_dir} do not exist'
 
-            if not os.path.isdir(self.masks_dir):
-                raise Exception(f'Masks do not exist! {self.masks_dir}')
 
         self.enable_bboxes = bboxes
         self.bbox_scale = _calculate_bbox_scale(self.image_size)

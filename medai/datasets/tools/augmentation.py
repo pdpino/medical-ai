@@ -335,15 +335,18 @@ class Augmentator(Dataset):
             # Check original transforms
             _transforms = tf_instance.transforms
 
-            assert len(_transforms) >= 2, 'There should be at least two transforms'
-            assert isinstance(_transforms[0], transforms.Resize), '1st transform should be Resize'
-            assert isinstance(
-                _transforms[1],
-                (transforms.ToTensor, MaskToTensor),
-            ), '2d transform should be ToTensor'
+            # Find index of to-tensor transform
+            to_tensor_idx = None
+            for idx, tf in enumerate(_transforms):
+                if isinstance(tf, (transforms.ToTensor, MaskToTensor)):
+                    to_tensor_idx = idx
+                    break
 
-            pre_transform = _transforms[0] # Resize before
-            post_transform = transforms.Compose(_transforms[1:]) # ToTensor after
+            if to_tensor_idx is None:
+                raise Exception('Monkey-patch transform: no ToTensor transform found')
+
+            pre_transform = transforms.Compose(_transforms[:to_tensor_idx]) # Resize before
+            post_transform = transforms.Compose(_transforms[to_tensor_idx:]) # ToTensor after
             pre_post_transforms = pre_transform, post_transform
 
             # Monkey-patch with identity

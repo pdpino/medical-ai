@@ -51,6 +51,7 @@ class ChexpertDataset(Dataset):
                  image_size=(512, 512), norm_by_sample=False, image_format='RGB',
                  frontal_only=False, masks=False, masks_version=UP_TO_DATE_MASKS_VERSION,
                  seg_multilabel=False,
+                 crop_center=None,
                  **unused_kwargs):
         super().__init__()
 
@@ -59,11 +60,12 @@ class ChexpertDataset(Dataset):
 
         self.dataset_type = dataset_type
         self.image_format = image_format
-        self.image_size = image_size
+        self.image_size = image_size if crop_center is None else (crop_center, crop_center)
         _DATASET_MEAN, _DATASET_STD = _DATASET_STATS_BY_FRONTAL_ONLY[frontal_only]
         self.transform = get_default_image_transform(
             self.image_size,
             norm_by_sample=norm_by_sample,
+            crop_center=crop_center,
             mean=_DATASET_MEAN,
             std=_DATASET_STD,
         )
@@ -126,12 +128,13 @@ class ChexpertDataset(Dataset):
         if masks:
             self.masks_dir = os.path.join(DATASET_DIR, 'masks', masks_version)
 
-            assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
+            assert os.path.isdir(self.masks_dir), f'Masks {self.masks_dir} do not exist'
 
             self.transform_mask = get_default_mask_transform(
                 image_size,
                 self.seg_multilabel,
                 len(self.organs),
+                crop_center=crop_center,
             )
 
 

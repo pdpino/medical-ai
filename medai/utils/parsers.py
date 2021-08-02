@@ -249,6 +249,8 @@ def add_args_images(parser, image_format='RGB', image_size=512):
                               help='Use only frontal images')
     images_group.add_argument('--norm-by-sample', action='store_true',
                               help='Normalize each sample (instead of by dataset stats)')
+    images_group.add_argument('--crop-center', type=int, default=None,
+                              help='Add a crop-center transform')
     images_group.add_argument('--image-format', type=str, default=image_format,
                               choices=['RGB', 'L'], help='Image format to use')
 

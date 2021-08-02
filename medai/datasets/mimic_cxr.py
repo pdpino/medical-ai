@@ -69,15 +69,17 @@ class MIMICCXRDataset(Dataset):
                  seg_multilabel=True,
                  vocab_greater=None, reports_version=LATEST_REPORTS_VERSION,
                  do_not_load_image=False, do_not_load_report=False,
+                 crop_center=None,
                  vocab=None, **unused_kwargs):
         super().__init__()
 
         self.dataset_type = dataset_type
         self.image_format = image_format
-        self.image_size = image_size
+        self.image_size = image_size if crop_center is None else (crop_center, crop_center)
         self.transform = get_default_image_transform(
             self.image_size,
             norm_by_sample=norm_by_sample,
+            crop_center=crop_center,
             mean=_DATASET_MEAN,
             std=_DATASET_STD,
         )
@@ -163,12 +165,13 @@ class MIMICCXRDataset(Dataset):
         if masks:
             self.masks_dir = os.path.join(DATASET_DIR_FAST, 'masks', masks_version)
 
-            assert os.path.isdir(self.masks_dir), f'Masks {masks_version} not calculated!'
+            assert os.path.isdir(self.masks_dir), f'Masks {self.masks_dir} do not exist'
 
             self.transform_mask = get_default_mask_transform(
                 image_size,
                 self.seg_multilabel,
                 len(self.organs),
+                crop_center=crop_center,
             )
 
         if not set(self.master_df['study_id']).issubset(self._reports):

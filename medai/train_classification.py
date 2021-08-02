@@ -304,6 +304,7 @@ def train_from_scratch(run_name,
                        fc_layers=(),
                        max_samples=None,
                        image_size=512,
+                       crop_center=None,
                        loss_name=None,
                        loss_kwargs={},
                        print_metrics=None,
@@ -423,6 +424,8 @@ def train_from_scratch(run_name,
         run_name += f'_size{image_size}'
     if frontal_only:
         run_name += '_front'
+    if crop_center is not None:
+        run_name += f'_crop{crop_center}'
     if n_epochs == 0:
         run_name += '_e0'
     run_name += f'_lr{lr}'
@@ -464,6 +467,7 @@ def train_from_scratch(run_name,
         'max_samples': max_samples,
         'batch_size': batch_size,
         'image_size': (image_size, image_size),
+        'crop_center': crop_center,
         'frontal_only': frontal_only,
         'num_workers': num_workers,
         'norm_by_sample': norm_by_sample,
@@ -787,6 +791,7 @@ if __name__ == '__main__':
             fc_layers=ARGS.fc_layers,
             max_samples=ARGS.max_samples,
             image_size=ARGS.image_size,
+            crop_center=ARGS.crop_center,
             loss_name=ARGS.loss_name,
             loss_kwargs=ARGS.loss_kwargs,
             print_metrics=ARGS.print_metrics,

@@ -115,6 +115,7 @@ def get_default_image_transform(image_size=(512, 512),
                                 mean=0,
                                 std=1,
                                 xrv_norm=False,
+                                crop_center=None,
                                 ):
     def _to_channel_list(value):
         if isinstance(value, (list, tuple)):
@@ -123,8 +124,12 @@ def get_default_image_transform(image_size=(512, 512),
 
     composed_tfs = [
         transforms.Resize(image_size),
-        transforms.ToTensor(),
     ]
+
+    if crop_center is not None:
+        composed_tfs.append(transforms.CenterCrop(crop_center))
+
+    composed_tfs.append(transforms.ToTensor())
 
     if norm_by_sample:
         composed_tfs.append(NormalizeBySample())
@@ -280,8 +285,12 @@ class MaskToTensor:
         # shape(seg_multilabel=False): height, width
         return mask
 
-def get_default_mask_transform(image_size, seg_multilabel, n_seg_labels=None):
-    return transforms.Compose([
+def get_default_mask_transform(image_size, seg_multilabel, n_seg_labels=None, crop_center=None):
+    tfs = [
         transforms.Resize(image_size, 0), # Nearest mode
-        MaskToTensor(seg_multilabel, n_seg_labels),
-    ])
+    ]
+    if crop_center is not None:
+        tfs.append(transforms.CenterCrop(crop_center))
+    tfs.append(MaskToTensor(seg_multilabel, n_seg_labels))
+    return transforms.Compose(tfs)
+
