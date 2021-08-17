@@ -7,6 +7,23 @@ CHEXPERT_LABELS = [
     'Pleural Other', 'Fracture', 'Support Devices',
 ]
 
+CHEXPERT_LABEL2SHORT = {
+    'Cardiomegaly': 'Card',
+    'Enlarged Cardiomediastinum': 'EC',
+    'Consolidation': 'Cons',
+    'Lung Opacity': 'LO',
+    'Atelectasis': 'A',
+    'Support Devices': 'SD',
+    'Pleural Effusion': 'PE',
+    'Pleural Other': 'PO',
+    'Pneumonia': 'Pn',
+    'Pneumothorax': 'Pt',
+    'Edema': 'E',
+    'Lung Lesion': 'LL',
+    'Fracture': 'F',
+}
+CHEXPERT_SHORT2LABEL = {v:k for k, v in CHEXPERT_LABEL2SHORT.items()}
+
 CHEXPERT_DISEASES = list(CHEXPERT_LABELS) # Alias for the same list
 
 CXR14_DISEASES = [

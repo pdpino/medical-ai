@@ -110,38 +110,90 @@ class ScaleValues:
         return image * slope + intersect
 
 
+class GrayTo3Channels:
+    def __call__(self, img):
+        """Converts image to 3 channels.
+        If image has 3 channels, returns unchanged
+        If image has 1 channel, repeats three times as RGB
+        img size: n_channels, height, width
+        """
+        assert isinstance(img, torch.Tensor)
+
+        if img.ndim == 2:
+            img = img.unsqueeze(0)
+
+        assert img.ndim == 3
+
+        n_channels = img.size(0)
+
+        if n_channels == 3:
+            return img
+
+        assert n_channels == 1, f'Received invalid n_channels: {n_channels}'
+
+        return img.repeat(3, 1, 1)
+        # shape: 3, height, width
+
+
+class PILToTensorAndRange01:
+    def __call__(self, pic):
+        """Transform PIL image to tensor and to range 0-1.
+        The class transforms.ToTensor() transforms 8bit images to 0-1 range,
+        but not 16bit images.
+        This class transform images from any type to tensor and to 0-1 range.
+        """
+        # Copied from torchvision.transforms
+        arr = np.asarray(pic).astype(np.float32)
+        tensor = torch.as_tensor(arr, dtype=torch.float)
+        tensor = tensor.view(pic.size[1], pic.size[0], len(pic.getbands()))
+        tensor = tensor.permute((2, 0, 1))
+        # shape: n_channels, height, width
+
+        # To range 0-1
+        tensor -= tensor.min()
+        tensor /= tensor.max()
+        return tensor
+
+
 def get_default_image_transform(image_size=(512, 512),
                                 norm_by_sample=True,
                                 mean=0,
                                 std=1,
                                 xrv_norm=False,
                                 crop_center=None,
+                                bit16=False,
                                 ):
     def _to_channel_list(value):
         if isinstance(value, (list, tuple)):
             return value
         return [value]
 
-    composed_tfs = [
+    tfs = [
         transforms.Resize(image_size),
     ]
 
     if crop_center is not None:
-        composed_tfs.append(transforms.CenterCrop(crop_center))
+        tfs.append(transforms.CenterCrop(crop_center))
 
-    composed_tfs.append(transforms.ToTensor())
+    if bit16:
+        tfs.extend([
+            PILToTensorAndRange01(),
+            GrayTo3Channels(),
+        ])
+    else:
+        tfs.append(transforms.ToTensor())
 
     if norm_by_sample:
-        composed_tfs.append(NormalizeBySample())
+        tfs.append(NormalizeBySample())
     else:
         mean = _to_channel_list(mean)
         std = _to_channel_list(std)
-        composed_tfs.append(transforms.Normalize(mean, std))
+        tfs.append(transforms.Normalize(mean, std))
 
     if xrv_norm:
-        composed_tfs.append(ScaleValues(target=1024))
+        tfs.append(ScaleValues(target=1024))
 
-    return transforms.Compose(composed_tfs)
+    return transforms.Compose(tfs)
 
 
 def bbox_coordinates_to_map(bboxes, valid, image_size):
@@ -287,10 +339,9 @@ class MaskToTensor:
 
 def get_default_mask_transform(image_size, seg_multilabel, n_seg_labels=None, crop_center=None):
     tfs = [
-        transforms.Resize(image_size, 0), # Nearest mode
+        transforms.Resize(image_size, Image.NEAREST),
     ]
     if crop_center is not None:
         tfs.append(transforms.CenterCrop(crop_center))
     tfs.append(MaskToTensor(seg_multilabel, n_seg_labels))
     return transforms.Compose(tfs)
-

@@ -252,7 +252,7 @@ def add_args_images(parser, image_format='RGB', image_size=512):
     images_group.add_argument('--crop-center', type=int, default=None,
                               help='Add a crop-center transform')
     images_group.add_argument('--image-format', type=str, default=image_format,
-                              choices=['RGB', 'L'], help='Image format to use')
+                              choices=['RGB', 'L', 'I;16', 'I'], help='Image format to use')
 
     return images_group
 

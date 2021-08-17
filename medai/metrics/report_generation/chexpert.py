@@ -88,6 +88,7 @@ def _concat_df_matrix(df, results, suffix=None):
     labels = labels_with_suffix(suffix)
     result = pd.concat(
         [df, pd.DataFrame(results, columns=labels)], axis=1, join='inner',
+        # use index=df.index to avoid problems???
     )
 
     n_out = len(result)

@@ -8,6 +8,13 @@ from medai.metrics.report_generation.abn_match.labeler import AbnormalityLabeler
 
 ### Some leftover stuff:
 # "density": many sentences! which abnormality do they belong?
+# lymphadenopathy
+# pneumonia
+## MIMIC:
+# pneumoperitoneum
+# pneumonitis
+# possible minimal fluid at the right costophrenic angle
+# interstitial lung disease
 
 
 _TEXTRAY_PATTERNS = {
@@ -34,17 +41,11 @@ _TEXTRAY_PATTERNS = {
     'Bronchial wall thickening': AllGroupsPattern('bronchial', r'thickening|cuffing'),
     # cuffing is referred to the same???
     'Cardiac pacer': AnyGroupPattern(
-        r'pacer|pacemaker|icd',
+        r'pacer|pacemaker|\bicd',
         AllGroupsPattern('cardiac', 'generator'),
     ),
     'Cardiomegaly': AnyGroupPattern(
         'cardiomegaly',
-        # AllGroupsPattern(
-        #     'heart', r'large|prominen|upper|top|widen',
-        # ),
-        # AllGroupsPattern(
-        #     'cardiac', r'contour|silhouette', r'large|prominen|upper|top|widen',
-        # ),
         BodyPartStatusPattern(
             body=AnyGroupPattern(
                 'heart',
@@ -59,7 +60,7 @@ _TEXTRAY_PATTERNS = {
         AllGroupsPattern('central', r'\bline'),
     ),
     'Consolidation': r'consolidat', # alveolar (redundant??) #  focal bibasilar
-    'Costophrenic angle blunting': AllGroupsPattern('costophrenic', r'blunting|blunted'),
+    'Costophrenic angle blunting': AllGroupsPattern('costophrenic|\bcp\b', r'blunting|blunted'),
     'Degenerative changes': AllGroupsPattern('degenerative', 'change'),
     'Elevated diaphragm': AllGroupsPattern('elevat', 'diaphragm'),
     # Other abnormality: flattenning of the diaphragm

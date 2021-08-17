@@ -18,6 +18,9 @@ pyenv*
 # Course project file
 main.py
 
+# CAV folder
+cav/
+
 # Others
 medai/batch*.sh
 medai/utils/*.sh

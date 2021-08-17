@@ -152,8 +152,8 @@ class NBatchesLabeler(HolisticLabeler):
             return self.labeler(reports)
 
         LOGGER.info(
-            'Splitted in n_batches=%d of approx %s reports each',
-            self.n_batches, math.ceil(n_reports / self.n_batches),
+            'Total reports %s splitted in n_batches=%d of approx %s reports each',
+            f'{n_reports:,}', self.n_batches, math.ceil(n_reports / self.n_batches),
         )
 
         batches = np.array_split(reports, self.n_batches)

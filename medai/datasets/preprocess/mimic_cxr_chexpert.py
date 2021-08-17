@@ -88,8 +88,47 @@ def label_reports_and_save(max_samples=None):
     LOGGER.info('Saved Chexpert labels to %s', out_fpath)
 
 
+@timeit_main(LOGGER)
+def label_sentences_and_save(max_samples=None):
+    out_fpath = os.path.join(DATASET_DIR, 'reports', 'sentences_with_chexpert_labels.csv')
+
+    if os.path.isfile(out_fpath):
+        LOGGER.error('File %s already exists, backup first!', out_fpath)
+        return
+
+    sentences_df = pd.read_csv(os.path.join(DATASET_DIR, 'reports', 'sentences.csv'))
+    sentences = list(sentences_df['sentence'])
+
+    if max_samples is not None:
+        LOGGER.warning('Using only %d max_samples', max_samples)
+        sentences = sentences[:max_samples]
+
+    # Apply labeler
+    labeler = ChexpertLabeler(
+        fill_empty=-2, fill_uncertain=-1, caller_id='mimic-preprocess-chexpert-sentences',
+    )
+    labeler = NBatchesLabeler(labeler)
+    labeler = AvoidDuplicatedLabeler(labeler)
+
+    labels = labeler(sentences)
+
+    # Save labels as npy array, in case something fails later
+    _save_numpy_backup(labels, out_fpath)
+
+    assert labels.shape == (len(sentences), 14)
+
+    # Save as DF
+    df = pd.DataFrame(labels, columns=labeler.diseases)
+    df['sentence'] = sentences
+    df = df[['sentence', *labeler.diseases]]
+
+    df.to_csv(out_fpath, index=False)
+    LOGGER.info('Saved Chexpert labels to %s', out_fpath)
+
+
 
 if __name__ == '__main__':
     config_logging()
 
-    label_reports_and_save()
+    # label_reports_and_save()
+    label_sentences_and_save()

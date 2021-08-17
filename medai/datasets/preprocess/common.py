@@ -33,7 +33,7 @@ def load_clean_reports(reports_dir, version):
         return json.load(f)
 
 
-def split_sentences_and_save_csv(reports_dir, reports_dict):
+def split_sentences_and_save_csv(reports_dir, reports_dict, suffix=None):
     # Count sentences and appearances
     sentence_counter = get_sentences_appearances(r['clean_text'] for r in reports_dict.values())
 
@@ -42,7 +42,8 @@ def split_sentences_and_save_csv(reports_dir, reports_dict):
     df_sentences = pd.DataFrame(sentence_counter.items(), columns=columns)
 
     # Save to file
-    fpath = os.path.join(reports_dir, 'sentences.csv')
+    name = 'sentences.csv' if suffix is None else f'sentences.{suffix}.csv'
+    fpath = os.path.join(reports_dir, name)
     df_sentences.to_csv(fpath, index=False)
 
     print(f'Saved sentences with appearances to {fpath}')

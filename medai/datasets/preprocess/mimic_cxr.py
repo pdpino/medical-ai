@@ -152,3 +152,12 @@ def create_sentences_with_organs(version, studies=None, **kwargs):
     df_organs, errors = save_sentences_with_organs(DATASET_DIR, sentences, **kwargs)
 
     return df_organs, errors
+
+if __name__ == '__main__':
+    # Takes around 1min
+    REPORTS, _, _ = preprocess_mimic_cxr(
+        'v4-2', override=True, target_keys=['findings', 'text'],
+    )
+    print('N reports: ', len(REPORTS))
+
+    # df_organs, errors = create_sentences_with_organs('v4-2', show=True)
