@@ -2,14 +2,15 @@
 
 Code used for the papers:
 
-* [_Clinically Correct Report Generation from Chest X-rays using Templates_](https://link.springer.com/chapter/10.1007/978-3-030-87589-3_67), in [MLMI at MICCAI 2021](https://sites.google.com/view/mlmi2021/home)
-  * Research group [news](https://haivis.ing.puc.cl/news/13_miccai_mlmi_publication/)
-  * [Preprint](https://dparra.sitios.ing.uc.cl/pdfs/preprint_Pinoetal_MICCAI_2021.pdf)
-  * [Oral presentation](https://drive.google.com/file/d/1ZVPRtlfyXyQa6ZKJ2UkamFlrC9aTKCBq/view) (10 min)
-  * [Slides](https://denisparra.github.io/pdfs/MLMI2021-O-19_PinoParra_MICCAI21_small.pdf)
-  * [Poster](https://denisparra.github.io/pdfs/MLMI2021-O-19_poster-small.pdf)
-* [_Inspecting state of the art performance and NLP metrics in image-based medical report generation_](https://research.latinxinai.org/papers/neurips/2020/pdf/pino_short_23.pdf), in [LXAI at NeurIPS 2020](https://www.latinxinai.org/neurips-2020-about).
-  * [Poster](https://research.latinxinai.org/papers/neurips/2020/png/pino_short_23.png)
+> [_Clinically Correct Report Generation from Chest X-rays using Templates_](https://link.springer.com/chapter/10.1007/978-3-030-87589-3_67) \
+> Pablo Pino, Denis Parra, Cecilia Besa and Claudio Lagos \
+> [MLMI](https://sites.google.com/view/mlmi2021/home) at MICCAI 2021, oral presentation, best paper candidate \
+> Links: [Pre-print](https://dparra.sitios.ing.uc.cl/pdfs/preprint_Pinoetal_MICCAI_2021.pdf), [video](https://drive.google.com/file/d/1ZVPRtlfyXyQa6ZKJ2UkamFlrC9aTKCBq/view) (10 min), [slides](https://denisparra.github.io/pdfs/MLMI2021-O-19_PinoParra_MICCAI21_small.pdf), [poster](https://denisparra.github.io/pdfs/MLMI2021-O-19_poster-small.pdf)
+
+> [_Inspecting state of the art performance and NLP metrics in image-based medical report generation_](https://research.latinxinai.org/papers/neurips/2020/pdf/pino_short_23.pdf) \
+> Pablo Pino, Denis Parra, Pablo Messina, Cecilia Besa and Sergio Uribe \
+> [LXAI](https://www.latinxinai.org/neurips-2020-about) at NeurIPS 2020 \
+> Links: [Poster](https://research.latinxinai.org/papers/neurips/2020/png/pino_short_23.png)
 
 
 Visit our research group at: https://haivis.ing.puc.cl
