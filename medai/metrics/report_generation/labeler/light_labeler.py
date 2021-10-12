@@ -4,7 +4,7 @@ import numpy as np
 
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.metrics.report_generation import chexpert
-from medai.metrics.report_generation.labeler_correctness.cache import ReportLabelsCache
+from medai.metrics.report_generation.labeler.cache import ReportLabelsCache
 from medai.utils.nlp import (
     ReportReader,
     sentence_iterator,

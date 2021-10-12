@@ -13,7 +13,7 @@ from medai.metrics.report_generation import (
     attach_metrics_report_generation,
     print_rg_metrics,
 )
-from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
+from medai.metrics.report_generation.labeler import attach_medical_correctness
 from medai.metrics.report_generation.writer import (
     attach_report_writer,
     delete_previous_outputs,

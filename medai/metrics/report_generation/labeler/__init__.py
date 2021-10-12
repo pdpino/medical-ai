@@ -1,211 +1,207 @@
-import math
+import operator
+from functools import partial
 import logging
-import pandas as pd
 import numpy as np
+from ignite.engine import Events
+from ignite.metrics import MetricsLambda
+
+from medai.metrics.report_generation.labeler.metric import MedicalLabelerCorrectness
+from medai.metrics.report_generation.labeler.light_labeler import (
+    ChexpertLightLabeler,
+    DummyLabeler,
+)
+from medai.metrics.report_generation.labeler.labeler_timer import LabelerTimerMetric
+from medai.metrics.report_generation.labeler.cache import LABELER_CACHE_DIR
+from medai.metrics.report_generation.labeler.hit_counter_metric import HitCounterMetric
+from medai.metrics.report_generation.abn_match.chexpert import (
+    ChexpertLighterLabeler,
+)
+from medai.metrics.report_generation.transforms import get_flat_reports
+from medai.utils.lock import SyncLock
+from medai.utils.metrics import EveryNAfterMEpochs
 
 LOGGER = logging.getLogger(__name__)
 
-class HolisticLabeler:
-    """Provides a base report-labeler class.
 
-    Subclass this class, and use the labelers with the decorator pattern.
+_LOCK_FOLDER = LABELER_CACHE_DIR
+_LOCK_NAME = 'medical-correctness-cache'
+
+_LABELER_CLASSES = {
+    'dummy': DummyLabeler,
+    'lighter-chexpert': ChexpertLighterLabeler,
+    'light-chexpert': ChexpertLightLabeler,
+}
+
+AVAILABLE_MED_LABELERS = list(_LABELER_CLASSES)
+
+
+def _attach_hit_counter(engine, labeler, basename, device='cuda'):
+    hit_counter_metric = HitCounterMetric(labeler, device=device)
+
+    for i, subvalue in enumerate(['misses', 'misses_unique', 'misses_perc']):
+        metric = MetricsLambda(operator.itemgetter(i), hit_counter_metric)
+        metric.attach(engine, f'{basename}_labeler_{subvalue}')
+
+
+def _attach_labeler(engine, labeler, basename, usage=None, device='cuda'):
+    """Attaches MedicalLabelerCorrectness metrics to an engine.
+
+    It will attach metrics in the form <basename>_<metric_name>_<disease>
+
+    Args:
+        engine -- ignite engine to attach metrics to
+        labeler -- labeler instance to pass to the MedicalLabelerCorrectness metric
+        basename -- to use when attaching metrics
+        device -- passed to Metrics
     """
-    def __init__(self, labeler):
-        self.labeler = labeler
+    if labeler.use_timer:
+        timer_metric = LabelerTimerMetric(labeler=labeler, device=device)
+        timer_metric.attach(engine, f'{basename}_timer')
 
-    def __getattr__(self, name):
-        return getattr(self.labeler, name)
+    if labeler.use_cache:
+        _attach_hit_counter(engine, labeler, basename, device=device)
 
-    def forward(self, reports):
-        """Receives a list of reports (str) and returns a np.array of labels.
+    metric_obj = MedicalLabelerCorrectness(
+        labeler, output_transform=get_flat_reports, device=device,
+    )
 
-        Override this method!
+    def _disease_metric_getter(result, metric_name, metric_index):
+        """Given the MedicalLabelerCorrectness output returns a disease metric value.
+
+        The metric obj returns a dict(key: metric_name, value: tensor/array of size n_diseases)
+        e.g.: {
+          'acc': tensor/ndarray of 14 diseases,
+          'prec': tensor/ndarray of 14 diseases,
+          etc
+        }
         """
-        return np.zeros(len(reports), len(self.diseases))
+        return result[metric_name][metric_index].item()
 
-    def __call__(self, reports):
-        class_name = self.__class__.__name__
-        if not isinstance(reports, (list, np.ndarray)):
-            raise Exception(
-                f'Expected list or array passed to {class_name}, received: {type(reports)}',
+    def _macro_avg_getter(result, metric_name):
+        return result[metric_name].mean().item()
+
+    if labeler.no_finding_idx is not None:
+        if not labeler.use_numpy:
+            # To use this, the tensors should be moved to CPU to use np.ma.array
+            # REVIEW: can something like array[mask == 0].mean().item() be used?
+            raise Exception('Internal error: cannot attach woNF metrics if use_numpy is False')
+
+        ignore_no_finding_mask = np.zeros(len(labeler.diseases))
+        if labeler.no_finding_idx is not None:
+            ignore_no_finding_mask[labeler.no_finding_idx] = 1
+
+        def _macro_avg_getter_fonly(result, metric_name):
+            values = result[metric_name] # shape: n_findings
+            return np.ma.array(values, mask=ignore_no_finding_mask).mean()
+
+
+    if usage:
+        kwargs = {
+            'usage': usage,
+        }
+    else:
+        kwargs = {}
+
+    for metric_name in metric_obj.METRICS:
+        # Attach diseases' macro average
+        macro_avg = MetricsLambda(
+            partial(_macro_avg_getter, metric_name=metric_name),
+            metric_obj,
+        )
+        macro_avg.attach(engine, f'{basename}_{metric_name}', **kwargs)
+
+        if labeler.no_finding_idx is not None:
+            # Attach macro-avg removing "no-finding"
+            macro_avg_fonly = MetricsLambda(
+                partial(_macro_avg_getter_fonly, metric_name=metric_name),
+                metric_obj,
             )
+            macro_avg_fonly.attach(engine, f'{basename}_{metric_name}_woNF', **kwargs)
 
-        labels = self.forward(reports)
+        # Attach for each disease
+        for index, disease in enumerate(labeler.diseases):
+            disease_metric = MetricsLambda(
+                partial(_disease_metric_getter, metric_name=metric_name, metric_index=index),
+                metric_obj,
+            )
+            disease_metric.attach(engine, f'{basename}_{metric_name}_{disease}', **kwargs)
 
-        expected = (len(reports), len(self.diseases))
-        assert labels.shape == expected, \
-            f'{class_name} output size do not match: out={labels.shape} vs expect={expected}'
-
-        return labels
-
-    def _assert_out_df_matches_input(self, input_reports, df, key):
-        """Asserts an out_df matches the input reports.
-
-        Use this when the labeler uses a DF before returning an array,
-        to assert that the output reports are the same and in the same order
-        than the input.
-        """
-        prefix = f'{self.__class__.__name__} i-o mismatch in'
-
-        # Assert sizes
-        assert len(df) == len(input_reports), \
-            f'{prefix} size: n_input={len(input_reports)} vs n_out={len(df)}'
-
-        # Assert content (i.e. reports inside)
-        output_reports = list(df[key])
-        set_in = set(input_reports)
-        set_out = set(output_reports)
-        assert set_in == set_out, \
-            f'{prefix} content: in - out={len(set_in - set_out)}, out - in={len(set_out - set_in)}'
-
-        # Assert order
-        assert output_reports == list(input_reports), \
-            f'{prefix} order: input={input_reports} vs out={output_reports}'
+    return metric_obj
 
 
-class CacheLookupLabeler(HolisticLabeler):
-    """Looks up reports in a cache before labelling them.
+def attach_medical_correctness(trainer, validator, vocab,
+                               after=None, steps=None, val_after=None, val_steps=None,
+                               metric='lighter-chexpert',
+                               device='cuda'):
+    """Attaches medical correctness metrics to engines.
 
-    Does not update the cache (only lookup on GT reports).
+    It uses a SyncLock to assure not two engines use the inner Cache at the same time.
 
-    Paramters:
-        cache -- df with keys ['Reports', *diseases]
+    Notes:
+        - allows calculating the metrics after m epochs and every n epochs
+
+    Args:
+        trainer -- ignite.Engine
+        validator -- ignite.Engine or None
+        vocab -- dataset vocabulary (dict)
+        device -- passed to Metrics
     """
-    def __init__(self, labeler, cache=None):
-        super().__init__(labeler)
+    val_after = val_after if val_after is not None else after
+    val_steps = val_steps if val_steps is not None else steps
+    info = {
+        'metric': metric,
+        'train_after': after,
+        'train_steps': steps,
+        'val_after': val_after,
+        'val_steps': val_steps,
+    }
+    info_str = ' '.join(f"{k}={v}" for k, v in info.items())
+    LOGGER.info('Using medical correctness: %s', info_str)
 
-        # Remove duplicated Reports, so merge() works properly
-        self.cache = cache.groupby('Reports').first().reset_index()
+    if metric not in _LABELER_CLASSES:
+        raise Exception(f'Metric not found {metric}')
+    LabelerClass = _LABELER_CLASSES[metric]
 
-    def forward(self, reports):
-        # reports: list of str
+    if metric == 'dummy':
+        LOGGER.warning('Attaching DUMMY med metrics!!')
 
-        reports_saved_in_cache = set(self.cache['Reports'])
+    needs_lock = metric.startswith('light-')
 
-        cached_reports = [
-            report for report in reports
-            if report in reports_saved_in_cache
-        ]
+    if needs_lock:
+        lock = SyncLock(_LOCK_FOLDER, _LOCK_NAME, verbose=True)
 
-        non_cached_reports = [
-            report for report in reports
-            if report not in reports_saved_in_cache
-        ]
+        if not lock.acquire():
+            LOGGER.warning(
+                'Cannot attach medical correctness metric, cache is locked',
+            )
+            return
 
-        if len(cached_reports) == 0:
-            return self.labeler(reports)
+    train_usage = EveryNAfterMEpochs(steps, after, trainer) if after or steps else None
+    val_usage = EveryNAfterMEpochs(val_steps, val_after, trainer) \
+        if val_after or val_steps else None
 
-        LOGGER.info(
-            'Using GT cache: %s found in cache, %s new ones',
-            f'{len(cached_reports):,}',
-            f'{len(non_cached_reports):,}'
-        )
+    for engine in (trainer, validator):
+        if engine is None:
+            continue
 
-        df_with_solution = self.cache
+        if engine is trainer:
+            usage = train_usage
+        else:
+            usage = val_usage
 
-        # Label new reports
-        if len(non_cached_reports) > 0:
-            new_reports_labels = self.labeler(non_cached_reports)
+        labeler = LabelerClass(vocab)
+        _attach_labeler(engine, labeler, labeler.metric_name, device=device, usage=usage)
 
-            # Build a DF to use merge()
-            new_reports_df = pd.DataFrame(new_reports_labels, columns=self.diseases)
-            new_reports_df['Reports'] = non_cached_reports
+    if needs_lock:
+        def _release_locks(engine, err=None):
+            lock.release()
 
-            df_with_solution = pd.concat([df_with_solution, new_reports_df], axis=0)
+            if err is not None:
+                LOGGER.error('Error in trainer=%s', engine is trainer)
+                raise err
 
-        # Target DF with the final result
-        target_reports_df = pd.DataFrame(reports, columns=['Reports'])
-        target_reports_df['order'] = list(range(len(reports)))
-        target_reports_df = target_reports_df.merge(
-            df_with_solution, how='left', on='Reports',
-        )
-        target_reports_df = target_reports_df.sort_values('order')
+        trainer.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)
+        trainer.add_event_handler(Events.COMPLETED, _release_locks, err=None)
 
-        self._assert_out_df_matches_input(reports, target_reports_df, 'Reports')
-
-        return target_reports_df[self.diseases].to_numpy()
-
-
-class NBatchesLabeler(HolisticLabeler):
-    """Calls the child labeler splitting the reports in n-batches."""
-    LIMIT_PER_BATCH = 10000
-
-    def __init__(self, labeler, batches=None):
-        super().__init__(labeler)
-
-        self.n_batches = batches
-
-    def redecide_n_batches(self, n_reports):
-        if self.n_batches is None:
-            if n_reports > self.LIMIT_PER_BATCH:
-                self.n_batches = math.ceil(n_reports / self.LIMIT_PER_BATCH)
-            else:
-                self.n_batches = 1
-
-    def forward(self, reports):
-        # reports: list of str
-
-        n_reports = len(reports)
-        self.redecide_n_batches(n_reports)
-
-        if self.n_batches <= 1:
-            return self.labeler(reports)
-
-        LOGGER.info(
-            'Total reports %s splitted in n_batches=%d of approx %s reports each',
-            f'{n_reports:,}', self.n_batches, math.ceil(n_reports / self.n_batches),
-        )
-
-        batches = np.array_split(reports, self.n_batches)
-
-        result = np.concatenate([
-            self.labeler(batch)
-            for batch in batches
-            if len(batch) > 0
-        ], axis=0)
-
-        return result
-
-
-class AvoidDuplicatedLabeler(HolisticLabeler):
-    """Avoids calculating duplicated results.
-
-    Relies on pd.DataFrame().merge() to find duplicated reports quickly.
-    """
-    def forward(self, reports):
-        # reports: list of str
-
-        # Convert to dataframe, to use merge() later
-        aux_df = pd.DataFrame(reports, columns=['text'])
-        n_samples = len(aux_df)
-        aux_df['order'] = list(range(n_samples))
-
-        # Grab unique reports passed
-        unique_reports = aux_df['text'].unique() # np.array of shape: n_unique_reports
-        n_unique_reports = len(unique_reports)
-
-        if n_samples == n_unique_reports:
-            return self.labeler(reports)
-
-        LOGGER.info(
-            'Reduced duplicated reports: from %s to %s unique',
-            f'{n_samples:,}',
-            f'{n_unique_reports:,}',
-        )
-
-        unique_generated = self.labeler(unique_reports)
-        # shape: n_unique_reports, n_labels
-
-        expected = (n_unique_reports, len(self.diseases))
-        assert unique_generated.shape == expected, \
-            f'Wrong shape in duplicated: {unique_generated.shape} vs {expected}'
-
-        df_unique = pd.DataFrame(unique_generated, columns=self.diseases)
-        df_unique['unique-reports'] = unique_reports
-
-        aux_df = aux_df.merge(df_unique, how='inner', left_on='text', right_on='unique-reports')
-        aux_df = aux_df.sort_values('order')
-
-        self._assert_out_df_matches_input(reports, aux_df, 'text')
-
-        return aux_df[self.diseases].to_numpy()
+        if validator is not None:
+            validator.add_event_handler(Events.EXCEPTION_RAISED, _release_locks)

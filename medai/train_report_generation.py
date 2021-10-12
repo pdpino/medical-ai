@@ -16,7 +16,7 @@ from medai.metrics.report_generation import (
     attach_losses_rg,
     attach_organ_by_sentence,
 )
-from medai.metrics.report_generation.labeler_correctness import attach_medical_correctness
+from medai.metrics.report_generation.labeler import attach_medical_correctness
 from medai.models import load_pretrained_weights_cnn_
 from medai.models.classification import (
     AVAILABLE_CLASSIFICATION_MODELS,

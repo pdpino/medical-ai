@@ -4,7 +4,7 @@ import pandas as pd
 
 from medai.datasets.mimic_cxr import DATASET_DIR
 from medai.metrics.report_generation.mirqi import MIRQILabeler
-from medai.metrics.report_generation.labeler import (
+from medai.metrics.report_generation.labeler.utils import (
     NBatchesLabeler,
     AvoidDuplicatedLabeler,
 )

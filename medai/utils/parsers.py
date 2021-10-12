@@ -5,7 +5,7 @@ from medai.models.classification import AVAILABLE_CLASSIFICATION_MODELS
 from medai.models.common import AVAILABLE_ACTIVATION_LAYERS, AVAILABLE_POOLING_REDUCTIONS
 from medai.utils.common import parse_str_or_int
 from medai.training.detection.h2bb import AVAILABLE_H2BB_METHODS
-from medai.metrics.report_generation.labeler_correctness import AVAILABLE_MED_LABELERS
+from medai.metrics.report_generation.labeler import AVAILABLE_MED_LABELERS
 
 # FIXME: this module (medai.utils) imports from medai.models (and others that are not utils)
 

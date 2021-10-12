@@ -7,7 +7,7 @@ import numpy as np
 
 from medai.datasets.mimic_cxr import DATASET_DIR
 from medai.metrics.report_generation.chexpert import ChexpertLabeler
-from medai.metrics.report_generation.labeler import (
+from medai.metrics.report_generation.labeler.utils import (
     NBatchesLabeler,
     AvoidDuplicatedLabeler,
 )

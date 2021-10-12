@@ -8,7 +8,7 @@ import pandas as pd
 from medai.utils.lock import with_lock
 from medai.datasets.iu_xray import DATASET_DIR as IU_DIR
 from medai.datasets.mimic_cxr import DATASET_DIR as MIMIC_DIR
-from medai.metrics.report_generation.labeler import (
+from medai.metrics.report_generation.labeler.utils import (
     HolisticLabeler,
     CacheLookupLabeler,
     NBatchesLabeler,

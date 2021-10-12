@@ -5,7 +5,7 @@ import logging
 import pandas as pd
 import numpy as np
 
-from medai.metrics.report_generation.labeler import (
+from medai.metrics.report_generation.labeler.utils import (
     HolisticLabeler,
     CacheLookupLabeler,
     NBatchesLabeler,
