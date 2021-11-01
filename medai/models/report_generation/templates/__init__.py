@@ -64,6 +64,15 @@ _TEMPLATE_SETS = {
         templates=chex_v1.TEMPLATES_CHEXPERT_v1,
         groups=chex_group.GROUPS_mimic_v6,
     ),
+    'chex-v1-gaming-rm-neg': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1_gaming_rm_neg,
+        groups=chex_group.GROUPS_no_active_disease,
+    ),
+    'chex-v1-gaming-dup': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1_gaming_dup,
+    ),
 }
 
 AVAILABLE_TEMPLATE_SETS = list(_TEMPLATE_SETS)

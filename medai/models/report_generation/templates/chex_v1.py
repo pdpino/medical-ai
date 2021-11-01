@@ -64,6 +64,24 @@ TEMPLATES_CHEXPERT_v1 = {
     },
 }
 
+# Remove negative sentences (i.e. leave empty)
+TEMPLATES_CHEXPERT_v1_gaming_rm_neg = {
+    abn: {
+        val: (sentence if val == 1 else '')
+        for val, sentence in d.items()
+    }
+    for abn, d in TEMPLATES_CHEXPERT_v1.items()
+}
+
+# Duplicate sentences
+TEMPLATES_CHEXPERT_v1_gaming_dup = {
+    abn: {
+        val: sentence + ' . ' + sentence if sentence else ''
+        for val, sentence in d.items()
+    }
+    for abn, d in TEMPLATES_CHEXPERT_v1.items()
+}
+
 
 TEMPLATES_CHEXPERT_v1_noisy = {
     'Cardiomegaly': {
@@ -125,29 +143,29 @@ TEMPLATES_CHEXPERT_v1_noisy = {
 
 # NOTE: Wrong chexpert labeler:
 # enlarged-cardiom == 1
-#   'heart and mediastinum within normal limits'
-#   'contour irregularity of the left clavicle appears chronic and suggests old injury'
-#   'chronic appearing contour deformity of the distal right clavicle suggests old injury .'
+#   'heart and mediastinum within normal limits',
+#   'contour irregularity of the left clavicle appears chronic and suggests old injury',
+#   'chronic appearing contour deformity of the distal right clavicle suggests old injury .',
 #   'elevated right hemidiaphragm , with a nodular soft tissue contour , containing liver .',
 
 # lung-lesion == 1
-#   ct scan is more sensitive in detecting small nodules
-#   no suspicious appearing lung nodules .
+#   'ct scan is more sensitive in detecting small nodules',
+#   'no suspicious appearing lung nodules .',
 #   'there is no evidence for mass lung apices .'
 
 # lung-opacity == 1
-#   no focal air space opacities .
-#    'this opacity cannot be well identified on the lateral view .',
+#   'no focal air space opacities .',
+#   'this opacity cannot be well identified on the lateral view .',
 
 # consolidation == 1
-#   'no focal airspace consolidations .'
-#   'no focal air is prominent consolidation .'
+#   'no focal airspace consolidations .',
+#   'no focal air is prominent consolidation .',
 
 # pleural-effusion == 0
-#   no knee joint effusion
+#   'no knee joint effusion',
 
 # pleural-effusion == 1
-#   no findings to suggest pleural effusion
+#   'no findings to suggest pleural effusion',
 
 # fracture==1
 #   no visible fractures

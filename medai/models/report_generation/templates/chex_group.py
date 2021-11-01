@@ -202,3 +202,10 @@ GROUPS_mimic_v6 = [
 #     ('Edema', 1, 'mild pulmonary edema .'),
 #     ('Atelectasis', 1, 'low lung volumes with bibasilar atelectasis .'),
 # ]
+
+
+GROUPS_no_active_disease = [
+    (
+        ACTUAL_DISEASES, 0, 'no active disease',
+    ),
+]
