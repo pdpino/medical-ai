@@ -55,6 +55,11 @@ def _calculate_metrics_dict(df):
     return all_metrics
 
 
+def dict_with_suffix(scores, suffix):
+    """Given a dict of MIRQI scores, add a suffix to the keys."""
+    new_name = f'MIRQI-{suffix}'
+    return { k.replace('MIRQI', new_name): v for k, v in scores.items() }
+
 @timeit_main(LOGGER, sep='-', sep_times=50)
 def evaluate_run(run_id,
                  override=False,
@@ -102,15 +107,60 @@ def evaluate_run(run_id,
         # Save to file, to avoid heavy recalculations
         df.to_csv(labeled_output_path, index=False)
 
-    # Compute MIRQI v2
+    # Compute MIRQI v1 and v2
     attributes_gt = _attributes_to_list(df['attributes-gt'])
     attributes_gen = _attributes_to_list(df['attributes-gen'])
     scores_v1 = mirqi.MIRQI(attributes_gt, attributes_gen)
     scores_v2 = mirqi.MIRQI_v2(attributes_gt, attributes_gen)
 
+    scores_v3 = mirqi.MIRQI(attributes_gt, attributes_gen, pos_weight=1, attribute_weight=0)
+    scores_v3 = dict_with_suffix(scores_v3, 'v3-clean')
+
+    scores_v4 = mirqi.MIRQI(attributes_gt, attributes_gen, pos_weight=1)
+    scores_v4 = dict_with_suffix(scores_v4, 'v4-pos')
+
+    ###
+    # v5-game: Remove negative findings when there is one positive
+    attributes_gamed_v5 = []
+    for report_entry in attributes_gen:
+        # neg_findings = [finding for finding in report_entry if finding[2] == 'NEGATIVE']
+        pos_findings = [finding for finding in report_entry if finding[2] != 'NEGATIVE']
+        if len(pos_findings) > 0:
+            attributes_gamed_v5.append(pos_findings) # keep only pos-findings
+        else:
+            attributes_gamed_v5.append(report_entry)
+
+    scores_v5 = mirqi.MIRQI(attributes_gt, attributes_gamed_v5)
+    scores_v5 = dict_with_suffix(scores_v5, 'v5-game')
+
+    ###
+    # v6-game: Fill with negative findings
+    attributes_gamed_v6 = []
+    ALL_ABNS = ["Other Finding", "Enlarged Cardiomediastinum", "Cardiomegaly",
+              "Lung Lesion", "Airspace Opacity", "Edema", "Consolidation",
+              "Pneumonia", "Atelectasis", "Pneumothorax", "Pleural Effusion",
+              "Pleural Other", "Fracture", "Support Devices",
+              "Emphysema", "Cicatrix", "Hernia", "Calcinosis", "Airspace Disease",
+              "Hypoinflation"]
+    for report_entry in attributes_gen:
+        abns_mentioned = set(finding[1] for finding in report_entry)
+        gamed_entry = [list(finding) for finding in report_entry] # copy
+        for abn in ALL_ABNS:
+            if abn not in abns_mentioned:
+                gamed_entry.append([abn.lower(), abn, 'NEGATIVE', ''])
+
+        attributes_gamed_v6.append(gamed_entry)
+
+    scores_v6 = mirqi.MIRQI(attributes_gt, attributes_gamed_v6)
+    scores_v6 = dict_with_suffix(scores_v6, 'v6-game')
+
     # Add to dataframe
     df = df.assign(**scores_v1)
     df = df.assign(**scores_v2)
+    df = df.assign(**scores_v3)
+    df = df.assign(**scores_v4)
+    df = df.assign(**scores_v5)
+    df = df.assign(**scores_v6)
 
     # Compute metrics
     metrics = _calculate_metrics_dict(df)
@@ -122,7 +172,7 @@ def evaluate_run(run_id,
     LOGGER.info('Saved to file: %s', mirqi_metrics_path)
 
     if not quiet:
-        pprint(metrics)
+        pprint(metrics['test'])
 
 @timeit_main(LOGGER)
 def evaluate_run_with_free_values(run_id, free_values, **kwargs):

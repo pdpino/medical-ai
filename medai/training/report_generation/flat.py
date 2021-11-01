@@ -60,7 +60,7 @@ def clean_gt_reports(gt_reports):
 
 
 def get_step_fn_flat(model, optimizer=None, training=True, free=False,
-                     device='cuda', max_words=200, **unused_kwargs):
+                     device='cuda', max_words=200, temperature=1, **unused_kwargs):
     """Creates a step function for an Engine."""
     loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
@@ -91,7 +91,7 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
 
         if not free:
             # Compute word classification loss
-            loss = loss_fn(generated_words.permute(0, 2, 1), reports)
+            loss = loss_fn(generated_words.permute(0, 2, 1) / temperature, reports)
         else:
             loss = None
 

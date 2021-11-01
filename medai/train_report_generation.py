@@ -398,6 +398,7 @@ def train_from_scratch(run_name,
                        lambda_stop=1,
                        lambda_att=1,
                        lambda_sent=1,
+                       temperature=1,
                        checkpoint_metric=None,
                        organ_by_sentence=True,
                        augment=False,
@@ -530,6 +531,11 @@ def train_from_scratch(run_name,
         step = lr_sch_kwargs['step_size']
         factor = lr_sch_kwargs['gamma']
         run_name += f'_sch-step{step}-f{factor}'
+    if temperature != 1:
+        run_name += f'_temp{temperature}'
+
+    if temperature != 1 and hierarchical:
+        raise Exception('Temperature != 1 is not implemented for hierarchical')
 
     if frontal_only and not supervise_attention: # If supervise attention, frontal_only is implied
         run_name += '_front'
@@ -700,6 +706,7 @@ def train_from_scratch(run_name,
         'lambda_sent': lambda_sent,
         'organ_by_sentence': organ_by_sentence,
         'checkpoint_metric': checkpoint_metric,
+        'temperature': temperature,
     }
 
     # Save metadata
@@ -771,6 +778,8 @@ def parse_args():
                         help='Lambda for att loss')
     parser.add_argument('--lambda-sent', type=float, default=1,
                         help='Lambda for sent loss')
+    parser.add_argument('--temperature', type=float, default=1,
+                        help='Temperature for cross-entropy loss')
     parser.add_argument('--skip-organ-by-sentence', action='store_true',
                         help='If present, do not attach organ-by-sentence metrics')
     parser.add_argument('--checkpoint-metric', type=str, default=None, nargs='+',
@@ -1047,6 +1056,7 @@ if __name__ == '__main__':
                            lambda_stop=ARGS.lambda_stop,
                            lambda_att=ARGS.lambda_att,
                            lambda_sent=ARGS.lambda_sent,
+                           temperature=ARGS.temperature,
                            organ_by_sentence=not ARGS.skip_organ_by_sentence,
                            augment=ARGS.augment,
                            augment_mode=ARGS.augment_mode,
