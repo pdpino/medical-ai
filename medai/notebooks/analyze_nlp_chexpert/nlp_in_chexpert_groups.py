@@ -1,0 +1,431 @@
+import os
+import random
+import pickle
+import logging
+from collections import namedtuple
+from itertools import product
+from tqdm import tqdm
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from pycocoevalcap.bleu import bleu_scorer
+from pycocoevalcap.cider import cider_scorer
+from pycocoevalcap.rouge import rouge as rouge_lib
+
+from medai.datasets.iu_xray import DATASET_DIR as IU_DIR
+from medai.datasets.common.constants import CHEXPERT_DISEASES
+from medai.datasets.mimic_cxr import DATASET_DIR as MIMIC_DIR
+from medai.metrics.report_generation.nlp.cider_idf import (
+    CiderScorerIDFModified,
+    compute_doc_freq,
+)
+from medai.utils import timeit_main, config_logging
+from medai.utils.files import WORKSPACE_DIR
+
+LOGGER = logging.getLogger('medai.analyze.nlp-chex-groups')
+
+###### Scorers
+class RougeLScorer:
+    """Comply with BLEU api."""
+    def __init__(self):
+        self._all_scores = []
+
+        self._scorer = rouge_lib.Rouge()
+
+    def update(self, generated, gt):
+        new_score = self._scorer.calc_score([generated], [gt])
+        self._all_scores.append(new_score)
+
+    def __iadd__(self, tup):
+        assert isinstance(tup, tuple) and len(tup) == 2
+        gen, gt_list = tup
+        assert len(gt_list) == 1
+        self.update(gen, gt_list[0])
+        return self
+
+    def compute_score(self):
+        # scores = np.array(self._all_scores)
+        return np.mean(self._all_scores), self._all_scores
+
+_SCORERS = {
+    'bleu': (bleu_scorer.BleuScorer, 4),
+    'rouge': (RougeLScorer, 1),
+    'cider': (cider_scorer.CiderScorer, 1),
+    'cider-IDF': (CiderScorerIDFModified, 1),
+}
+
+
+###### Sampling classes
+
+class BaseSampler:
+    def __init__(self, sentences_gen, sentences_gt):
+        self.sentences_gen = sentences_gen
+        self.sentences_gt = sentences_gt
+    def __repr__(self):
+        return self.__str__()
+
+class SampleAllPairwise(BaseSampler):
+    def __iter__(self):
+        content = product(self.sentences_gen, self.sentences_gt)
+        for sentence_gen, sentence_gt in content:
+            yield sentence_gen, [sentence_gt]
+
+    def __len__(self):
+        return len(self.sentences_gen)*len(self.sentences_gt)
+
+    def __str__(self):
+        return 'all'
+
+class SampleKRandomGen(BaseSampler):
+    def __init__(self, sentences_gen, sentences_gt, k_times=100, max_n=500):
+        super().__init__(sentences_gen, sentences_gt)
+
+        self.k = k_times
+        self.max_n = max_n
+
+    def __iter__(self):
+        if self.max_n is not None and self.max_n < len(self.sentences_gt):
+            gts = random.sample(self.sentences_gt, self.max_n)
+        else:
+            gts = self.sentences_gt
+
+        for sentence_gt in gts:
+            if self.k < len(self.sentences_gen):
+                gens = random.sample(self.sentences_gen, self.k)
+            else:
+                gens = self.sentences_gen # Generate all available pairs instead
+            for sentence_gen in gens:
+                yield sentence_gen, [sentence_gt]
+
+    def __len__(self):
+        n_gts = min(len(self.sentences_gt), self.max_n)
+        n_gens = min(len(self.sentences_gen), self.k)
+        return n_gts * n_gens
+
+    def __str__(self):
+        return f'random-gen_k{self.k}_n{self.max_n}'
+
+class SampleKRandomGT(BaseSampler):
+    def __init__(self, sentences_gen, sentences_gt, k_times=100, k_gts=5, max_n=500):
+        super().__init__(sentences_gen, sentences_gt)
+
+        self.k_times = k_times
+        self.k_gts = k_gts
+        self.max_n = max_n
+
+    def __iter__(self):
+        if self.max_n < len(self.sentences_gen):
+            gens = random.sample(self.sentences_gen, self.max_n)
+        else:
+            gens = self.sentences_gen
+
+        grab_n_samples = self.k_times * self.k_gts
+        for sentence_gen in gens:
+            if grab_n_samples < len(self.sentences_gt):
+                gts = random.sample(self.sentences_gt, grab_n_samples)
+            else:
+                gts = self.sentences_gt
+            for i in range(0, len(gts), self.k_gts):
+                yield sentence_gen, gts[i:i+self.k_gts]
+
+    def __len__(self):
+        n_gens = min(self.max_n, len(self.sentences_gen))
+        n_gts = min(self.k_times, len(self.sentences_gt) // self.k_gts)
+        return n_gens * n_gts
+
+    def __str__(self):
+        return f'random-gt_k{self.k_times}_n{self.max_n}_lgts{self.k_gts}'
+
+
+_SAMPLERS = {
+    'all': SampleAllPairwise,
+    'random-gen': SampleKRandomGen,
+    'random-gt': SampleKRandomGT,
+}
+
+###### Matrices functions
+
+MatrixResult = namedtuple('MatrixResult', ['cube', 'dists', 'metric', 'groups', 'sampler'])
+
+def calc_score_matrices(grouped, dataset_info, groups=(-2, 0, -1, 1), metric='bleu', show=True,
+                        sampler='all', **sampler_kwargs,
+                       ):
+    for g in groups:
+        if g not in grouped:
+            LOGGER.warning('%s not in grouped!', g)
+
+    ScorerClass, n_metrics = _SCORERS[metric]
+    SamplerClass = _SAMPLERS[sampler]
+
+    n_groups = len(groups)
+    out_cube = np.zeros((n_metrics, n_groups, n_groups))
+
+    out_dists = dict()
+
+    for (row_i, group_gen), (col_j, group_gt) in product(enumerate(groups), enumerate(groups)):
+        scorer = ScorerClass()
+
+        if metric == 'cider-IDF':
+            # pylint: disable=assigning-non-slot
+            scorer.document_frequency = dataset_info.doc_freq
+            # Also needs to update ref_len
+            scorer.ref_len = dataset_info.log_ref_len
+
+        sentences_gen = grouped.get(group_gen, [])
+        sentences_gt = grouped.get(group_gt, [])
+
+        content = SamplerClass(sentences_gen, sentences_gt, **sampler_kwargs)
+        if show:
+            content = tqdm(content, desc=f'{group_gen:>2} vs {group_gt:>2}')
+
+        for sentence_gen, sentences_gt in content:
+            scorer += (sentence_gen, sentences_gt)
+
+        summary, all_scores = scorer.compute_score()
+        # all_scores shape: n_metrics, n_samples=n_group1 x n_group2
+        # summary shape: n_metrics
+
+        if len(all_scores) == 0:
+            continue
+
+        # REMEMBER THEY ARE FLIPPED!!
+        # out_cube[:, row_i, col_j] = np.array(summary)
+        out_cube[:, col_j, row_i] = np.array(summary)
+
+        # key = (group_gen, group_gt)
+        key = (group_gt, group_gen)
+        out_dists[key] = np.array(all_scores)
+
+    return MatrixResult(
+        cube=out_cube,
+        dists=out_dists,
+        metric=metric,
+        groups=groups,
+        # dummy sampler to get a string representing the sampler
+        sampler=str(SamplerClass([], [], **sampler_kwargs)),
+    )
+
+
+
+
+#### Experiment functions
+
+class Experiment:
+    def __init__(self, abnormality, grouped, dataset):
+        self.abnormality = abnormality
+        self.grouped = grouped
+        self.dataset = dataset
+
+        self.grouped_2 = dict()
+        self.grouped_2[0] = grouped.get(0, []) + grouped.get(-2, [])
+        self.grouped_2[1] = grouped.get(1, []) + grouped.get(-1, [])
+        self.results = []
+
+    def add_result(self, result):
+        assert isinstance(result, MatrixResult)
+        self.results.append(result)
+
+    def append(self, result):
+        self.add_result(result)
+
+    def __getitem__(self, idx):
+        return self.results[idx]
+
+    def __str__(self):
+        lens = tuple([len(self.grouped.get(group, [])) for group in (-2, 0, -1, 1)])
+        return f'{self.abnormality} data={self.dataset} n_sent={lens} n_results={len(self.results)}'
+
+    def __repr__(self):
+        return self.__str__()
+
+
+def init_experiment(abnormality, dataset_info):
+    grouped = dataset_info.sentences_df.groupby(abnormality)['sentence'].apply(
+        lambda x: sorted(list(x), key=len),
+    )
+    # print([(valuation, len(sentences)) for valuation, sentences in grouped.iteritems()])
+
+    return Experiment(
+        abnormality=abnormality,
+        grouped=grouped,
+        dataset=dataset_info.name,
+    )
+
+
+### Plot matrix functions
+
+KEY_TO_LABEL = {-2: 'None', 0: 'Neg', 1: 'Pos', -1: 'Unc'}
+PRETTIER_METRIC = {
+    'bleu': 'BLEU',
+    'cider-IDF': 'CIDEr-D',
+    'cider': 'CIDEr-D-NONIDF',
+    'rouge': 'ROUGE-L',
+}
+
+
+def get_pretty_metric(metric, metric_i=0):
+    pretty_metric = PRETTIER_METRIC[metric]
+    if pretty_metric == 'BLEU':
+        pretty_metric += f'-{metric_i+1}'
+    return pretty_metric
+
+
+def plot_heatmap(exp, result_i=-1, metric_i=0):
+    # Select result to plot
+    result = exp.results[result_i]
+
+    # This is useful for BLEU-1, -2, -3, -4
+    if metric_i > result.cube.shape[0]:
+        err = f'metric_i={metric_i} too large for cube of shape {result.cube.shape}, using 0'
+        LOGGER.error(err)
+        metric_i = 0
+
+    # Prettier
+    ticks = [KEY_TO_LABEL[k] for k in result.groups]
+    pretty_metric = get_pretty_metric(result.metric, metric_i=metric_i)
+
+    sns.heatmap(result.cube[metric_i], annot=True, square=True, cmap='YlOrRd',
+                xticklabels=ticks, yticklabels=ticks, fmt='.3f')
+
+    plt.title(f'{pretty_metric} in {exp.abnormality} ({result.sampler})')
+    plt.xlabel('Generated', fontsize=14)
+    plt.ylabel('Ground-Truth', fontsize=14)
+
+
+#### Plot hist functions
+def plot_hists(exp, keys, result_i=-1, metric_i=0,
+               title=True, xlabel=True, bins=15, alpha=0.5,
+               add_n_to_label=False,
+               **hist_kwargs):
+    result = exp.results[result_i]
+
+    for key in keys:
+        dist = result.dists[key]
+        if dist.ndim > 1:
+            values = dist[metric_i] # useful for bleu-1, -2, -3, -4
+        else:
+            values = dist
+
+        assert len(key) == 2
+        gt_key, gen_key = key
+        label = f'GT: {KEY_TO_LABEL[gt_key]} / Gen: {KEY_TO_LABEL[gen_key]}'
+        if add_n_to_label:
+            label += f' / (N={len(values):,})'
+        plt.hist(values, label=label, alpha=alpha, bins=bins, density=True, **hist_kwargs)
+
+        print(f'{label} -- mean={values.mean():.4f} -- n={len(values):,}')
+
+    pretty_metric = get_pretty_metric(result.metric, metric_i)
+
+    plt.legend()
+    if title:
+        dataset = 'IU' if exp.dataset == 'iu' else 'MIMIC'
+        plt.title(f'{pretty_metric} scores in {exp.abnormality} sentences ({dataset})')
+    if xlabel:
+        plt.xlabel(f'{pretty_metric} score')
+    plt.ylabel('Frequency')
+
+
+#### Load/save pickle functions
+
+_EXP_FOLDER = os.path.join(WORKSPACE_DIR, 'report_generation', 'nlp-controlled-corpus')
+def save_experiment_pickle(exp, name, overwrite=False):
+    fpath = os.path.join(_EXP_FOLDER, f'{name}.data')
+    if not overwrite and os.path.isfile(fpath):
+        raise Exception(f'{fpath} file exists!')
+
+    with open(fpath, 'wb') as f:
+        pickle.dump(exp, f)
+    LOGGER.info('Saved to %s', fpath)
+
+def exist_experiment_pickle(name):
+    fpath = os.path.join(_EXP_FOLDER, f'{name}.data')
+    return os.path.isfile(fpath)
+
+def load_experiment_pickle(name):
+    fpath = os.path.join(_EXP_FOLDER, f'{name}.data')
+    if not os.path.isfile(fpath):
+        raise Exception(f'No {fpath} file exists!')
+
+    with open(fpath, 'rb') as f:
+        exp = pickle.load(f)
+    return exp
+
+
+####### Dataset loading
+DatasetInfo = namedtuple('DatasetInfo', [
+    'name', 'reports_df', 'sentences_df', 'doc_freq', 'log_ref_len',
+])
+
+def init_dataset_info(name):
+    dataset_dir = IU_DIR if name == 'iu' else MIMIC_DIR
+
+    fpath = os.path.join(dataset_dir, 'reports', 'sentences_with_chexpert_labels.csv')
+    sentences_df = pd.read_csv(fpath)
+    fpath = os.path.join(dataset_dir, 'reports', 'reports_with_chexpert_labels.csv')
+    reports_df = pd.read_csv(fpath)
+
+
+    doc_freq = compute_doc_freq(list(reports_df['Reports']))
+    log_ref_len = np.log(len(reports_df))
+
+    return DatasetInfo(
+        name=name,
+        reports_df=reports_df,
+        sentences_df=sentences_df,
+        doc_freq=doc_freq,
+        log_ref_len=log_ref_len,
+    )
+
+@timeit_main(LOGGER)
+def run_experiments(dataset='iu',
+                    abns=[],
+                    metrics=['bleu', 'rouge', 'cider-IDF'],
+                    k_times=50,
+                    max_n=50,
+                    ):
+    dataset_info = init_dataset_info(dataset)
+
+    kwargs = {
+        'sampler': 'random-gen',
+        'k_times': k_times,
+        # 'k_gts': 1,
+        'max_n': max_n,
+    }
+
+    for abn in abns:
+        fname = f'{dataset_info.name}-{abn.replace(" ", "-").lower()}'
+        LOGGER.info('Computing %s', fname)
+
+        # Save only one per dataset per abnormality, with a list of results
+        exist = exist_experiment_pickle(fname)
+        if exist:
+            exp = load_experiment_pickle(fname)
+        else:
+            exp = init_experiment(abn, dataset_info)
+
+        for metric in metrics:
+            LOGGER.info('\tcomputing 4x4 for %s', metric)
+            exp.append(calc_score_matrices(
+                exp.grouped, dataset_info, metric=metric, **kwargs,
+            ))
+            LOGGER.info('\tcomputing 2x2 for %s', metric)
+            exp.append(calc_score_matrices(
+                exp.grouped_2, dataset_info, groups=(0, 1), metric=metric, **kwargs,
+            ))
+
+        save_experiment_pickle(exp, fname, overwrite=exist)
+
+if __name__ == '__main__':
+    config_logging()
+
+    run_experiments(
+        'mimic',
+        abns=CHEXPERT_DISEASES[1:],
+        # abns=['Support Devices'],
+        metrics=['bleu', 'rouge', 'cider-IDF'],
+        k_times=50,
+        max_n=100,
+    )
