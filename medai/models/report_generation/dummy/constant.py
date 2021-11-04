@@ -22,12 +22,15 @@ change and no evidence of acute cardiopulmonary disease .
 the heart is normal in size . the mediastinum is unremarkable .
 no pneumonia , vascular congestion , or pleural effusion . END"""
 
+_DUMMY_SHORT = "no acute findings . END"
+
 _CONSTANT_REPORTS = {
     'iu': _IU_DUMMY_REPORT,
     'mimic': _MIMIC_DUMMY_REPORT,
     'mimic-v2': _MIMIC_DUMMY_REPORT_2,
     'mimic-v3': _MIMIC_DUMMY_REPORT_3,
     'mimic-v4': _MIMIC_DUMMY_REPORT_4,
+    'short': _DUMMY_SHORT,
 }
 
 AVAILABLE_CONSTANT_VERSIONS = list(_CONSTANT_REPORTS)

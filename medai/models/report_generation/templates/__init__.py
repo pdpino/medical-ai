@@ -1,7 +1,10 @@
 import logging
 
 from medai.datasets.common import CHEXPERT_DISEASES
-from medai.models.report_generation.templates import chex_v1, chex_v2, chex_v3, chex_group
+from medai.models.report_generation.templates import (
+    chex_v1, chex_v2, chex_v3, chex_v4, chex_v5, chex_v6,
+    chex_group,
+)
 from medai.models.report_generation.templates.models import (
     StaticTemplateRGModel,
     GroupedTemplateRGModel,
@@ -72,6 +75,42 @@ _TEMPLATE_SETS = {
     'chex-v1-gaming-dup': partialclass(
         StaticTemplateRGModel,
         templates=chex_v1.TEMPLATES_CHEXPERT_v1_gaming_dup,
+    ),
+    'chex-v4-syn': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v4.TEMPLATES_CHEXPERT_v4_syn,
+    ),
+    'chex-v4-noisy': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v4.TEMPLATES_CHEXPERT_v4_noisy,
+    ),
+    'chex-v4-dup-noisy': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v4.TEMPLATES_CHEXPERT_v4_gaming_dup_noisy,
+    ),
+    'chex-v4-dup-noisy-inv': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v4.TEMPLATES_CHEXPERT_v4_gaming_dup_noisy_inv,
+    ),
+    'chex-v5-clean': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v5.TEMPLATES_CHEXPERT_v5_clean,
+    ),
+    'chex-v5-verbose': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v5.TEMPLATES_CHEXPERT_v5_verbose,
+    ),
+    'chex-v5-2-verbose': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v5.TEMPLATES_CHEXPERT_v5_2_verbose,
+    ),
+    'chex-v6-minimal': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v6.TEMPLATES_CHEXPERT_v6_minimal,
+    ),
+    'chex-v6-verbose': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v6.TEMPLATES_CHEXPERT_v6_verbose,
     ),
 }
 
