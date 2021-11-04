@@ -22,7 +22,24 @@ change and no evidence of acute cardiopulmonary disease .
 the heart is normal in size . the mediastinum is unremarkable .
 no pneumonia , vascular congestion , or pleural effusion . END"""
 
+# Short: only one sentence, findings will be _unmentioned_
 _DUMMY_SHORT = "no acute findings . END"
+# Long: one sentence per finding, each will be mentioned _negatively_
+_DUMMY_LONG = """heart size is normal . the mediastinal contour is normal .
+no pulmonary nodules or mass lesions identified . the lungs are free of focal airspace disease .
+no pulmonary edema . no focal consolidation . no pneumonia . no atelectasis .
+no pneumothorax is seen . no pleural effusion . no fibrosis .
+no fracture is seen . END"""
+
+
+_CONSTANT_PHRASING_v1 = """the heart is normal in size . the mediastinum is unremarkable .
+the lungs are clear .
+there is no pneumothorax or pleural effusion . no focal airspace disease . END"""
+_CONSTANT_PHRASING_v2 = """heart size and mediastinal contour are within normal limits .
+no evidence of focal consolidation , pneumothorax , or pleural effusion . END"""
+_CONSTANT_PHRASING_v3 = """the heart size and cardiomediastinal silhouette are within
+normal limits .
+no focal area of consolidation , pleural effusion , pneumothorax . END"""
 
 _CONSTANT_REPORTS = {
     'iu': _IU_DUMMY_REPORT,
@@ -31,6 +48,10 @@ _CONSTANT_REPORTS = {
     'mimic-v3': _MIMIC_DUMMY_REPORT_3,
     'mimic-v4': _MIMIC_DUMMY_REPORT_4,
     'short': _DUMMY_SHORT,
+    'long': _DUMMY_LONG,
+    'simple-v1': _CONSTANT_PHRASING_v1,
+    'simple-v2': _CONSTANT_PHRASING_v2,
+    'simple-v3': _CONSTANT_PHRASING_v3,
 }
 
 AVAILABLE_CONSTANT_VERSIONS = list(_CONSTANT_REPORTS)

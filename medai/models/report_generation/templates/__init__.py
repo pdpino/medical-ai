@@ -112,6 +112,10 @@ _TEMPLATE_SETS = {
         StaticTemplateRGModel,
         templates=chex_v6.TEMPLATES_CHEXPERT_v6_verbose,
     ),
+    'chex-v6-verbose-amb': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_v6.TEMPLATES_CHEXPERT_v6_verbose_amb,
+    ),
 }
 
 AVAILABLE_TEMPLATE_SETS = list(_TEMPLATE_SETS)
