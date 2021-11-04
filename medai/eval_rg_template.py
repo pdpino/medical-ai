@@ -374,7 +374,7 @@ def parse_args():
                         help='If present, do not use medical-correctness metrics')
     parser.add_argument('--quiet', action='store_true',
                         help='Do not print metrics to stdout')
-    parser.add_argument('--order', type=str, default='best',
+    parser.add_argument('--order', type=str, default='best-v2',
                         help='Default order to use')
     parser.add_argument('--reports-version', type=str, default=LATEST_REPORTS_VERSION,
                         help='Specify an reports-version')

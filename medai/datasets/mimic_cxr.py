@@ -114,7 +114,8 @@ class MIMICCXRDataset(Dataset):
             self.labels = CHEXPERT_DISEASES
 
         # Load master_df
-        fpath = os.path.join(DATASET_DIR, 'master_metadata.csv')
+        # FIXME: mini will not work with v4-2-fixed for now
+        fpath = os.path.join(DATASET_DIR, 'master_metadata.v4-2-fixed.csv')
         self.master_df = pd.read_csv(fpath)
 
         # Filter by train, val, test

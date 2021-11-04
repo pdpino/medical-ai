@@ -22,12 +22,18 @@ TMP_FOLDER = os.path.join(TMP_DIR, 'mirqi')
 MIRQI_FOLDER = '~/software/MIRQI'
 CHEXPERT_PYTHON = '~/software/miniconda3/envs/chexpert-label/bin/python'
 
+def _smart_division(a, b):
+    if b == 0:
+        return 0
+    return a / b
+
 # Medical Image Reporting Quality Indexing
 def MIRQI(gt_list, cand_list, pos_weight=0.8, attribute_weight=0.3):
     """Compute the score of matching keyword and associated attributes
     between gt list and candidate list.
 
     Copied from https://github.com/xiaosongwang/MIRQI, minor changes:
+        - use _smart_division() to avoid losing float precision
         - return format
         - linter fixes
         - docstring improvements
@@ -104,19 +110,18 @@ def MIRQI(gt_list, cand_list, pos_weight=0.8, attribute_weight=0.3):
             score_r = 0.0
             score_p = 0.0
         else:
-            score_r = tp / (tp + fn + 0.000001)
-            score_p = tp / (tp + fp + 0.000001)
+            score_r = _smart_division(tp, tp + fn)
+            score_p = _smart_division(tp, tp + fp)
 
         # calculate score for negative mentions
         # if neg_count_in_cand != 0 and neg_count_in_gt != 0:
         if tn != 0:
-            score_r = score_r * pos_weight + tn / (tn + fp + 0.000001) * (1.0 - pos_weight)
-            score_p = score_p * pos_weight + tn / (tn + fn + 0.000001) * (1.0 - pos_weight)
+            score_r = score_r * pos_weight + _smart_division(tn, tn + fp) * (1.0 - pos_weight)
+            score_p = score_p * pos_weight + _smart_division(tn, tn + fn) * (1.0 - pos_weight)
 
         MIRQI_r.append(score_r)
         MIRQI_p.append(score_p)
-        rec_prec = (score_r + score_p)
-        MIRQI_f.append(2*(score_r * score_p) / rec_prec if rec_prec != 0.0 else 0.0)
+        MIRQI_f.append(_smart_division(2 * score_r * score_p, score_r + score_p))
 
     scores = {
         'MIRQI-r': MIRQI_r,
