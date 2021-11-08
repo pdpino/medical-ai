@@ -1,5 +1,5 @@
-import operator
 import logging
+import operator
 from pprint import pprint
 import numpy as np
 from torch.nn.functional import interpolate
@@ -161,3 +161,10 @@ def print_rg_metrics(metrics, ignore=CHEXPERT_DISEASES, splits='test'):
             if _filter_metric(k)
         }
     pprint(to_print_metrics)
+
+
+def build_suffix(free, best):
+    suffix = 'free' if free else 'notfree'
+    if not best:
+        return suffix
+    return f'{suffix}-{best}'

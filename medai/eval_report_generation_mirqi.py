@@ -9,8 +9,11 @@ import numpy as np
 
 from medai.utils import timeit_main, RunId, config_logging, parsers
 from medai.utils.files import get_results_folder
-from medai.metrics import load_rg_outputs
-from medai.metrics.report_generation import mirqi
+from medai.metrics.report_generation.writer import (
+    load_rg_outputs,
+    get_best_outputs_info,
+)
+from medai.metrics.report_generation import build_suffix, mirqi
 
 LOGGER = logging.getLogger('medai.rg.eval.mirqi')
 
@@ -65,6 +68,7 @@ def evaluate_run(run_id,
                  override=False,
                  max_samples=None,
                  free=False,
+                 best=None,
                  quiet=False,
                  ):
     """Evaluates a run with the MIRQI metric."""
@@ -72,7 +76,7 @@ def evaluate_run(run_id,
     results_folder = get_results_folder(run_id)
 
     # Output file at the end of this process
-    suffix = 'free' if free else 'notfree'
+    suffix = build_suffix(free, best)
     labeled_output_path = os.path.join(results_folder, f'outputs-labeled-mirqi-{suffix}.csv')
     # The ones "output-mirqi-suffix.csv" are deprecated!!
 
@@ -82,7 +86,7 @@ def evaluate_run(run_id,
         df = pd.read_csv(labeled_output_path)
     else:
         # Read outputs
-        df = load_rg_outputs(run_id, free=free)
+        df = load_rg_outputs(run_id, free=free, best=best)
 
         if df is None:
             LOGGER.error('Need to compute outputs for run first: %s', run_id)
@@ -175,13 +179,18 @@ def evaluate_run(run_id,
         pprint(metrics['test'])
 
 @timeit_main(LOGGER)
-def evaluate_run_with_free_values(run_id, free_values, **kwargs):
+def evaluate_run_with_free_values(run_id, free_values, only_best, **kwargs):
     LOGGER.info('Evaluating MIRQI %s', run_id)
 
-    for free_value in free_values:
+    chosen, leftout = get_best_outputs_info(run_id, free_values, only_best)
+
+    LOGGER.info('\tChosen suffixes: %s, leftout: %s', chosen, leftout)
+
+    for free_value, best in chosen:
         evaluate_run(
             run_id,
             free=free_value,
+            best=best,
             **kwargs
         )
 
@@ -199,6 +208,9 @@ def parse_args():
                         help='Debug: use a max amount of samples')
     parser.add_argument('--quiet', action='store_true',
                         help='Do not print final metrics to stdout')
+    parser.add_argument('--only-best', type=str, nargs='*',
+                        help='Only eval best by certain metrics')
+
 
     parsers.add_args_free_values(parser)
 
@@ -221,5 +233,6 @@ if __name__ == '__main__':
         override=ARGS.override,
         max_samples=ARGS.max_samples,
         free_values=ARGS.free_values,
+        only_best=ARGS.only_best,
         quiet=ARGS.quiet,
     )

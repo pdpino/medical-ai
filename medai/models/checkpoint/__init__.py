@@ -19,7 +19,9 @@ from medai.models.cls_spatial import create_cls_spatial_model
 from medai.models.detection import create_detection_seg_model
 from medai.models.cls_seg import create_cls_seg_model
 from medai.models.checkpoint.compiled_model import CompiledModel
-from medai.models.checkpoint.filenames import get_checkpoint_filepath
+from medai.models.checkpoint.filenames import (
+    get_checkpoint_filepath, get_checkpoint_metrics_from_folder,
+)
 from medai.utils.files import get_checkpoint_folder
 
 
@@ -203,6 +205,14 @@ def load_compiled_model_report_generation(run_id,
     Checkpoint.load_objects(compiled_model.to_save_checkpoint(), checkpoint)
 
     return compiled_model
+
+
+def get_best_checkpoints_metrics(run_id):
+    folder = get_checkpoint_folder(run_id,
+                                   save_mode=False,
+                                   assert_exists=True,
+                                   )
+    return get_checkpoint_metrics_from_folder(folder)
 
 
 def attach_checkpoint_saver(run_id,

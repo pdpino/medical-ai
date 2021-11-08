@@ -29,6 +29,26 @@ def _get_best(infos, metric):
     return max(infos, key=lambda x: x.value)
 
 
+def get_checkpoint_metrics_from_folder(folder):
+    checkpoint_names = [
+        fname
+        for fname in os.listdir(folder)
+        if fname.endswith('.pt')
+    ]
+
+    if len(checkpoint_names) == 0:
+        return []
+
+    checkpoint_infos = [
+        _split_checkpoint_name(name)
+        for name in checkpoint_names
+    ]
+
+    return sorted(list(set(
+        info.metric for info in checkpoint_infos if info.metric is not None
+    )))
+
+
 def get_checkpoint_filepath(folder, mode='best'):
     """Return the checkpoint fpath for in a folder.
 

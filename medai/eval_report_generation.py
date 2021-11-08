@@ -11,6 +11,7 @@ from medai.metrics.report_generation import (
     attach_attention_vs_masks,
     attach_losses_rg,
     attach_organ_by_sentence,
+    build_suffix,
     print_rg_metrics,
 )
 from medai.metrics.report_generation.labeler import attach_medical_correctness
@@ -19,7 +20,10 @@ from medai.metrics.report_generation.writer import (
     delete_previous_outputs,
 )
 from medai.models.report_generation import is_decoder_hierarchical
-from medai.models.checkpoint import load_compiled_model_report_generation
+from medai.models.checkpoint import (
+    load_compiled_model_report_generation,
+    get_best_checkpoints_metrics,
+)
 from medai.training.report_generation import get_step_fn_getter
 from medai.utils import (
     print_hw_options,
@@ -44,6 +48,7 @@ def _evaluate_model_in_dataloader(
         medical_correctness=True,
         att_vs_masks=False,
         free=False,
+        best=None,
         check_unclean=True,
         model_name='lstm',
         device='cuda'):
@@ -76,7 +81,7 @@ def _evaluate_model_in_dataloader(
     attach_organ_by_sentence(engine, vocab, device=device)
     attach_report_writer(engine, run_id,
                          vocab, assert_n_samples=len(dataset),
-                         free=free)
+                         free=free, best=best)
 
     if medical_correctness:
         attach_medical_correctness(engine, None, vocab, device=device)
@@ -84,7 +89,7 @@ def _evaluate_model_in_dataloader(
     if att_vs_masks and not free:
         attach_attention_vs_masks(engine, device=device)
 
-    LOGGER.info('Evaluating model in %s, free=%s', dataset.dataset_type, free)
+    LOGGER.info('Evaluating model in %s, free=%s, best=%s', dataset.dataset_type, free, best)
     engine.run(dataloader, n_epochs)
 
     return engine.state.metrics
@@ -101,6 +106,7 @@ def evaluate_model_and_save(
         att_vs_masks=False,
         n_epochs=1,
         free_values=[False, True],
+        best=None,
         check_unclean=True,
         model_name='lstm',
         quiet=False,
@@ -115,10 +121,11 @@ def evaluate_model_and_save(
         'n_epochs': n_epochs,
         'check_unclean': check_unclean,
         'model_name': model_name,
+        'best': best,
     }
 
     for free_value in free_values:
-        delete_previous_outputs(run_id, free=free_value)
+        delete_previous_outputs(run_id, free=free_value, best=best)
 
         metrics = {}
 
@@ -136,7 +143,7 @@ def evaluate_model_and_save(
             )
 
         # Add a suffix
-        suffix = 'free' if free_value else 'notfree'
+        suffix = build_suffix(free_value, best)
 
         save_results(metrics, run_id, suffix=suffix)
 
@@ -146,29 +153,29 @@ def evaluate_model_and_save(
     return metrics
 
 
-@timeit_main(LOGGER)
-def evaluate_run(run_id,
-                 n_epochs=1,
-                 free_values=[False, True],
-                 device='cuda',
-                 multiple_gpu=False,
-                 batch_size=None,
-                 dataset_types=('train','val','test'),
-                 medical_correctness=True,
-                 max_samples=None,
-                 override=False,
-                 check_unclean=True,
-                 quiet=False,
-                 load_mode='best',
-                 ):
+@timeit_main(LOGGER, sep='-', sep_times=50)
+def evaluate_run_by_best(run_id,
+                         best,
+                         n_epochs=1,
+                         free_values=[False, True],
+                         device='cuda',
+                         multiple_gpu=False,
+                         batch_size=None,
+                         dataset_types=('train','val','test'),
+                         medical_correctness=True,
+                         max_samples=None,
+                         override=False,
+                         check_unclean=True,
+                         quiet=False,
+                         ):
     """Evaluates a saved run."""
-    LOGGER.info('Evaluating %s', run_id)
+    LOGGER.info('Evaluating %s best=%s', run_id.short_name, best)
 
     # Check if overriding
     if not override:
         filtered_free_values = []
         for free_value in free_values:
-            suffix = 'free' if free_value else 'notfree'
+            suffix = build_suffix(free_value, best)
 
             if are_results_saved(run_id, suffix=suffix):
                 LOGGER.info('Already calculated for %s, skipping', suffix)
@@ -182,7 +189,7 @@ def evaluate_run(run_id,
 
     # Load model
     compiled_model = load_compiled_model_report_generation(
-        run_id, device=device, multiple_gpu=multiple_gpu, mode=load_mode,
+        run_id, device=device, multiple_gpu=multiple_gpu, mode=best,
     )
 
     # Metadata contains all configuration
@@ -237,10 +244,29 @@ def evaluate_run(run_id,
         att_vs_masks=supervise_attention,
         n_epochs=n_epochs,
         free_values=free_values,
+        best=best,
         check_unclean=check_unclean,
         model_name=model_name,
         quiet=quiet,
     )
+
+@timeit_main(LOGGER)
+def evaluate_run(run_id, only_best=None, **kwargs):
+    """Evaluates a run by all its saved checkpoints."""
+    LOGGER.info('Evaluating %s', run_id)
+    best_metrics = get_best_checkpoints_metrics(run_id)
+
+    if only_best:
+        best_chosen = [b for b in best_metrics if b in only_best]
+        best_leftout = [b for b in best_metrics if b not in only_best]
+    else:
+        best_chosen = best_metrics
+        best_leftout = []
+
+    LOGGER.info('\t\tChosen metrics: %s, leftout: %s', best_chosen, best_leftout)
+
+    for best in best_chosen:
+        evaluate_run_by_best(run_id, best, **kwargs)
 
 
 def parse_args():
@@ -272,8 +298,8 @@ def parse_args():
                         help='If present, use (runtime) medical-correctness metrics')
     parser.add_argument('--skip-check-unclean', action='store_true',
                         help='If present, do not check for unclean reports in the outputs')
-    parser.add_argument('--load-mode', type=str, default='best',
-                        help='Pick a load mode (best/save/<metric>)')
+    parser.add_argument('--only-best', type=str, nargs='*',
+                        help='Only eval best by certain metrics')
 
     parsers.add_args_free_values(parser)
     parsers.add_args_hw(parser, num_workers=4)
@@ -308,5 +334,5 @@ if __name__ == '__main__':
         batch_size=ARGS.batch_size,
         check_unclean=not ARGS.skip_check_unclean,
         quiet=ARGS.quiet,
-        load_mode=ARGS.load_mode,
+        only_best=ARGS.only_best,
     )

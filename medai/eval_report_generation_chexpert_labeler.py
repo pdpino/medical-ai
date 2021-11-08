@@ -13,8 +13,15 @@ from sklearn.metrics import (
 )
 
 from medai.datasets.common import CHEXPERT_LABELS
-from medai.metrics import load_rg_outputs
-from medai.metrics.report_generation import chexpert, print_rg_metrics
+from medai.metrics.report_generation import (
+    chexpert,
+    print_rg_metrics,
+    build_suffix,
+)
+from medai.metrics.report_generation.writer import (
+    load_rg_outputs,
+    get_best_outputs_info,
+)
 from medai.utils.files import get_results_folder
 from medai.utils import (
     timeit_main,
@@ -123,6 +130,7 @@ def evaluate_run(run_id,
                  override_outputs=False,
                  max_samples=None,
                  free=False,
+                 best=None,
                  quiet=False,
                  batches=None,
                  ):
@@ -131,7 +139,7 @@ def evaluate_run(run_id,
     results_folder = get_results_folder(run_id)
 
     # Output file at the end of this process
-    suffix = 'free' if free else 'notfree'
+    suffix = build_suffix(free, best)
     labeled_output_path = os.path.join(results_folder, f'outputs-labeled-{suffix}.csv')
 
     if not override_outputs and os.path.isfile(labeled_output_path):
@@ -139,14 +147,14 @@ def evaluate_run(run_id,
         df = pd.read_csv(labeled_output_path)
     else:
         # Read outputs
-        df = load_rg_outputs(run_id, free=free)
+        df = load_rg_outputs(run_id, free=free, best=best)
 
         if df is None:
             LOGGER.error('Need to compute outputs for run first: %s', run_id)
             return
 
         n_samples = len(df)
-        LOGGER.info('%d samples found in outputs, free=%s', n_samples, free)
+        LOGGER.info('%d samples found in outputs, suffix=%s', n_samples, suffix)
 
         _n_distinct_epochs = set(df['epoch'])
         if len(_n_distinct_epochs) != 1:
@@ -196,14 +204,19 @@ def evaluate_run(run_id,
 
 
 @timeit_main(LOGGER)
-def evaluate_run_with_free_values(run_id, free_values, **kwargs):
+def evaluate_run_with_free_values(run_id, free_values, only_best, **kwargs):
     LOGGER.info('Evaluating chexpert %s', run_id)
 
-    for free_value in free_values:
+    chosen, leftout = get_best_outputs_info(run_id, free_values, only_best)
+
+    LOGGER.info('\tChosen suffixes: %s, leftout: %s', chosen, leftout)
+
+    for free_value, best_metric in chosen:
         evaluate_run(
             run_id,
             free=free_value,
-            **kwargs
+            best=best_metric,
+            **kwargs,
         )
 
 
@@ -222,6 +235,8 @@ def parse_args():
                         help='Do not print metrics to stdout')
     parser.add_argument('--batches', type=int, default=None,
                         help='Process the reports in batches')
+    parser.add_argument('--only-best', type=str, nargs='*',
+                        help='Only eval best by certain metrics')
 
     parsers.add_args_free_values(parser)
 
@@ -242,6 +257,7 @@ if __name__ == '__main__':
     evaluate_run_with_free_values(
         RunId(ARGS.run_name, ARGS.debug, 'rg'),
         free_values=ARGS.free_values,
+        only_best=ARGS.only_best,
         override_outputs=ARGS.override_outputs,
         max_samples=ARGS.max_samples,
         quiet=ARGS.quiet,
