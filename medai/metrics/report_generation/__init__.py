@@ -125,12 +125,14 @@ def attach_losses_rg(engine, free=False, hierarchical=False,
     losses = []
     if hierarchical:
         losses.extend(['word_loss', 'stop_loss'])
-    if supervise_attention:
-        losses.append('att_loss')
-    if supervise_sentences:
-        losses.append('sentence_loss')
+        if supervise_attention:
+            losses.append('att_loss')
+        if supervise_sentences:
+            losses.append('sentence_loss')
     if 'coatt' in model_name:
         losses.extend(['tag_loss', 'reg_loss'])
+    if model_name == 's-att-tell':
+        losses.extend(['word_loss', 'att_loss'])
     attach_losses(engine, losses, device=device)
 
 

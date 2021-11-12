@@ -12,6 +12,7 @@ from medai.models.report_generation.decoder_lstm_att_v2 import LSTMAttDecoderV2
 from medai.models.report_generation.decoder_lstm_att_v3 import LSTMAttDecoderV3
 from medai.models.report_generation.decoder_h_lstm_att import HierarchicalLSTMAttDecoder
 from medai.models.report_generation.decoder_h_lstm_att_v2 import HierarchicalLSTMAttDecoderV2
+from medai.models.report_generation.decoder_show_attend_tell import ShowAttendTellDecoder
 from medai.utils import partialclass
 
 LOGGER = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ _MODELS_DEF = {
     'h-lstm-att': partialclass(HierarchicalLSTMAttDecoder, attention=True),
     'h-lstm-v2': partialclass(HierarchicalLSTMAttDecoderV2, attention=False),
     'h-lstm-att-v2': partialclass(HierarchicalLSTMAttDecoderV2, attention=True),
+    's-att-tell': ShowAttendTellDecoder,
 }
 
 AVAILABLE_DECODERS = list(_MODELS_DEF)

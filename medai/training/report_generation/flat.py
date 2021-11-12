@@ -60,7 +60,9 @@ def clean_gt_reports(gt_reports):
 
 
 def get_step_fn_flat(model, optimizer=None, training=True, free=False,
-                     device='cuda', max_words=200, temperature=1, **unused_kwargs):
+                     device='cuda', max_words=200, temperature=1,
+                     lambda_att=0,
+                     **unused_kwargs):
     """Creates a step function for an Engine."""
     loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
@@ -91,9 +93,23 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
 
         if not free:
             # Compute word classification loss
-            loss = loss_fn(generated_words.permute(0, 2, 1) / temperature, reports)
+            loss_word = loss_fn(generated_words.permute(0, 2, 1) / temperature, reports)
+
+            if lambda_att > 0:
+                # Compute attention loss (show-att-tell)
+                assert len(output_tuple) > 1, 'output_tuple only has 1 elem and lambda_att > 0'
+                scores_out = output_tuple[1] # shape: bs, n_words, height, width
+                assert scores_out is not None, 'scores_out is None and lambda_att > 0'
+
+                loss_att = torch.mean((1 - scores_out.sum(dim=1))**2)
+                loss = loss_word + lambda_att * loss_att
+            else:
+                loss = loss_word
+                loss_att = None
         else:
             loss = None
+            loss_att = None
+            loss_word = None
 
         if training:
             loss.backward()
@@ -103,6 +119,8 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
 
         return {
             'loss': loss.detach() if loss is not None else None,
+            'att_loss': loss_att.detach() if loss_att is not None else None,
+            'word_loss': loss_word.detach() if loss_word is not None else None,
             'flat_clean_reports_gen': _clean_gen_reports(generated_words),
             'flat_clean_reports_gt': clean_gt_reports(reports),
         }

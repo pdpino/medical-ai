@@ -435,6 +435,8 @@ def train_from_scratch(run_name,
         run_name += '_satt'
         if lambda_att != 1:
             run_name += f'-{lambda_att}'
+    if decoder_name == 's-att-tell' and lambda_att > 0:
+        run_name += f'_lmb-att{lambda_att}'
     if supervise_sentences:
         run_name += '_ssent'
         if lambda_sent != 1:
@@ -475,15 +477,15 @@ def train_from_scratch(run_name,
         run_name += f'_precnn-{cnn_run_id.short_clean_name}'
     else:
         run_name += f'_{cnn_model_name}'
-    if cnn_freeze:
-        run_name += '_cnn-freeze'
+    if not cnn_freeze:
+        run_name += '_non-cnn-freeze'
     if mlc_layers and decoder_name == 'h-coatt':
         _layers = '-'.join(str(l) for l in mlc_layers)
         run_name += f'_fc-{_layers}'
     if reports_version != LATEST_REPORTS_VERSION:
         run_name += f'_reports-{reports_version}'
-    if not norm_by_sample:
-        run_name += '_normD'
+    if norm_by_sample:
+        run_name += '_normS'
     if image_size != 256:
         run_name += f'_size{image_size}'
     if not shuffle:
@@ -559,6 +561,8 @@ def train_from_scratch(run_name,
             raise Exception('Attention supervision is only available with frontal_only images')
         if 'h-lstm-att' not in decoder_name:
             raise Exception('Attention supervision is only available for h-lstm-att decoders')
+    elif lambda_att > 0 and decoder_name != 's-att-tell':
+        raise Exception(f'lambda_att > 0 not available for: {decoder_name}')
 
     if supervise_sentences:
         # TODO: move this to a more appropiate place?
