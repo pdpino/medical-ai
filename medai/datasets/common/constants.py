@@ -341,4 +341,5 @@ ABN_SHORTCUTS = {
     'Edema': 'E',
     'Lung Lesion': 'LL',
     'Fracture': 'F',
+    'No Finding': 'NF',
 }

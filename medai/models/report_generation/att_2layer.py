@@ -40,6 +40,7 @@ class AttentionTwoLayers(nn.Module):
         batch_size, height, width = out.size()
         # shape: batch_size, height, width
 
+        # NOTE: this .view(...) should preserve the dimensions after the flatten
         scores = self.softmax(out).view(batch_size, height, width)
         # shape: batch_size, height, width
 

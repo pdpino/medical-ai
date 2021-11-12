@@ -19,6 +19,7 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
                  features_size, teacher_forcing=True, stop_threshold=0.5,
                  embedding_kwargs={}, return_topics=True,
                  dropout_out=0, dropout_recursive=0,
+                 attention_size=100,
                  attention=True, double_bias=False, **unused_kwargs):
         super().__init__()
 
@@ -32,7 +33,8 @@ class HierarchicalLSTMAttDecoderV2(nn.Module):
         self._use_attention = attention
         if attention:
             self.attention = AttentionTwoLayers(
-                features_size, hidden_size, double_bias=double_bias,
+                features_size, hidden_size, internal_size=attention_size,
+                double_bias=double_bias,
             )
         else:
             self.attention = NoAttention(reduction='mean')

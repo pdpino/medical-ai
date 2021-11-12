@@ -351,14 +351,14 @@ def _fetch_gt_attributes(target_df, gt_with_labels):
     return merged[cols].to_numpy() # shape: (n_reports, 1)
 
 
-def apply_mirqi_to_df(df, timestamp, batches=None, dataset_name='iu-x-ray'):
+def apply_mirqi_to_df(df, caller_id, batches=None, dataset_name='iu-x-ray'):
     # Load attributes for GT
     gt_attributes_df = _load_gt_df(dataset_name)
 
     gt_attributes = _fetch_gt_attributes(df, gt_attributes_df)
 
     # Calculate attributes for Generated
-    labeler = MIRQILabeler(caller_id=timestamp)
+    labeler = MIRQILabeler(caller_id=caller_id)
     labeler = CacheLookupLabeler(labeler, gt_attributes_df)
     labeler = NBatchesLabeler(labeler, batches)
     labeler = AvoidDuplicatedLabeler(labeler)

@@ -139,6 +139,8 @@ def load_rg_outputs(run_id, free=False, best=None, labeled=False):
 
     outputs_path = os.path.join(results_folder, name)
 
+    LOGGER.info('Loading RG outputs from: %s', name)
+
     if not os.path.isfile(outputs_path):
         LOGGER.error('Outputs file not found: %s', outputs_path)
         return None
@@ -150,7 +152,7 @@ def load_rg_outputs(run_id, free=False, best=None, labeled=False):
 
 def get_best_outputs_info(run_id, free_values=None, only_best=None):
     """Get the info of the outputs.csv saved for a run."""
-    outputs_with_suffix = re.compile(r'outputs-(?P<free>free|notfree)(-(?P<suffix>[\w\-]+))\.csv')
+    outputs_with_suffix = re.compile(r'outputs-(?P<free>free|notfree)(-(?P<suffix>[\w\-]+))?\.csv')
 
     # Grab all infos
     infos = []

@@ -378,6 +378,7 @@ def train_from_scratch(run_name,
                        embedding_size=100,
                        embedding_kwargs={},
                        hidden_size=100,
+                       attention_size=100,
                        lr=0.0001,
                        weight_decay=0,
                        custom_lr=None,
@@ -465,8 +466,11 @@ def train_from_scratch(run_name,
             run_name += f'_emb-{"-".join(options)}'
     if hidden_size != 100:
         run_name += f'_hs-{hidden_size}'
-    if '-att' in decoder_name and att_double_bias:
-        run_name += '_att-bias2'
+    if '-att' in decoder_name:
+        if attention_size != 100:
+            run_name += f'_as-{attention_size}'
+        if att_double_bias:
+            run_name += '_att-bias2'
     if cnn_run_id:
         run_name += f'_precnn-{cnn_run_id.short_clean_name}'
     else:
@@ -663,6 +667,7 @@ def train_from_scratch(run_name,
             'dropout_recursive': dropout_recursive,
             'dropout_out': dropout_out,
             'double_bias': att_double_bias,
+            'attention_size': attention_size,
         }
         decoder = create_decoder(**decoder_kwargs).to(device)
 
@@ -797,6 +802,8 @@ def parse_args():
                                help='Embedding size of the decoder')
     decoder_group.add_argument('-hs', '--hidden-size', type=int, default=100,
                                help='Hidden size of the decoder')
+    decoder_group.add_argument('--attention-size', type=int, default=100,
+                               help='Attention (internal) size')
     decoder_group.add_argument('-drop-r', '--dropout-recursive', type=float, default=0,
                                help='Recursive dropout (for LSTM models)')
     decoder_group.add_argument('-drop-o', '--dropout-out', type=float, default=0,
@@ -1036,6 +1043,7 @@ if __name__ == '__main__':
                            embedding_size=ARGS.embedding_size,
                            embedding_kwargs=ARGS.embedding_kwargs,
                            hidden_size=ARGS.hidden_size,
+                           attention_size=ARGS.attention_size,
                            lr=ARGS.learning_rate,
                            weight_decay=ARGS.weight_decay,
                            custom_lr=ARGS.custom_lr,
