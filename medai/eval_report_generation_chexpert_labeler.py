@@ -26,7 +26,6 @@ from medai.utils.files import get_results_folder
 from medai.utils import (
     timeit_main,
     config_logging,
-    get_timestamp,
     RunId,
     parsers,
 )
@@ -154,7 +153,7 @@ def evaluate_run(run_id,
             return
 
         n_samples = len(df)
-        LOGGER.info('%d samples found in outputs, suffix=%s', n_samples, suffix)
+        LOGGER.info('%s samples found in outputs, suffix=%s', f'{n_samples:,}', suffix)
 
         _n_distinct_epochs = set(df['epoch'])
         if len(_n_distinct_epochs) != 1:
@@ -173,7 +172,7 @@ def evaluate_run(run_id,
         dataset_name = run_id.get_dataset_name()
 
         # Compute labels for both GT and generated
-        caller_id = f'{run_id.short_name}_eval{get_timestamp()}'
+        caller_id = f'runid-{run_id.short_name}_suffix-{suffix}'
         df = chexpert.apply_labeler_to_df(
             df, caller_id=caller_id, dataset_name=dataset_name, batches=batches,
         )

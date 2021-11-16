@@ -81,7 +81,7 @@ def evaluate_run(run_id,
     # The ones "output-mirqi-suffix.csv" are deprecated!!
 
     if not override and os.path.isfile(labeled_output_path):
-        LOGGER.info('Skipping calculation, already calculated: %s', run_id)
+        LOGGER.info('Skipping MIRQI labelling, already calculated: %s', run_id)
 
         df = pd.read_csv(labeled_output_path)
     else:
@@ -104,7 +104,7 @@ def evaluate_run(run_id,
         # Compute MIRQI metrics, plus graph for generated text
         df = mirqi.apply_mirqi_to_df(
             df,
-            timestamp=run_id.short_name,
+            caller_id=f'runid-{run_id.short_name}_suffix-{suffix}',
             dataset_name=run_id.get_dataset_name(),
         )
 
@@ -158,6 +158,9 @@ def evaluate_run(run_id,
     scores_v6 = mirqi.MIRQI(attributes_gt, attributes_gamed_v6)
     scores_v6 = dict_with_suffix(scores_v6, 'v6-game')
 
+    scores_v7 = mirqi.MIRQI(attributes_gt, attributes_gen, attribute_weight=1)
+    scores_v7 = dict_with_suffix(scores_v7, 'v7-attr-only')
+
     # Add to dataframe
     df = df.assign(**scores_v1)
     df = df.assign(**scores_v2)
@@ -165,6 +168,7 @@ def evaluate_run(run_id,
     df = df.assign(**scores_v4)
     df = df.assign(**scores_v5)
     df = df.assign(**scores_v6)
+    df = df.assign(**scores_v7)
 
     # Compute metrics
     metrics = _calculate_metrics_dict(df)

@@ -7,7 +7,7 @@ CHEXPERT_LABELS = [
     'Pleural Other', 'Fracture', 'Support Devices',
 ]
 
-CHEXPERT_LABEL2SHORT = {
+ABN_SHORTCUTS = {
     'Cardiomegaly': 'Card',
     'Enlarged Cardiomediastinum': 'EC',
     'Consolidation': 'Cons',
@@ -21,7 +21,9 @@ CHEXPERT_LABEL2SHORT = {
     'Edema': 'E',
     'Lung Lesion': 'LL',
     'Fracture': 'F',
+    'No Finding': 'NF',
 }
+CHEXPERT_LABEL2SHORT = ABN_SHORTCUTS # Alias
 CHEXPERT_SHORT2LABEL = {v:k for k, v in CHEXPERT_LABEL2SHORT.items()}
 
 CHEXPERT_DISEASES = list(CHEXPERT_LABELS) # Alias for the same list
@@ -326,20 +328,3 @@ IU_MTI_TAGS = [
 'comminuted fracture', 'pneumomediastinum', 'fracture comminuted', 'lung volume reduction',
 'pleural disease', 'pulmonary metastasis',
 ]
-
-ABN_SHORTCUTS = {
-    'Cardiomegaly': 'Card',
-    'Enlarged Cardiomediastinum': 'EC',
-    'Consolidation': 'Cons',
-    'Lung Opacity': 'LO',
-    'Atelectasis': 'A',
-    'Support Devices': 'SD',
-    'Pleural Effusion': 'PE',
-    'Pleural Other': 'PO',
-    'Pneumonia': 'Pn',
-    'Pneumothorax': 'Pt',
-    'Edema': 'E',
-    'Lung Lesion': 'LL',
-    'Fracture': 'F',
-    'No Finding': 'NF',
-}
