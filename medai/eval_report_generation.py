@@ -1,5 +1,6 @@
 import argparse
 import logging
+import itertools
 import torch
 from torch.utils.data.dataset import Subset
 from ignite.engine import Engine
@@ -49,6 +50,7 @@ def _evaluate_model_in_dataloader(
         att_vs_masks=False,
         free=False,
         best=None,
+        beam_size=0,
         check_unclean=True,
         model_name='lstm',
         device='cuda'):
@@ -65,6 +67,7 @@ def _evaluate_model_in_dataloader(
                                 training=False,
                                 supervise_attention=supervise_attention,
                                 free=free,
+                                beam_size=beam_size,
                                 device=device))
     attach_unclean_report_checker(engine, check=check_unclean)
     attach_losses_rg(
@@ -81,7 +84,7 @@ def _evaluate_model_in_dataloader(
     attach_organ_by_sentence(engine, vocab, device=device)
     attach_report_writer(engine, run_id,
                          vocab, assert_n_samples=len(dataset),
-                         free=free, best=best)
+                         free=free, best=best, beam_size=beam_size)
 
     if medical_correctness:
         attach_medical_correctness(engine, None, vocab, device=device)
@@ -89,7 +92,10 @@ def _evaluate_model_in_dataloader(
     if att_vs_masks and not free:
         attach_attention_vs_masks(engine, device=device)
 
-    LOGGER.info('Evaluating model in %s, free=%s, best=%s', dataset.dataset_type, free, best)
+    LOGGER.info(
+        'Evaluating model in %s, free=%s, best=%s, beam_size=%d',
+        dataset.dataset_type, free, best, beam_size,
+    )
     engine.run(dataloader, n_epochs)
 
     return engine.state.metrics
@@ -105,13 +111,13 @@ def evaluate_model_and_save(
         supervise_attention=False,
         att_vs_masks=False,
         n_epochs=1,
-        free_values=[False, True],
+        free_configs=[],
         best=None,
         check_unclean=True,
         model_name='lstm',
         quiet=False,
         ):
-    """Evaluates a model in ."""
+    """Evaluates a model and save metrics to file."""
     evaluate_kwargs = {
         'hierarchical': hierarchical,
         'device': device,
@@ -124,12 +130,15 @@ def evaluate_model_and_save(
         'best': best,
     }
 
-    for free_value in free_values:
-        delete_previous_outputs(run_id, free=free_value, best=best)
+    for free_value, beam_size in free_configs:
+        delete_previous_outputs(run_id, free=free_value, best=best, beam_size=beam_size)
 
         metrics = {}
 
-        evaluate_kwargs['free'] = free_value
+        evaluate_kwargs.update({
+            'free': free_value,
+            'beam_size': beam_size,
+        })
 
         for dataloader in dataloaders:
             if dataloader is None:
@@ -143,7 +152,7 @@ def evaluate_model_and_save(
             )
 
         # Add a suffix
-        suffix = build_suffix(free_value, best)
+        suffix = build_suffix(free_value, best, beam_size)
 
         save_results(metrics, run_id, suffix=suffix)
 
@@ -158,6 +167,7 @@ def evaluate_run_by_best(run_id,
                          best,
                          n_epochs=1,
                          free_values=[False, True],
+                         beam_sizes=[0],
                          device='cuda',
                          multiple_gpu=False,
                          batch_size=None,
@@ -171,21 +181,27 @@ def evaluate_run_by_best(run_id,
     """Evaluates a saved run."""
     LOGGER.info('Evaluating %s best=%s', run_id.short_name, best)
 
-    # Check if overriding
-    if not override:
-        filtered_free_values = []
-        for free_value in free_values:
-            suffix = build_suffix(free_value, best)
+    assert len(beam_sizes) > 0, 'At least one beam size! (provide at least dummy=0)'
 
-            if are_results_saved(run_id, suffix=suffix):
-                LOGGER.info('Already calculated for %s, skipping', suffix)
-            else:
-                filtered_free_values.append(free_value)
+    free_configs = []
+    for free_value, beam_size in itertools.product(free_values, beam_sizes):
+        if beam_size > 0 and not free_value:
+            # Beam-search only makes sense with free=True
+            continue
 
-        free_values = filtered_free_values
-        if len(free_values) == 0:
-            LOGGER.info('Skipping run')
-            return
+        suffix = build_suffix(free_value, best, beam_size)
+
+        # Check if overriding
+        if not override and are_results_saved(run_id, suffix=suffix):
+            LOGGER.info('Already calculated for %s, skipping', suffix)
+        else:
+            free_configs.append((free_value, beam_size))
+
+    if len(free_configs) == 0:
+        LOGGER.info('------Skipping run')
+        return
+
+    LOGGER.info('Free configs chosen: %s', free_configs)
 
     # Load model
     compiled_model = load_compiled_model_report_generation(
@@ -243,7 +259,7 @@ def evaluate_run_by_best(run_id,
         supervise_attention=supervise_attention,
         att_vs_masks=supervise_attention,
         n_epochs=n_epochs,
-        free_values=free_values,
+        free_configs=free_configs,
         best=best,
         check_unclean=check_unclean,
         model_name=model_name,
@@ -300,12 +316,16 @@ def parse_args():
                         help='If present, do not check for unclean reports in the outputs')
     parser.add_argument('--only-best', type=str, nargs='*',
                         help='Only eval best by certain metrics')
+    parser.add_argument('--beam-sizes', type=int, nargs='+', default=[0],
+                        help='Eval using beam sizes')
 
     parsers.add_args_free_values(parser)
     parsers.add_args_hw(parser, num_workers=4)
 
     args = parser.parse_args()
 
+    if args.beam_sizes is None or len(args.beam_sizes) == 0:
+        parser.error('Beam size cannot be empty')
 
     parsers.build_args_free_values_(args, parser)
 
@@ -324,6 +344,7 @@ if __name__ == '__main__':
     evaluate_run(
         run_id=RunId(ARGS.run_name, not ARGS.no_debug, 'rg'),
         free_values=ARGS.free_values,
+        beam_sizes=ARGS.beam_sizes,
         dataset_types=ARGS.eval_in,
         multiple_gpu=ARGS.multiple_gpu,
         device=DEVICE,

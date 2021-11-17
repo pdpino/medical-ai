@@ -69,6 +69,7 @@ def evaluate_run(run_id,
                  max_samples=None,
                  free=False,
                  best=None,
+                 beam_size=0,
                  quiet=False,
                  ):
     """Evaluates a run with the MIRQI metric."""
@@ -76,7 +77,7 @@ def evaluate_run(run_id,
     results_folder = get_results_folder(run_id)
 
     # Output file at the end of this process
-    suffix = build_suffix(free, best)
+    suffix = build_suffix(free, best, beam_size)
     labeled_output_path = os.path.join(results_folder, f'outputs-labeled-mirqi-{suffix}.csv')
     # The ones "output-mirqi-suffix.csv" are deprecated!!
 
@@ -86,7 +87,7 @@ def evaluate_run(run_id,
         df = pd.read_csv(labeled_output_path)
     else:
         # Read outputs
-        df = load_rg_outputs(run_id, free=free, best=best)
+        df = load_rg_outputs(run_id, free=free, best=best, beam_size=beam_size)
 
         if df is None:
             LOGGER.error('Need to compute outputs for run first: %s', run_id)
@@ -183,18 +184,19 @@ def evaluate_run(run_id,
         pprint(metrics['test'])
 
 @timeit_main(LOGGER)
-def evaluate_run_with_free_values(run_id, free_values, only_best, **kwargs):
+def evaluate_run_with_free_values(run_id, free_values, only_best, only_beam, **kwargs):
     LOGGER.info('Evaluating MIRQI %s', run_id)
 
-    chosen, leftout = get_best_outputs_info(run_id, free_values, only_best)
+    chosen, leftout = get_best_outputs_info(run_id, free_values, only_best, only_beam)
 
     LOGGER.info('\tChosen suffixes: %s, leftout: %s', chosen, leftout)
 
-    for free_value, best in chosen:
+    for free_value, best, beam_size in chosen:
         evaluate_run(
             run_id,
             free=free_value,
             best=best,
+            beam_size=beam_size,
             **kwargs
         )
 
@@ -214,7 +216,8 @@ def parse_args():
                         help='Do not print final metrics to stdout')
     parser.add_argument('--only-best', type=str, nargs='*',
                         help='Only eval best by certain metrics')
-
+    parser.add_argument('--only-beam', type=int, nargs='*', default=None,
+                        help='Eval only in some beam sizes')
 
     parsers.add_args_free_values(parser)
 
@@ -234,9 +237,10 @@ if __name__ == '__main__':
 
     evaluate_run_with_free_values(
         RunId(ARGS.run_name, ARGS.debug, 'rg').resolve(),
-        override=ARGS.override,
-        max_samples=ARGS.max_samples,
         free_values=ARGS.free_values,
         only_best=ARGS.only_best,
+        only_beam=ARGS.only_beam,
+        override=ARGS.override,
+        max_samples=ARGS.max_samples,
         quiet=ARGS.quiet,
     )

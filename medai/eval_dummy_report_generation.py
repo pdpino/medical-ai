@@ -158,13 +158,15 @@ def evaluate_dummy_model(model_name,
         if d.dataset.dataset_type in dataset_types
     ]
 
+    _BEAM_SIZE = None # not used for dummy models
+
     # Evaluate
     evaluate_model_and_save(
         run_id,
         model,
         dataloaders,
         hierarchical=hierarchical,
-        free_values=free_values,
+        free_configs=[(fv, _BEAM_SIZE) for fv in free_values],
         medical_correctness=medical_correctness,
         device=device,
         check_unclean=False,

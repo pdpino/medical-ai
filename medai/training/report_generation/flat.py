@@ -1,29 +1,34 @@
 import torch
 from torch import nn
 
-from medai.utils.nlp import PAD_IDX, END_IDX
+from medai.utils.nlp import PAD_IDX, END_IDX, START_IDX
 
 
 def _clean_gen_reports(gen_words):
     """Cleans the generated reports.
 
     Args:
-        gen_words -- tensor of shape batch_size, n_words, vocab_size
+        gen_words -- tensor of shape batch_size, n_words[, vocab_size]
     Returns:
         list of lists with reports, shape: batch_size, n_words_per_report
         (with token indexes, not words).
     """
-    assert gen_words.ndim == 3
-
-    gen_words = gen_words.argmax(-1)
-    # shape: bs, n_words
+    if isinstance(gen_words, torch.Tensor):
+        if gen_words.ndim == 3:
+            gen_words = gen_words.argmax(-1)
+            # shape: bs, n_words
+        else:
+            assert gen_words.ndim == 2
+            # assume shape: bs, n_words
+    else:
+        assert isinstance(gen_words, list)
 
     clean_reports = []
     for report in gen_words:
         # report shape: n_words
 
         # Remove PAD_IDX
-        report = report[(report != PAD_IDX)]
+        report = report[(report != PAD_IDX) & (report != START_IDX)]
         # shape: n_useful_words
 
         # Find END token
@@ -61,9 +66,58 @@ def clean_gt_reports(gt_reports):
 
 def get_step_fn_flat(model, optimizer=None, training=True, free=False,
                      device='cuda', max_words=200, temperature=1,
-                     lambda_att=0,
+                     lambda_att=0, beam_size=0,
                      **unused_kwargs):
     """Creates a step function for an Engine."""
+    if beam_size > 0:
+        assert free, 'Cannot set beam_size>0 and free=False'
+        assert not training, 'Cannot set beam_size>0 and training=True'
+        assert isinstance(model.cnn, nn.Module)
+        assert isinstance(model.decoder, nn.Module)
+
+        def step_fn_beam_size(unused_engine, data_batch):
+            """Step function using beam search.
+
+            Decoder must accept beam_size, and return tensor of shape = (n_words,)
+            Return specific function, since is slightly different
+            """
+            # Images
+            images = data_batch.images.to(device) # batch_size, 3, height, width
+
+            model.eval()
+
+            with torch.no_grad():
+                features = model.cnn.features(images)
+                # shape: batch_size, n_features, f-height, f-width
+
+                generated_words = [] # shape: batch_size, n_words (list of tensors)
+
+                for feature in features:
+                    output_tuple = model.decoder(
+                        feature.unsqueeze(0), # 1, n_features, f-height, f-width
+                        reports=None, free=True,
+                        max_words=max_words,
+                        beam_size=beam_size,
+                    )
+
+                    out_words = output_tuple[0] # shape: n_words
+                    assert out_words.ndim == 1
+                    generated_words.append(out_words)
+
+            # Reports, as word ids
+            # Not necessary to send to GPU, since are cleaned as lists right away
+            reports = data_batch.reports # batch_size, max_sentence_len
+
+            return {
+                'loss': None,
+                'att_loss': None,
+                'word_loss': None,
+                'flat_clean_reports_gen': _clean_gen_reports(generated_words),
+                'flat_clean_reports_gt': clean_gt_reports(reports),
+            }
+
+        return step_fn_beam_size
+
     loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     assert not (free and training), 'Cannot set training=True and free=True'

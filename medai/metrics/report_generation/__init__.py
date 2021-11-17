@@ -1,5 +1,6 @@
 import logging
 import operator
+import numbers
 from pprint import pprint
 import numpy as np
 from torch.nn.functional import interpolate
@@ -165,8 +166,23 @@ def print_rg_metrics(metrics, ignore=CHEXPERT_DISEASES, splits='test'):
     pprint(to_print_metrics)
 
 
-def build_suffix(free, best):
+def build_suffix(free, best, beam_size):
     suffix = 'free' if free else 'notfree'
-    if not best:
-        return suffix
-    return f'{suffix}-{best}'
+    if best:
+        suffix = f'{suffix}-{best}'
+    if beam_size is not None:
+        if isinstance(beam_size, str) and beam_size.isnumeric():
+            beam_size = int(beam_size)
+
+        if isinstance(beam_size, numbers.Number) and beam_size > 0:
+            suffix = f'{suffix}.bs{beam_size}'
+
+            if not free:
+                LOGGER.error('Passed beam_size=%d and free=False to build_suffix()', beam_size)
+
+        if not isinstance(beam_size, numbers.Number):
+            LOGGER.warning(
+                'Weird beam_size instance received: %s, %s', type(beam_size), beam_size,
+            )
+
+    return suffix
