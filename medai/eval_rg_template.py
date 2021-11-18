@@ -215,6 +215,22 @@ _BEST_CHEXPERT_ORDER_v2 = [
     'Support Devices',
 ]
 
+_BEST_ORDER_MIMIC = [
+    'Cardiomegaly',
+    'Lung Opacity',
+    'Pneumonia',
+    'Consolidation',
+    'Edema',
+    'Lung Lesion',
+    'Atelectasis',
+    'Pleural Effusion',
+    'Enlarged Cardiomediastinum',
+    'Pleural Other',
+    'Pneumothorax',
+    'Fracture',
+    'Support Devices',
+]
+
 def _get_disease_order(order, dataset_name, diseases):
     if not order or order.lower() == 'none':
         return None
@@ -233,6 +249,8 @@ def _get_disease_order(order, dataset_name, diseases):
         return ordered_diseases
     if order == 'best-v2':
         return _BEST_CHEXPERT_ORDER_v2
+    if order == 'best-mimic':
+        return _BEST_ORDER_MIMIC
 
     raise Exception(f'Order not recognized: {order}')
 
@@ -241,6 +259,7 @@ def _get_disease_order(order, dataset_name, diseases):
 def evaluate_run(cl_run_id,
                  template_set,
                  n_epochs=1,
+                 force_dataset=None,
                  debug=True,
                  device='cuda',
                  multiple_gpu=False,
@@ -261,6 +280,12 @@ def evaluate_run(cl_run_id,
     # Extract useful dataset kwargs
     cl_dataset_kwargs = compiled_model.metadata['dataset_kwargs']
     dataset_name = cl_dataset_kwargs['dataset_name']
+    if force_dataset is not None and force_dataset != dataset_name:
+        LOGGER.warning(
+            'Forcing to use a different dataset: CNN trained on %s, evaluating on %s',
+            dataset_name, force_dataset,
+        )
+        dataset_name = force_dataset
     norm_by_sample = cl_dataset_kwargs['norm_by_sample']
     frontal_only = cl_dataset_kwargs['frontal_only']
     image_format = cl_dataset_kwargs['image_format']
@@ -354,6 +379,8 @@ def parse_args():
 
     parser.add_argument('--run-name', type=str, default=None, required=True,
                         help='CL run-name to load')
+    parser.add_argument('--dataset', type=str, default=None,
+                        help='Force to eval in a specific dataset')
     parser.add_argument('--task', type=str, default='cls', choices=('cls', 'cls-seg'),
                         help='CL run task')
     parser.add_argument('--templates', type=str, default='chex-v1',
@@ -399,6 +426,7 @@ if __name__ == '__main__':
 
     evaluate_run(cl_run_id=ARGS.cl_run_id,
                  template_set=ARGS.templates,
+                 force_dataset=ARGS.dataset,
                  dataset_types=ARGS.eval_in,
                  debug=not ARGS.no_debug,
                  multiple_gpu=ARGS.multiple_gpu,

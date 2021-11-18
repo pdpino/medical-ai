@@ -336,9 +336,11 @@ class ShowAttendTellDecoder(nn.Module):
             return complete_seqs, complete_seqs_scores, complete_seqs_alpha
 
         complete_seqs_scores = torch.stack(complete_seqs_scores)
-        assert complete_seqs_scores.ndim == 1, f'scores wrong size={complete_seqs_scores.size()}'
+        if not (complete_seqs_scores.ndim == 1 or complete_seqs_scores.size(1) == 1):
+            # Scores should be one-dimensional (may be unsqueezed though)
+            raise Exception(f'Beam scores wrong size={complete_seqs_scores.size()}')
 
-        i = complete_seqs_scores.argmax()
+        i = complete_seqs_scores.argmax(dim=0)
         seq = complete_seqs[i] # shape: n_words_generated
         alphas = complete_seqs_alpha[i] # shape: n_words_generated, height, width
 
