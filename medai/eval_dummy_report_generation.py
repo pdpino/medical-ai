@@ -158,7 +158,7 @@ def evaluate_dummy_model(model_name,
         if d.dataset.dataset_type in dataset_types
     ]
 
-    _BEAM_SIZE = None # not used for dummy models
+    _BEAM_SIZE = 0 # not used for dummy models
 
     # Evaluate
     evaluate_model_and_save(

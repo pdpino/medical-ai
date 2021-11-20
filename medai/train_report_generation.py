@@ -562,7 +562,7 @@ def train_from_scratch(run_name,
         if 'h-lstm-att' not in decoder_name:
             raise Exception('Attention supervision is only available for h-lstm-att decoders')
     elif lambda_att > 0 and decoder_name != 's-att-tell':
-        raise Exception(f'lambda_att > 0 not available for: {decoder_name}')
+        raise Exception(f'lambda_att > 0 ({lambda_att}) not available for: {decoder_name}')
 
     if supervise_sentences:
         # TODO: move this to a more appropiate place?
@@ -988,6 +988,13 @@ def parse_args():
         if args.labels is not None:
             LOGGER.error('--labels are only useful with h-coatt decoder')
             args.labels = None
+
+    if args.lambda_att > 0 and args.decoder in ('s-tell', 'lstm-att-v2', 'lstm-v2'):
+        LOGGER.error(
+            'lambda_att > 0 (%s) not available for %s -- ignoring',
+            args.lambda_att, args.decoder,
+        )
+        args.lambda_att = 0
 
 
     return args

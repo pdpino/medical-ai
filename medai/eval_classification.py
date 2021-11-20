@@ -173,6 +173,8 @@ def evaluate_run(run_id,
     if not quiet:
         pprint(best_values)
 
+    LOGGER.info('Finished run: %s', run_id)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(usage='%(prog)s [options]')

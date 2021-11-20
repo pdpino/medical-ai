@@ -93,7 +93,7 @@ def _evaluate_model_in_dataloader(
         attach_attention_vs_masks(engine, device=device)
 
     LOGGER.info(
-        'Evaluating model in %s, free=%s, best=%s, beam_size=%d',
+        'Evaluating model in %s, free=%s, best=%s, beam_size=%s',
         dataset.dataset_type, free, best, beam_size,
     )
     engine.run(dataloader, n_epochs)

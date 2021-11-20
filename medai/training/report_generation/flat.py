@@ -69,7 +69,7 @@ def get_step_fn_flat(model, optimizer=None, training=True, free=False,
                      lambda_att=0, beam_size=0,
                      **unused_kwargs):
     """Creates a step function for an Engine."""
-    if beam_size > 0:
+    if beam_size is not None and beam_size > 0:
         assert free, 'Cannot set beam_size>0 and free=False'
         assert not training, 'Cannot set beam_size>0 and training=True'
         assert isinstance(model.cnn, nn.Module)
