@@ -791,8 +791,6 @@ def parse_args():
                         help='Temperature for cross-entropy loss')
     parser.add_argument('--skip-organ-by-sentence', action='store_true',
                         help='If present, do not attach organ-by-sentence metrics')
-    parser.add_argument('--checkpoint-metric', type=str, default=None, nargs='+',
-                        help='If present, save checkpoints with best value')
 
     decoder_group = parser.add_argument_group('Decoder')
     decoder_group.add_argument('-dec', '--decoder', type=str,
@@ -879,6 +877,7 @@ def parse_args():
 
     parsers.add_args_hw(parser, num_workers=4)
     parsers.add_args_med(parser)
+    parsers.add_args_checkpoint_metric(parser)
 
     args = parser.parse_args()
 
@@ -894,6 +893,7 @@ def parse_args():
     parsers.build_args_augment_(args)
     parsers.build_args_tb_(args)
     parsers.build_args_med_(args)
+    parsers.build_args_checkpoint_metric_(args)
 
     def _assert_med_metric_is_present(metric, argname):
         if metric is None or 'chex' not in metric:

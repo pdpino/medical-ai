@@ -301,3 +301,21 @@ def build_args_h2bb_(args):
         'heat_thresh': args.heat_thresh,
     }
     args.h2bb_suffix = f'{args.h2bb_method_name}-{args.cls_thresh}-{args.heat_thresh}'
+
+
+def add_args_checkpoint_metric(parser):
+    parser.add_argument('--checkpoint-metric', type=str, default=None, nargs='+',
+                        help='If present, save checkpoints with best/last value')
+
+def build_args_checkpoint_metric_(args):
+    def _resolve_last(metric):
+        if isinstance(metric, str) and metric.lower() == 'last':
+            # NOTE: no metric can be called "last"
+            return None
+        return metric
+
+    if args.checkpoint_metric is not None:
+        args.checkpoint_metric = [
+            _resolve_last(metric)
+            for metric in args.checkpoint_metric
+        ]
