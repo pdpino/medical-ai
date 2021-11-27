@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 
 from pycocoevalcap.bleu import bleu_scorer
 from pycocoevalcap.cider import cider_scorer
-from pycocoevalcap.rouge import rouge as rouge_lib
 
+from medai.notebooks.analyze_nlp_chexpert.utils import RougeLScorer
 from medai.datasets.iu_xray import DATASET_DIR as IU_DIR
 from medai.datasets.common.constants import CHEXPERT_DISEASES
 from medai.datasets.mimic_cxr import DATASET_DIR as MIMIC_DIR
@@ -27,28 +27,6 @@ from medai.utils.files import WORKSPACE_DIR
 LOGGER = logging.getLogger('medai.analyze.nlp-chex-groups')
 
 ###### Scorers
-class RougeLScorer:
-    """Comply with BLEU api."""
-    def __init__(self):
-        self._all_scores = []
-
-        self._scorer = rouge_lib.Rouge()
-
-    def update(self, generated, gt):
-        new_score = self._scorer.calc_score([generated], [gt])
-        self._all_scores.append(new_score)
-
-    def __iadd__(self, tup):
-        assert isinstance(tup, tuple) and len(tup) == 2
-        gen, gt_list = tup
-        assert len(gt_list) == 1
-        self.update(gen, gt_list[0])
-        return self
-
-    def compute_score(self):
-        # scores = np.array(self._all_scores)
-        return np.mean(self._all_scores), self._all_scores
-
 _SCORERS = {
     'bleu': (bleu_scorer.BleuScorer, 4),
     'rouge': (RougeLScorer, 1),
@@ -265,11 +243,18 @@ PRETTIER_METRIC = {
 }
 
 
-def get_pretty_metric(metric, metric_i=0):
+def get_pretty_metric(metric, metric_i=0, include_range=False):
     pretty_metric = PRETTIER_METRIC[metric]
     if pretty_metric == 'BLEU':
         pretty_metric += f'-{metric_i+1}'
+    if include_range:
+        max_value = 10 if 'cider' in metric else 1
+        pretty_metric += f' (0-{max_value})'
     return pretty_metric
+
+
+def get_cmap_by_metric(metric):
+    return 'Blues' if 'cider' in metric else 'YlOrRd'
 
 
 def plot_heatmap(exp, result_i=-1, metric_i=0):
@@ -286,7 +271,8 @@ def plot_heatmap(exp, result_i=-1, metric_i=0):
     ticks = [KEY_TO_LABEL[k] for k in result.groups]
     pretty_metric = get_pretty_metric(result.metric, metric_i=metric_i)
 
-    sns.heatmap(result.cube[metric_i], annot=True, square=True, cmap='YlOrRd',
+    sns.heatmap(result.cube[metric_i], annot=True, square=True,
+                cmap=get_cmap_by_metric(result.metric),
                 xticklabels=ticks, yticklabels=ticks, fmt='.3f')
 
     plt.title(f'{pretty_metric} in {exp.abnormality} ({result.sampler})')
