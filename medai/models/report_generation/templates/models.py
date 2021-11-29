@@ -88,11 +88,23 @@ class StaticTemplateRGModel(BaseTemplateRGModel):
 
 
 class GroupedTemplateRGModel(BaseTemplateRGModel):
-    def __init__(self, *args, groups=[], **kwargs):
+    def __init__(self, *args, groups=[], redundant=True, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Indicates if an abnormality from a group can be consumed multiple times
+        # by more groups
+        # (Notice if it consumed by a group, it is never consumed by single templates)
+        self.redundant = redundant
+
         self.groups = []
-        for group_diseases, target, template in groups:
+        for tup in groups:
+            if len(tup) == 3: # backward compatibility
+                group_diseases, target, template = tup
+                options = {}
+            elif len(tup) == 4:
+                group_diseases, target, template, options = tup
+            else:
+                raise Exception(f'Group must have 3 or 4 elements, got: {len(tup)}, {tup}')
             self.check_template_validity(template)
 
             if isinstance(group_diseases, str):
@@ -107,7 +119,7 @@ class GroupedTemplateRGModel(BaseTemplateRGModel):
 
             assert len(targets) == len(group_diseases)
 
-            self.groups.append((group_diseases, targets, self.str_to_idxs(template)))
+            self.groups.append((group_diseases, targets, self.str_to_idxs(template), options))
 
 
     def __call__(self, labels):
@@ -125,11 +137,16 @@ class GroupedTemplateRGModel(BaseTemplateRGModel):
             preds_by_disease = dict(zip(self.diseases, sample_predictions))
             covered_diseases = set()
 
-            for group_diseases, targets, sentence in self.groups:
-                if all(preds_by_disease[d] == t for d, t in zip(group_diseases, targets)):
+            for group_diseases, targets, sentence, options in self.groups:
+                redundant = options.get('redundant', self.redundant)
+
+                if all(preds_by_disease[d] == t for d, t in zip(group_diseases, targets)) \
+                    and (redundant or all(d not in covered_diseases for d in group_diseases)):
                     report.extend(sentence)
-                    for d in group_diseases:
-                        covered_diseases.add(d)
+
+                    if options.get('consume', True):
+                        for d in group_diseases:
+                            covered_diseases.add(d)
 
             # Last, fill the report with the diseases that were not covered in the groups
             for disease_index in self.disease_order:

@@ -3,7 +3,7 @@ import logging
 from medai.datasets.common import CHEXPERT_DISEASES
 from medai.models.report_generation.templates import (
     chex_v1, chex_v2, chex_v3, chex_v4, chex_v5, chex_v6,
-    chex_group,
+    chex_group, chex_group_mimic,
 )
 from medai.models.report_generation.templates.models import (
     StaticTemplateRGModel,
@@ -66,6 +66,20 @@ _TEMPLATE_SETS = {
         GroupedTemplateRGModel,
         templates=chex_v1.TEMPLATES_CHEXPERT_v1,
         groups=chex_group.GROUPS_mimic_v6,
+    ),
+    'm-chex-grouped-v7': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_v1.TEMPLATES_CHEXPERT_v1,
+        groups=chex_group_mimic.GROUPS_v7,
+    ),
+    'm-chex-grouped-v8': partialclass(
+        GroupedTemplateRGModel,
+        templates=chex_group_mimic.CHEX_mimic_single,
+        groups=chex_group_mimic.GROUPS_v8,
+    ),
+    'm-chex-v8': partialclass(
+        StaticTemplateRGModel,
+        templates=chex_group_mimic.CHEX_mimic_single,
     ),
     'chex-v1-gaming-rm-neg': partialclass(
         GroupedTemplateRGModel,

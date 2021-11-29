@@ -69,7 +69,10 @@ class LightLabeler(ABC):
     use_timer = True
     use_cache = True
 
-    def __init__(self, vocab):
+    def __init__(self, vocab, device=None):
+        # device is unused, for API consistency
+        self._unused_device = device
+
         self._labels_by_sentence = ReportLabelsCache(self.name, 'sentences', self.diseases)
 
         self._report_reader = ReportReader(vocab, ignore_pad=True)

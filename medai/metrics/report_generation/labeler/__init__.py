@@ -189,7 +189,7 @@ def attach_medical_correctness(trainer, validator, vocab,
         else:
             usage = val_usage
 
-        labeler = LabelerClass(vocab)
+        labeler = LabelerClass(vocab, device=device)
         _attach_labeler(engine, labeler, labeler.metric_name, device=device, usage=usage)
 
     if needs_lock:

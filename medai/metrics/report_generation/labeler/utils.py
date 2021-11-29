@@ -73,16 +73,18 @@ class CacheLookupLabeler(HolisticLabeler):
     Paramters:
         cache -- df with keys ['Reports', *diseases]
     """
-    def __init__(self, labeler, cache=None):
+    def __init__(self, labeler, cache=None, text_key='Reports'):
         super().__init__(labeler)
 
+        self._key = text_key
+
         # Remove duplicated Reports, so merge() works properly
-        self.cache = cache.groupby('Reports').first().reset_index()
+        self.cache = cache.groupby(self._key).first().reset_index()
 
     def forward(self, reports):
         # reports: list of str
 
-        reports_saved_in_cache = set(self.cache['Reports'])
+        reports_saved_in_cache = set(self.cache[self._key])
 
         cached_reports = [
             report for report in reports
@@ -111,19 +113,19 @@ class CacheLookupLabeler(HolisticLabeler):
 
             # Build a DF to use merge()
             new_reports_df = pd.DataFrame(new_reports_labels, columns=self.diseases)
-            new_reports_df['Reports'] = non_cached_reports
+            new_reports_df[self._key] = non_cached_reports
 
             df_with_solution = pd.concat([df_with_solution, new_reports_df], axis=0)
 
         # Target DF with the final result
-        target_reports_df = pd.DataFrame(reports, columns=['Reports'])
+        target_reports_df = pd.DataFrame(reports, columns=[self._key])
         target_reports_df['order'] = list(range(len(reports)))
         target_reports_df = target_reports_df.merge(
-            df_with_solution, how='left', on='Reports',
+            df_with_solution, how='left', on=self._key,
         )
         target_reports_df = target_reports_df.sort_values('order')
 
-        self._assert_out_df_matches_input(reports, target_reports_df, 'Reports')
+        self._assert_out_df_matches_input(reports, target_reports_df, self._key)
 
         return target_reports_df[self.diseases].to_numpy()
 
