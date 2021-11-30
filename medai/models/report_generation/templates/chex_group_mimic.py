@@ -90,7 +90,8 @@ CHEX_mimic_single = {
         0: '', # Empty on purpose
         # 1: 'the other monitoring and support devices are constant',
         # 1: 'ng tube tip is in the stomach .',
-        1: 'tracheostomy tube in standard placement .',
+        # 1: 'tracheostomy tube in standard placement .', # tracheostomy falls into "any-finding"!
+        1: 'tube in standard placement .',
     },
 }
 
