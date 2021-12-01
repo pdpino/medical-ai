@@ -2,6 +2,7 @@
 import os
 import json
 import logging
+from collections import defaultdict
 from functools import partial
 
 import torch
@@ -9,6 +10,8 @@ from torch import nn
 from torch import optim
 from ignite.engine import Events
 from ignite.handlers import Checkpoint, DiskSaver
+
+from medai.models.checkpoint.moving_average import create_moving_average
 
 from medai.losses.optimizers import create_optimizer
 from medai.losses.schedulers import create_lr_sch_handler
@@ -221,6 +224,7 @@ def attach_checkpoint_saver(run_id,
                             validator,
                             metric=None,
                             dryrun=False,
+                            moving_average_kwargs=None,
                             ):
     """Attach a Checkpoint handler to a validator to persist to disk a CompiledModel.
 
@@ -237,6 +241,8 @@ def attach_checkpoint_saver(run_id,
         if metric is None:
             return {}
 
+        ## Chex metrics usually save values to disk every N epochs
+        ## (are too expensive to calculate every epoch!)
         _SHOULD_IGNORE_WARNING_METRICS = metric.startswith('chex_')
 
         def score_fn(unused_engine):
@@ -247,6 +253,15 @@ def attach_checkpoint_saver(run_id,
                         'Checkpoint-saver received %s=-1, will keep with greater_or_equal',
                         metric,
                     )
+            elif moving_average_kwargs is not None:
+                if not hasattr(validator.state, 'moving_average'):
+                    # pylint: disable=unnecessary-lambda
+                    validator.state.moving_average = defaultdict(
+                        lambda: create_moving_average(**moving_average_kwargs),
+                    )
+
+                value = validator.state.moving_average[metric].next(value)
+
             if metric == 'loss':
                 value = -value
             return value
@@ -270,9 +285,14 @@ def attach_checkpoint_saver(run_id,
             'Model checkpoint is not saved by best metric-value (only LAST saved)',
         )
     else:
+        if moving_average_kwargs is not None:
+            ma_str = ','.join(f'{k}={v}' for k, v in moving_average_kwargs.items())
+        else:
+            ma_str = 'none'
+
         LOGGER.info(
-            'Saving checkpoints by best/last: %s',
-            [o if o is not None else 'LAST' for o in options]
+            'Saving checkpoints by best/last: %s / MA: %s',
+            [o if o is not None else 'LAST' for o in options], ma_str,
         )
 
 

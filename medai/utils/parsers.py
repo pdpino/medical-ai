@@ -319,3 +319,23 @@ def build_args_checkpoint_metric_(args):
             _resolve_last(metric)
             for metric in args.checkpoint_metric
         ]
+
+
+def add_args_moving_average(parser):
+    parser.add_argument('--ma-mode', type=str, default=None, choices=('single', 'exp'),
+                        help='Moving average mode')
+    parser.add_argument('--ma-weight', type=float, default=0.7,
+                        help='Weight for exp moving average')
+    parser.add_argument('--ma-n', type=int, default=10,
+                        help='N for single moving average')
+
+
+def build_args_moving_average_(args):
+    if args.ma_mode is not None:
+        args.moving_average_kwargs = {'mode': args.ma_mode}
+        if args.ma_mode == 'single':
+            args.moving_average_kwargs.update({'n': args.ma_n})
+        elif args.ma_mode == 'exp':
+            args.moving_average_kwargs.update({'weight': args.ma_weight})
+    else:
+        args.moving_average_kwargs = None

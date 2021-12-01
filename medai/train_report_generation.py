@@ -119,6 +119,7 @@ def train_model(run_id,
                 att_vs_masks=False,
                 early_stopping=True,
                 early_stopping_kwargs={},
+                moving_average_kwargs=None,
                 lambda_word=1,
                 lambda_stop=1,
                 lambda_att=1,
@@ -231,6 +232,7 @@ def train_model(run_id,
         validator,
         metric=checkpoint_metric,
         dryrun=dryrun or (not save_model),
+        moving_average_kwargs=moving_average_kwargs,
     )
 
     attach_save_training_stats(
@@ -394,6 +396,7 @@ def train_from_scratch(run_name,
                        image_size=512,
                        early_stopping=True,
                        early_stopping_kwargs={},
+                       moving_average_kwargs=None,
                        lr_sch_kwargs={},
                        lambda_word=1,
                        lambda_stop=1,
@@ -473,6 +476,9 @@ def train_from_scratch(run_name,
             run_name += f'_as-{attention_size}'
         if att_double_bias:
             run_name += '_att-bias2'
+    if moving_average_kwargs is not None:
+        mode = moving_average_kwargs['mode']
+        run_name += f'_{mode[0]}ma'
     if cnn_run_id:
         run_name += f'_precnn-{cnn_run_id.short_clean_name}'
     else:
@@ -716,6 +722,7 @@ def train_from_scratch(run_name,
         'organ_by_sentence': organ_by_sentence,
         'checkpoint_metric': checkpoint_metric,
         'temperature': temperature,
+        'moving_average_kwargs': moving_average_kwargs,
     }
 
     # Save metadata
@@ -878,6 +885,7 @@ def parse_args():
     parsers.add_args_hw(parser, num_workers=4)
     parsers.add_args_med(parser)
     parsers.add_args_checkpoint_metric(parser)
+    parsers.add_args_moving_average(parser)
 
     args = parser.parse_args()
 
@@ -894,6 +902,7 @@ def parse_args():
     parsers.build_args_tb_(args)
     parsers.build_args_med_(args)
     parsers.build_args_checkpoint_metric_(args)
+    parsers.build_args_moving_average_(args)
 
     def _assert_med_metric_is_present(metric, argname):
         if metric is None or 'chex' not in metric:
@@ -1070,6 +1079,7 @@ if __name__ == '__main__':
                            max_samples=ARGS.max_samples,
                            early_stopping=ARGS.early_stopping,
                            early_stopping_kwargs=ARGS.early_stopping_kwargs,
+                           moving_average_kwargs=ARGS.moving_average_kwargs,
                            lr_sch_kwargs=ARGS.lr_sch_kwargs,
                            lambda_word=ARGS.lambda_word,
                            lambda_stop=ARGS.lambda_stop,
