@@ -189,6 +189,9 @@ def attach_medical_correctness(trainer, validator, vocab,
         else:
             usage = val_usage
 
+        if isinstance(usage, EveryNAfterMEpochs) and usage.m_after == -1:
+            continue
+
         labeler = LabelerClass(vocab, device=device)
         _attach_labeler(engine, labeler, labeler.metric_name, device=device, usage=usage)
 

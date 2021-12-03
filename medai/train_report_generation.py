@@ -469,10 +469,10 @@ def train_from_scratch(run_name,
         # Add options to run_name
         if len(options) > 0:
             run_name += f'_emb-{"-".join(options)}'
-    if hidden_size != 100:
+    if hidden_size != 512:
         run_name += f'_hs-{hidden_size}'
     if '-att' in decoder_name:
-        if attention_size != 100:
+        if attention_size != 512:
             run_name += f'_as-{attention_size}'
         if att_double_bias:
             run_name += '_att-bias2'
@@ -480,7 +480,7 @@ def train_from_scratch(run_name,
         mode = moving_average_kwargs['mode']
         run_name += f'_{mode[0]}ma'
     if cnn_run_id:
-        run_name += f'_precnn-{cnn_run_id.short_clean_name}'
+        run_name += f'_cnn-{cnn_run_id.short_clean_name}'
     else:
         run_name += f'_{cnn_model_name}'
     if not cnn_freeze:

@@ -45,7 +45,7 @@ def get_checkpoint_metrics_from_folder(folder):
     ]
 
     return sorted(list(set(
-        info.metric for info in checkpoint_infos if info.metric is not None
+        info.metric if info.metric is not None else 'last' for info in checkpoint_infos
     )))
 
 

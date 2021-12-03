@@ -291,7 +291,7 @@ def attach_checkpoint_saver(run_id,
             ma_str = 'none'
 
         LOGGER.info(
-            'Saving checkpoints by best/last: %s / MA: %s',
+            'Checkpointing by best: %s     with moving average: %s',
             [o if o is not None else 'LAST' for o in options], ma_str,
         )
 

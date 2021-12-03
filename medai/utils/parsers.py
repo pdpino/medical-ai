@@ -6,6 +6,7 @@ from medai.models.common import AVAILABLE_ACTIVATION_LAYERS, AVAILABLE_POOLING_R
 from medai.utils.common import parse_str_or_int
 from medai.training.detection.h2bb import AVAILABLE_H2BB_METHODS
 from medai.metrics.report_generation.labeler import AVAILABLE_MED_LABELERS
+from medai.models.checkpoint.moving_average import AVAILABLE_MOVING_AVERAGES
 
 # FIXME: this module (medai.utils) imports from medai.models (and others that are not utils)
 
@@ -321,10 +322,10 @@ def build_args_checkpoint_metric_(args):
         ]
 
 
-def add_args_moving_average(parser):
-    parser.add_argument('--ma-mode', type=str, default=None, choices=('single', 'exp'),
+def add_args_moving_average(parser, ma_weight=0.7):
+    parser.add_argument('--ma-mode', type=str, default=None, choices=AVAILABLE_MOVING_AVERAGES,
                         help='Moving average mode')
-    parser.add_argument('--ma-weight', type=float, default=0.7,
+    parser.add_argument('--ma-weight', type=float, default=ma_weight,
                         help='Weight for exp moving average')
     parser.add_argument('--ma-n', type=int, default=10,
                         help='N for single moving average')
@@ -335,7 +336,7 @@ def build_args_moving_average_(args):
         args.moving_average_kwargs = {'mode': args.ma_mode}
         if args.ma_mode == 'single':
             args.moving_average_kwargs.update({'n': args.ma_n})
-        elif args.ma_mode == 'exp':
+        elif 'exp' in args.ma_mode:
             args.moving_average_kwargs.update({'weight': args.ma_weight})
     else:
         args.moving_average_kwargs = None

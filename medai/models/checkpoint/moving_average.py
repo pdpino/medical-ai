@@ -1,6 +1,9 @@
 from collections import deque
+import logging
 
 import numpy as np
+
+LOGGER = logging.getLogger(__name__)
 
 class SimpleMovingAverage:
     def __init__(self, n=10):
@@ -18,7 +21,7 @@ class ExpMovingAverage:
     """Exponential moving average.
 
     Could have used RunningAverage from ignite, but realized too late."""
-    def __init__(self, weight=0.6):
+    def __init__(self, weight=0.7):
         assert weight > 0
         assert weight < 1
 
@@ -29,14 +32,23 @@ class ExpMovingAverage:
         if self.current is None:
             self.current = item
         else:
-            self.current = (1-self.weight) * self.current + self.weight * item
+            self.current = self.weight * self.current + (1-self.weight) * item
 
         return self.current
 
-def create_moving_average(mode, **kwargs):
-    if mode == 'simple':
-        return SimpleMovingAverage(**kwargs)
-    if mode == 'exp':
-        return ExpMovingAverage(**kwargs)
+_MOVING_AVERAGES = {
+    'simple': SimpleMovingAverage,
+    'exp': lambda kw: ExpMovingAverage(weight=1-kw['weight']), # OLD: deprecated
+    'exp-fixed': ExpMovingAverage,
+}
 
-    raise Exception(f'No such moving-average mode: {mode}')
+AVAILABLE_MOVING_AVERAGES = list(_MOVING_AVERAGES)
+
+def create_moving_average(mode, **kwargs):
+    if mode not in _MOVING_AVERAGES:
+        raise Exception(f'No such moving-average mode: {mode}')
+
+    if mode == 'exp':
+        LOGGER.error('Moving average mode %s is deprecated', mode)
+
+    return _MOVING_AVERAGES[mode](**kwargs)
