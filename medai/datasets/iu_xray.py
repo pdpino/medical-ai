@@ -32,6 +32,12 @@ _AVAILABLE_SPLITS = ['train', 'val', 'test', 'all']
 _DATASET_MEAN = 0.4821
 _DATASET_STD = 0.2374
 
+def _get_reports_names_from_split(dataset_type):
+    list_fname = os.path.join(DATASET_DIR, 'splits', f'{dataset_type}.txt')
+    with open(list_fname, 'r') as f:
+        reports_from_split = [l.strip() for l in f.readlines()]
+    return reports_from_split
+
 
 class IUXRayDataset(Dataset):
     dataset_name = 'iu-x-ray'
@@ -89,11 +95,15 @@ class IUXRayDataset(Dataset):
             reports = list(json.load(f).values())
 
         # Filter by train, val, test
-        if dataset_type != 'all':
-            list_fname = os.path.join(DATASET_DIR, 'splits', f'{dataset_type}.txt')
-            with open(list_fname, 'r') as f:
-                reports_from_split = set(l.strip() for l in f.readlines())
-            reports = [rep for rep in reports if rep['filename'] in reports_from_split]
+        if dataset_type == 'all':
+            splits = ('train', 'val', 'test')
+        else:
+            splits = (dataset_type,)
+
+        reports_from_split = []
+        for split in splits:
+            reports_from_split.extend(_get_reports_names_from_split(split))
+        reports = [rep for rep in reports if rep['filename'] in reports_from_split]
 
         # Prepare reports for getter calls
         self._preprocess_reports(reports, sort_samples=sort_samples,

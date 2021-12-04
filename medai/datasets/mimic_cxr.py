@@ -93,7 +93,7 @@ class MIMICCXRDataset(Dataset):
             use_fast = mini == 1
             used_images_folder = 'images'
 
-        if not use_fast:
+        if not use_fast and not do_not_load_image:
             LOGGER.warning('MIMIC loading images from HDD, will be slow')
 
         if not use_fast and DATASET_DIR is None:
@@ -119,11 +119,15 @@ class MIMICCXRDataset(Dataset):
         self.master_df = pd.read_csv(fpath)
 
         # Filter by train, val, test
-        if dataset_type != 'all':
-            available_splits = list(self.master_df['split'].unique()) + ['all']
-            self.master_df = self.master_df.loc[self.master_df['split'] == dataset_type]
-            if len(self.master_df) == 0:
-                raise Exception(f'{dataset_type} split not available, only {available_splits}')
+        if dataset_type == 'all':
+            splits = ('train', 'val', 'test')
+        else:
+            splits = (dataset_type,)
+
+        available_splits = list(self.master_df['split'].unique()) + ['all']
+        self.master_df = self.master_df.loc[self.master_df['split'].isin(splits)]
+        if len(self.master_df) == 0:
+            raise Exception(f'{dataset_type} split not available, only {available_splits}')
 
         if frontal_only:
             df = self.master_df
