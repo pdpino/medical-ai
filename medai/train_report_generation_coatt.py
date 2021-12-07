@@ -1,5 +1,7 @@
 """TODO: merge this script with train_report_generation??.
 
+Script to train coatt model (not h-coatt model!)
+Most up-to-date is "h-coatt" version.
 """
 import argparse
 import logging

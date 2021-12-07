@@ -71,6 +71,9 @@ class HCoAttDecoder(nn.Module):
                  topic_size=512,
                  ):
         super().__init__()
+        if topic_size != word_embedding_size:
+            sizes = f'got topic={topic_size} vs word={word_embedding_size}'
+            raise Exception(f'Topic size must be equal to word-emb-size {sizes}')
 
         self.hidden_size = hidden_size
         self.stop_threshold = stop_threshold
@@ -209,6 +212,7 @@ class HCoAttDecoder(nn.Module):
         c_state_t = torch.zeros(batch_size, self.hidden_size, device=device)
 
         # Pass topic first
+        # NOTICE: topic_size must be == word_embedding_size
         h_state_t, c_state_t = self.word_lstm(topic, (h_state_t, c_state_t))
 
         # Build initial input

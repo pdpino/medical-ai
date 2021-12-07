@@ -629,6 +629,10 @@ def train_from_scratch(run_name,
             },
             'decoder_kwargs': {
                 'vocab': vocab,
+                'hidden_size': hidden_size,
+                'word_embedding_size': embedding_size,
+                'embedding_kwargs': embedding_kwargs,
+                'topic_size': embedding_size, # Model requirement
             },
         }
         model = create_rg_model(**model_kwargs).to(device)
@@ -997,6 +1001,10 @@ def parse_args():
         if args.labels is not None:
             LOGGER.error('--labels are only useful with h-coatt decoder')
             args.labels = None
+    else:
+        if args.cnn_pretrained is not None:
+            if args.cnn is None:
+                parser.error('For h-coatt and --cnn-pretrained, must also provide --cnn <name>')
 
     if args.lambda_att > 0 and args.decoder in ('s-tell', 'lstm-att-v2', 'lstm-v2'):
         LOGGER.error(
