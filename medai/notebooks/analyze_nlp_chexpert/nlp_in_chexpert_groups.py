@@ -257,7 +257,18 @@ def get_cmap_by_metric(metric):
     return 'Blues' if 'cider' in metric else 'YlOrRd'
 
 
-def plot_heatmap(exp, result_i=-1, metric_i=0):
+def plot_heatmap(exp, result_i=-1, metric_i=0, ax=None,
+                 title=True,
+                 title_fontsize=12,
+                 ylabel_fontsize=12,
+                 xlabel_fontsize=12,
+                 xlabel=True,
+                 ylabel=True,
+                 **heatmap_kwargs,
+                 ):
+    if ax is None:
+        ax = plt.gca()
+
     # Select result to plot
     result = exp.results[result_i]
 
@@ -273,18 +284,34 @@ def plot_heatmap(exp, result_i=-1, metric_i=0):
 
     sns.heatmap(result.cube[metric_i], annot=True, square=True,
                 cmap=get_cmap_by_metric(result.metric),
-                xticklabels=ticks, yticklabels=ticks, fmt='.3f')
+                xticklabels=ticks, yticklabels=ticks, fmt='.3f', ax=ax,
+                **heatmap_kwargs
+                )
 
-    plt.title(f'{pretty_metric} in {exp.abnormality} ({result.sampler})')
-    plt.xlabel('Generated', fontsize=14)
-    plt.ylabel('Ground-Truth', fontsize=14)
+    if title:
+        ax.set_title(
+            f'{pretty_metric} in {exp.abnormality} ({result.sampler})',
+            fontsize=title_fontsize,
+        )
+    if xlabel:
+        ax.set_xlabel('Generated', fontsize=xlabel_fontsize)
+    if ylabel:
+        ax.set_ylabel('Ground-Truth', fontsize=ylabel_fontsize)
 
 
 #### Plot hist functions
 def plot_hists(exp, keys, result_i=-1, metric_i=0,
-               title=True, xlabel=True, bins=15, alpha=0.5,
+               title=True, xlabel=True, ylabel=True, bins=15, alpha=0.5,
                add_n_to_label=False,
+               legend_fontsize=12,
+               title_fontsize=12,
+               ylabel_fontsize=12,
+               xlabel_fontsize=12,
+               ax=None,
                **hist_kwargs):
+    if ax is None:
+        ax = plt.gca()
+
     result = exp.results[result_i]
 
     for key in keys:
@@ -296,22 +323,26 @@ def plot_hists(exp, keys, result_i=-1, metric_i=0,
 
         assert len(key) == 2
         gt_key, gen_key = key
-        label = f'GT: {KEY_TO_LABEL[gt_key]} / Gen: {KEY_TO_LABEL[gen_key]}'
+        label = f'GT={KEY_TO_LABEL[gt_key]}, Gen={KEY_TO_LABEL[gen_key]}'
         if add_n_to_label:
             label += f' / (N={len(values):,})'
-        plt.hist(values, label=label, alpha=alpha, bins=bins, density=True, **hist_kwargs)
+        ax.hist(values, label=label, alpha=alpha, bins=bins, density=True, **hist_kwargs)
 
         print(f'{label} -- mean={values.mean():.4f} -- n={len(values):,}')
 
     pretty_metric = get_pretty_metric(result.metric, metric_i)
 
-    plt.legend()
+    ax.legend(fontsize=legend_fontsize)
     if title:
         dataset = 'IU' if exp.dataset == 'iu' else 'MIMIC'
-        plt.title(f'{pretty_metric} scores in {exp.abnormality} sentences ({dataset})')
+        ax.set_title(
+            f'{pretty_metric} scores in {exp.abnormality} sentences ({dataset})',
+            fontsize=title_fontsize,
+        )
     if xlabel:
-        plt.xlabel(f'{pretty_metric} score')
-    plt.ylabel('Frequency')
+        ax.set_xlabel(f'{pretty_metric} score', fontsize=xlabel_fontsize)
+    if ylabel:
+        ax.set_ylabel('Frequency', fontsize=ylabel_fontsize)
 
 
 #### Load/save pickle functions

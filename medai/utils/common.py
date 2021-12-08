@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
+FIGURES_DIR = os.path.join(WORKSPACE_DIR, 'figures') # png/pdf figures
 TMP_DIR = os.path.join(WORKSPACE_DIR, 'tmp')
 CACHE_DIR = os.path.join(WORKSPACE_DIR, 'cache')
 
