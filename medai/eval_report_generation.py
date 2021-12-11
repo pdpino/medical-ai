@@ -116,6 +116,7 @@ def evaluate_model_and_save(
         check_unclean=True,
         model_name='lstm',
         quiet=False,
+        print_metrics_split='test',
         ):
     """Evaluates a model and save metrics to file."""
     evaluate_kwargs = {
@@ -157,7 +158,7 @@ def evaluate_model_and_save(
         save_results(metrics, run_id, suffix=suffix)
 
         if not quiet:
-            print_rg_metrics(metrics)
+            print_rg_metrics(metrics, split=print_metrics_split)
 
     return metrics
 

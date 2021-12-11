@@ -13,7 +13,10 @@ from medai.models.report_generation.dummy.constant import (
 from medai.models.report_generation.dummy.common_words import MostCommonWords
 from medai.models.report_generation.dummy.common_sentences import MostCommonSentences
 from medai.models.report_generation.dummy.random import RandomReport
-from medai.models.report_generation.dummy.most_similar_image import MostSimilarImage
+from medai.models.report_generation.dummy.most_similar_image import (
+    AVAILABLE_DISTANCES,
+    MostSimilarImage,
+)
 from medai.eval_report_generation import evaluate_model_and_save
 from medai.utils import (
     get_timestamp,
@@ -50,6 +53,7 @@ def evaluate_dummy_model(model_name,
                          k_first=100,
                          similar_cnn_id=None,
                          similar_cnn_kwargs={},
+                         nn_distance='euc',
                          image_size=256,
                          norm_by_sample=False,
                          free_values=[False, True],
@@ -59,6 +63,7 @@ def evaluate_dummy_model(model_name,
                          device='cuda',
                          max_samples=None,
                          quiet=False,
+                         experiment='',
                          ):
     # Run name
     run_name = f'{get_timestamp()}_{dataset_name}_dummy-{model_name}'
@@ -69,18 +74,20 @@ def evaluate_dummy_model(model_name,
             run_name += f'-{constant_version}'
     if model_name == 'most-similar-image':
         if similar_cnn_id:
-            run_name += f'_{similar_cnn_id.short_clean_name}'
+            run_name += f'_cnn-{similar_cnn_id.short_clean_name}'
         else:
             cnn_name = similar_cnn_kwargs.get('model_name', None)
             run_name += f'_{cnn_name}'
         if image_size != 256:
             run_name += f'_size{image_size}'
+        if nn_distance != 'euc':
+            run_name += f'_dist-{nn_distance}'
     if frontal_only:
         run_name += '_front'
     if reports_version != LATEST_REPORTS_VERSION:
         run_name += f'_reports-{reports_version}'
 
-    run_id = RunId(run_name, debug, 'rg')
+    run_id = RunId(run_name, debug, 'rg', experiment=experiment)
 
     LOGGER.info('Evaluating %s', run_id)
 
@@ -137,7 +144,7 @@ def evaluate_dummy_model(model_name,
         else:
             cnn = create_cnn(**similar_cnn_kwargs).to(device)
 
-        model = MostSimilarImage(cnn, vocab)
+        model = MostSimilarImage(cnn, vocab, nn_distance)
         model.eval()
 
         LOGGER.info('Precalculating feature vectors...')
@@ -172,6 +179,7 @@ def evaluate_dummy_model(model_name,
         check_unclean=False,
         quiet=quiet,
         model_name=model_name,
+        print_metrics_split=(('train', 'test') if model_name == 'most-similar-image' else 'test'),
     )
 
     LOGGER.info('Evaluated %s', run_id)
@@ -202,6 +210,8 @@ def parse_args():
                         help='MostSimilarImage: CNN name to create')
     parser.add_argument('--imagenet', action='store_true',
                         help='MostSimilarImage: args to CNN')
+    parser.add_argument('--nn-distance', type=str, default='euc', choices=AVAILABLE_DISTANCES,
+                        help='MostSimilarImage: distance to use')
     parser.add_argument('--no-debug', action='store_true',
                         help='If is a non-debugging run')
     parser.add_argument('--norm-by-sample', action='store_true',
@@ -216,6 +226,8 @@ def parse_args():
                         help='Do not print metrics')
     parser.add_argument('--reports-version', type=str, default=LATEST_REPORTS_VERSION,
                         help='Reports version to use')
+    parser.add_argument('-exp', '--experiment', type=str, default='',
+                        help='Custom experiment name')
     parsers.add_args_free_values(parser)
 
     args = parser.parse_args()
@@ -262,10 +274,12 @@ if __name__ == '__main__':
         k_first=ARGS.k_first,
         similar_cnn_id=ARGS.similar_cnn_id,
         similar_cnn_kwargs=ARGS.similar_cnn_kwargs,
+        nn_distance=ARGS.nn_distance,
         debug=not ARGS.no_debug,
         free_values=ARGS.free_values,
         medical_correctness=not ARGS.no_med,
         device=DEVICE,
         max_samples=ARGS.max_samples,
         quiet=ARGS.quiet,
+        experiment=ARGS.experiment,
     )

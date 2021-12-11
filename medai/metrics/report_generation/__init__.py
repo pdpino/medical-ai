@@ -145,14 +145,16 @@ def attach_organ_by_sentence(engine, vocab, should_attach=True, device='cuda'):
     metric.attach(engine, 'organ-acc')
 
 
-def print_rg_metrics(metrics, ignore=CHEXPERT_DISEASES, splits='test'):
+def print_rg_metrics(metrics, ignore=CHEXPERT_DISEASES, split='test'):
     def _filter_metric(metric_name):
         if ignore is not None:
             return all(text not in metric_name for text in ignore)
         return True
 
-    if isinstance(splits, str):
-        splits = (splits,)
+    if not isinstance(split, (tuple, list)):
+        splits = (split,)
+    else:
+        splits = split
 
     to_print_metrics = {}
     for split, mets in metrics.items():
