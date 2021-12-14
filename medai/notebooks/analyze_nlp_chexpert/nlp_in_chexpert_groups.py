@@ -262,6 +262,7 @@ def plot_heatmap(exp, result_i=-1, metric_i=0, ax=None,
                  title_fontsize=12,
                  ylabel_fontsize=12,
                  xlabel_fontsize=12,
+                 ticks_fontsize=12,
                  xlabel=True,
                  ylabel=True,
                  **heatmap_kwargs,
@@ -298,6 +299,9 @@ def plot_heatmap(exp, result_i=-1, metric_i=0, ax=None,
     if ylabel:
         ax.set_ylabel('Ground-Truth', fontsize=ylabel_fontsize)
 
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=ticks_fontsize)
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=ticks_fontsize)
+
 
 #### Plot hist functions
 def plot_hists(exp, keys, result_i=-1, metric_i=0,
@@ -307,7 +311,9 @@ def plot_hists(exp, keys, result_i=-1, metric_i=0,
                title_fontsize=12,
                ylabel_fontsize=12,
                xlabel_fontsize=12,
+               xlog=False,
                ax=None,
+               verbose=False,
                **hist_kwargs):
     if ax is None:
         ax = plt.gca()
@@ -328,7 +334,8 @@ def plot_hists(exp, keys, result_i=-1, metric_i=0,
             label += f' / (N={len(values):,})'
         ax.hist(values, label=label, alpha=alpha, bins=bins, density=True, **hist_kwargs)
 
-        print(f'{label} -- mean={values.mean():.4f} -- n={len(values):,}')
+        if verbose:
+            print(f'{label} -- mean={values.mean():.4f} -- n={len(values):,}')
 
     pretty_metric = get_pretty_metric(result.metric, metric_i)
 
@@ -343,6 +350,72 @@ def plot_hists(exp, keys, result_i=-1, metric_i=0,
         ax.set_xlabel(f'{pretty_metric} score', fontsize=xlabel_fontsize)
     if ylabel:
         ax.set_ylabel('Frequency', fontsize=ylabel_fontsize)
+    if xlog:
+        ax.set_xscale('log')
+
+#### Plot distributions as boxplots
+# Useful when there are many keys!
+def plot_boxplots(exp, keys, result_i=-1, metric_i=0,
+                  title=True, xlabel=True, ylabel=True,
+                  # add_n_to_label=False,
+                  title_fontsize=12,
+                  ylabel_fontsize=12,
+                  xlabel_fontsize=12,
+                  labels_fontsize=12,
+                  labelrot=0,
+                  ylog=False,
+                  correct_color='green',
+                  incorrect_color='red',
+                  ax=None):
+    if ax is None:
+        ax = plt.gca()
+
+    result = exp.results[result_i]
+
+    data = []
+    labels = []
+    colors = []
+    for key in keys:
+        dist = result.dists.get(key, np.zeros((1,)))
+        if dist.ndim > 1:
+            values = dist[metric_i] # useful for bleu-1, -2, -3, -4
+        else:
+            values = dist
+        data.append(values)
+
+        assert len(key) == 2
+        gt_key, gen_key = key
+        label = f'{KEY_TO_LABEL[gt_key]}-{KEY_TO_LABEL[gen_key]}'
+        # if add_n_to_label:
+        #     label += f' / (N={len(values):,})'
+        labels.append(label)
+
+        colors.append(correct_color if gt_key == gen_key else incorrect_color)
+
+    ax.boxplot(data)
+    ax.set_xticklabels(labels, fontsize=labels_fontsize, rotation=labelrot)
+
+    xticks = ax.get_xticklabels()
+    assert len(xticks) == len(colors), f'{len(xticks)} vs {len(colors)}'
+    for color, xtick in zip(colors, xticks):
+        xtick.set_color(color)
+
+    pretty_metric = get_pretty_metric(result.metric, metric_i)
+
+    # ax.legend(fontsize=legend_fontsize)
+    if title:
+        dataset = 'IU' if exp.dataset == 'iu' else 'MIMIC'
+        ax.set_title(
+            f'{pretty_metric} scores in {exp.abnormality} sentences ({dataset})',
+            fontsize=title_fontsize,
+        )
+    if ylabel:
+        ax.set_ylabel(pretty_metric, fontsize=ylabel_fontsize)
+    if xlabel:
+        ax.set_xlabel('Corpus', fontsize=xlabel_fontsize)
+    if ylog:
+        ax.set_yscale('log')
+
 
 
 #### Load/save pickle functions
