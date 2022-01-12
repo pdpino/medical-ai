@@ -13,7 +13,7 @@ from medai.metrics.report_generation.labeler.light_labeler import (
 from medai.metrics.report_generation.labeler.labeler_timer import LabelerTimerMetric
 from medai.metrics.report_generation.labeler.cache import LABELER_CACHE_DIR
 from medai.metrics.report_generation.labeler.hit_counter_metric import HitCounterMetric
-from medai.metrics.report_generation.abn_match.chexpert import (
+from medai.metrics.report_generation.abn_match.schemas.chexpert import (
     ChexpertLighterLabeler,
 )
 from medai.metrics.report_generation.transforms import get_flat_reports

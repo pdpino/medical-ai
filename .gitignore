@@ -28,4 +28,3 @@ medai/batch*.sh
 medai/utils/*.sh
 medai/notebooks/debug.ipynb
 medai/notebooks/pamessina/
-medai/metrics/report_generation/abn_match/

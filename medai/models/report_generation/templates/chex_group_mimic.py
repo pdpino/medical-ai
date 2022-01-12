@@ -135,7 +135,8 @@ GROUPS_v8 = [
 ]
 
 
-GROUPS_v9 = [
+# DEBUG ones:
+_GROUPS_v9 = [
     # *GROUPS_v7,
     # (
     #     ('Lung Opacity', 'Atelectasis', 'Pleural Effusion', 'Pneumonia'), 1,
