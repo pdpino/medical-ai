@@ -2,7 +2,7 @@ import os
 import random
 import pickle
 import logging
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from itertools import product
 from tqdm import tqdm
 import numpy as np
@@ -230,6 +230,24 @@ def init_experiment(abnormality, dataset_info):
         grouped=grouped,
         dataset=dataset_info.name,
     )
+
+
+# Load experiments
+def load_experiments(dataset_name):
+    exp_by_abn = {}
+    errors = defaultdict(list)
+    for abnormality in CHEXPERT_DISEASES[1:]:
+        fname = f'{dataset_name}-{abnormality.replace(" ", "-").lower()}'
+        if not exist_experiment_pickle(fname):
+            errors['not-found'].append(fname)
+            continue
+        exp = load_experiment_pickle(fname)
+        exp_by_abn[abnormality] = exp
+
+    if len(errors['not-found']):
+        print('Not found: ', errors['not-found'])
+
+    return exp_by_abn
 
 
 ### Plot matrix functions
