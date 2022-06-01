@@ -1,4 +1,4 @@
-# Medical AI
+# Chest X-rays and clinical reports analysis using DL
 
 Code used for the papers:
 
@@ -12,8 +12,12 @@ Code used for the papers:
 > [LXAI](https://www.latinxinai.org/neurips-2020-about) at NeurIPS 2020 \
 > Links: [Poster](https://research.latinxinai.org/papers/neurips/2020/png/pino_short_23.png)
 
+And master thesis:
 
-Visit our research group at: https://haivis.ing.puc.cl
+> [_Report generation from chest X-Rays: analysis of NLP metrics and clinically correct template-based model_](https://repositorio.uc.cl/handle/11534/63600) \
+> Pablo Pino \
+> Advisor: Denis Parra \
+> [Computer Science Department at PUC Chile](https://dcc.ing.puc.cl/)
 
 
 ### Citations
@@ -47,3 +51,7 @@ Visit our research group at: https://haivis.ing.puc.cl
   note={{I}n LXAI at NeurIPS 2020}
 }
 ```
+
+### Research group
+
+Visit our research group at: https://haivis.ing.puc.cl
