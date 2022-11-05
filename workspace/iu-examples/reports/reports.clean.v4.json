@@ -1,0 +1,60 @@
+{
+  "1.xml": {
+    "comparison": "None.",
+    "filename": "1.xml",
+    "findings": "The cardiac silhouette and mediastinum size are within normal limits. There is no pulmonary edema. There is no focal consolidation. There are no XXXX of a pleural effusion. There is no evidence of pneumothorax.",
+    "images": [
+      {
+        "caption": "Xray Chest PA and Lateral",
+        "id": "CXR1_1_IM-0001-3001",
+        "side": "lateral-left",
+        "wrong": false,
+        "broken": false
+      },
+      {
+        "caption": "Xray Chest PA and Lateral",
+        "id": "CXR1_1_IM-0001-4001",
+        "side": "frontal",
+        "wrong": false,
+        "broken": false
+      }
+    ],
+    "impression": "Normal chest x-XXXX.",
+    "indication": "Positive TB test",
+    "tags_auto": [],
+    "tags_manual": [
+      "normal"
+    ],
+    "clean_text": "the cardiac silhouette and mediastinum size are within normal limits . there is no pulmonary edema . there is no focal consolidation . there are no xxxx of a pleural effusion . there is no evidence of pneumothorax ."
+  },
+  "10.xml": {
+    "comparison": "Chest radiographs XXXX.",
+    "filename": "10.xml",
+    "findings": "The cardiomediastinal silhouette is within normal limits for size and contour. The lungs are normally inflated without evidence of focal airspace disease, pleural effusion, or pneumothorax. Stable calcified granuloma within the right upper lung. No acute bone abnormality..",
+    "images": [
+      {
+        "caption": "PA and lateral chest x-XXXX XXXX. ",
+        "id": "CXR10_IM-0002-1001",
+        "side": "lateral-left",
+        "wrong": false,
+        "broken": false
+      },
+      {
+        "caption": "PA and lateral chest x-XXXX XXXX. ",
+        "id": "CXR10_IM-0002-2001",
+        "side": "frontal",
+        "wrong": false,
+        "broken": false
+      }
+    ],
+    "impression": "No acute cardiopulmonary process.",
+    "indication": "XXXX-year-old male, chest pain.",
+    "tags_auto": [
+      "calcified granuloma"
+    ],
+    "tags_manual": [
+      "Calcified Granuloma/lung/upper lobe/right"
+    ],
+    "clean_text": "the cardiomediastinal silhouette is within normal limits for size and contour . the lungs are normally inflated without evidence of focal airspace disease , pleural effusion , or pneumothorax . stable calcified granuloma within the right upper lung . no acute bone abnormality ."
+  }
+}
