@@ -20,8 +20,8 @@ main.py
 # CAV folder
 cav/
 
-# Requirements are not updated!
-requirements*
+# Some requirements files are not updated
+requirements-*
 
 # Others
 medai/batch*.sh
