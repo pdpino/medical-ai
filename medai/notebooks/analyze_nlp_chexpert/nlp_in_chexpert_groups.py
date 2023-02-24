@@ -24,25 +24,28 @@ from medai.metrics.report_generation.nlp.cider_idf import (
 from medai.utils import timeit_main, config_logging
 from medai.utils.files import WORKSPACE_DIR
 
-LOGGER = logging.getLogger('medai.analyze.nlp-chex-groups')
+LOGGER = logging.getLogger("medai.analyze.nlp-chex-groups")
 
 ###### Scorers
 _SCORERS = {
-    'bleu': (bleu_scorer.BleuScorer, 4),
-    'rouge': (RougeLScorer, 1),
-    'cider': (cider_scorer.CiderScorer, 1),
-    'cider-IDF': (CiderScorerIDFModified, 1),
+    "bleu": (bleu_scorer.BleuScorer, 4),
+    "rouge": (RougeLScorer, 1),
+    "cider": (cider_scorer.CiderScorer, 1),
+    "cider-IDF": (CiderScorerIDFModified, 1),
 }
 
 
 ###### Sampling classes
 
+
 class BaseSampler:
     def __init__(self, sentences_gen, sentences_gt):
         self.sentences_gen = sentences_gen
         self.sentences_gt = sentences_gt
+
     def __repr__(self):
         return self.__str__()
+
 
 class SampleAllPairwise(BaseSampler):
     def __iter__(self):
@@ -51,10 +54,11 @@ class SampleAllPairwise(BaseSampler):
             yield sentence_gen, [sentence_gt]
 
     def __len__(self):
-        return len(self.sentences_gen)*len(self.sentences_gt)
+        return len(self.sentences_gen) * len(self.sentences_gt)
 
     def __str__(self):
-        return 'all'
+        return "all"
+
 
 class SampleKRandomGen(BaseSampler):
     def __init__(self, sentences_gen, sentences_gt, k_times=100, max_n=500):
@@ -73,7 +77,7 @@ class SampleKRandomGen(BaseSampler):
             if self.k < len(self.sentences_gen):
                 gens = random.sample(self.sentences_gen, self.k)
             else:
-                gens = self.sentences_gen # Generate all available pairs instead
+                gens = self.sentences_gen  # Generate all available pairs instead
             for sentence_gen in gens:
                 yield sentence_gen, [sentence_gt]
 
@@ -83,7 +87,8 @@ class SampleKRandomGen(BaseSampler):
         return n_gts * n_gens
 
     def __str__(self):
-        return f'random-gen_k{self.k}_n{self.max_n}'
+        return f"random-gen_k{self.k}_n{self.max_n}"
+
 
 class SampleKRandomGT(BaseSampler):
     def __init__(self, sentences_gen, sentences_gt, k_times=100, k_gts=5, max_n=500):
@@ -106,7 +111,7 @@ class SampleKRandomGT(BaseSampler):
             else:
                 gts = self.sentences_gt
             for i in range(0, len(gts), self.k_gts):
-                yield sentence_gen, gts[i:i+self.k_gts]
+                yield sentence_gen, gts[i : i + self.k_gts]
 
     def __len__(self):
         n_gens = min(self.max_n, len(self.sentences_gen))
@@ -114,25 +119,34 @@ class SampleKRandomGT(BaseSampler):
         return n_gens * n_gts
 
     def __str__(self):
-        return f'random-gt_k{self.k_times}_n{self.max_n}_lgts{self.k_gts}'
+        return f"random-gt_k{self.k_times}_n{self.max_n}_lgts{self.k_gts}"
 
 
 _SAMPLERS = {
-    'all': SampleAllPairwise,
-    'random-gen': SampleKRandomGen,
-    'random-gt': SampleKRandomGT,
+    "all": SampleAllPairwise,
+    "random-gen": SampleKRandomGen,
+    "random-gt": SampleKRandomGT,
 }
 
 ###### Matrices functions
 
-MatrixResult = namedtuple('MatrixResult', ['cube', 'dists', 'metric', 'groups', 'sampler'])
+MatrixResult = namedtuple(
+    "MatrixResult", ["cube", "dists", "metric", "groups", "sampler"]
+)
 
-def calc_score_matrices(grouped, dataset_info, groups=(-2, 0, -1, 1), metric='bleu', show=True,
-                        sampler='all', **sampler_kwargs,
-                       ):
+
+def calc_score_matrices(
+    grouped,
+    dataset_info,
+    groups=(-2, 0, -1, 1),
+    metric="bleu",
+    show=True,
+    sampler="all",
+    **sampler_kwargs,
+):
     for g in groups:
         if g not in grouped:
-            LOGGER.warning('%s not in grouped!', g)
+            LOGGER.warning("%s not in grouped!", g)
 
     ScorerClass, n_metrics = _SCORERS[metric]
     SamplerClass = _SAMPLERS[sampler]
@@ -142,10 +156,12 @@ def calc_score_matrices(grouped, dataset_info, groups=(-2, 0, -1, 1), metric='bl
 
     out_dists = dict()
 
-    for (row_i, group_gen), (col_j, group_gt) in product(enumerate(groups), enumerate(groups)):
+    for (row_i, group_gen), (col_j, group_gt) in product(
+        enumerate(groups), enumerate(groups)
+    ):
         scorer = ScorerClass()
 
-        if metric == 'cider-IDF':
+        if metric == "cider-IDF":
             # pylint: disable=assigning-non-slot
             scorer.document_frequency = dataset_info.doc_freq
             # Also needs to update ref_len
@@ -156,7 +172,7 @@ def calc_score_matrices(grouped, dataset_info, groups=(-2, 0, -1, 1), metric='bl
 
         content = SamplerClass(sentences_gen, sentences_gt, **sampler_kwargs)
         if show:
-            content = tqdm(content, desc=f'{group_gen:>2} vs {group_gt:>2}')
+            content = tqdm(content, desc=f"{group_gen:>2} vs {group_gt:>2}")
 
         for sentence_gen, sentences_gt in content:
             scorer += (sentence_gen, sentences_gt)
@@ -186,9 +202,8 @@ def calc_score_matrices(grouped, dataset_info, groups=(-2, 0, -1, 1), metric='bl
     )
 
 
-
-
 #### Experiment functions
+
 
 class Experiment:
     def __init__(self, abnormality, grouped, dataset):
@@ -213,14 +228,14 @@ class Experiment:
 
     def __str__(self):
         lens = tuple([len(self.grouped.get(group, [])) for group in (-2, 0, -1, 1)])
-        return f'{self.abnormality} data={self.dataset} n_sent={lens} n_results={len(self.results)}'
+        return f"{self.abnormality} data={self.dataset} n_sent={lens} n_results={len(self.results)}"
 
     def __repr__(self):
         return self.__str__()
 
 
 def init_experiment(abnormality, dataset_info):
-    grouped = dataset_info.sentences_df.groupby(abnormality)['sentence'].apply(
+    grouped = dataset_info.sentences_df.groupby(abnormality)["sentence"].apply(
         lambda x: sorted(list(x), key=len),
     )
     # print([(valuation, len(sentences)) for valuation, sentences in grouped.iteritems()])
@@ -239,52 +254,56 @@ def load_experiments(dataset_name):
     for abnormality in CHEXPERT_DISEASES[1:]:
         fname = f'{dataset_name}-{abnormality.replace(" ", "-").lower()}'
         if not exist_experiment_pickle(fname):
-            errors['not-found'].append(fname)
+            errors["not-found"].append(fname)
             continue
         exp = load_experiment_pickle(fname)
         exp_by_abn[abnormality] = exp
 
-    if len(errors['not-found']):
-        print('Not found: ', errors['not-found'])
+    if len(errors["not-found"]):
+        print("Not found: ", errors["not-found"])
 
     return exp_by_abn
 
 
 ### Plot matrix functions
 
-KEY_TO_LABEL = {-2: 'None', 0: 'Neg', 1: 'Pos', -1: 'Unc'}
+KEY_TO_LABEL = {-2: "None", 0: "Neg", 1: "Pos", -1: "Unc"}
 PRETTIER_METRIC = {
-    'bleu': 'BLEU',
-    'cider-IDF': 'CIDEr-D',
-    'cider': 'CIDEr-D-NONIDF',
-    'rouge': 'ROUGE-L',
+    "bleu": "BLEU",
+    "cider-IDF": "CIDEr-D",
+    "cider": "CIDEr-D-NONIDF",
+    "rouge": "ROUGE-L",
 }
 
 
 def get_pretty_metric(metric, metric_i=0, include_range=False):
     pretty_metric = PRETTIER_METRIC[metric]
-    if pretty_metric == 'BLEU':
-        pretty_metric += f'-{metric_i+1}'
+    if pretty_metric == "BLEU":
+        pretty_metric += f"-{metric_i+1}"
     if include_range:
-        max_value = 10 if 'cider' in metric else 1
-        pretty_metric += f' (0-{max_value})'
+        max_value = 10 if "cider" in metric else 1
+        pretty_metric += f" (0-{max_value})"
     return pretty_metric
 
 
 def get_cmap_by_metric(metric):
-    return 'Blues' if 'cider' in metric else 'YlOrRd'
+    return "Blues" if "cider" in metric else "YlOrRd"
 
 
-def plot_heatmap(exp, result_i=-1, metric_i=0, ax=None,
-                 title=True,
-                 title_fontsize=12,
-                 ylabel_fontsize=12,
-                 xlabel_fontsize=12,
-                 ticks_fontsize=12,
-                 xlabel=True,
-                 ylabel=True,
-                 **heatmap_kwargs,
-                 ):
+def plot_heatmap(
+    exp,
+    result_i=-1,
+    metric_i=0,
+    ax=None,
+    title=True,
+    title_fontsize=12,
+    ylabel_fontsize=12,
+    xlabel_fontsize=12,
+    ticks_fontsize=12,
+    xlabel=True,
+    ylabel=True,
+    **heatmap_kwargs,
+):
     if ax is None:
         ax = plt.gca()
 
@@ -293,7 +312,7 @@ def plot_heatmap(exp, result_i=-1, metric_i=0, ax=None,
 
     # This is useful for BLEU-1, -2, -3, -4
     if metric_i > result.cube.shape[0]:
-        err = f'metric_i={metric_i} too large for cube of shape {result.cube.shape}, using 0'
+        err = f"metric_i={metric_i} too large for cube of shape {result.cube.shape}, using 0"
         LOGGER.error(err)
         metric_i = 0
 
@@ -301,38 +320,53 @@ def plot_heatmap(exp, result_i=-1, metric_i=0, ax=None,
     ticks = [KEY_TO_LABEL[k] for k in result.groups]
     pretty_metric = get_pretty_metric(result.metric, metric_i=metric_i)
 
-    sns.heatmap(result.cube[metric_i], annot=True, square=True,
-                cmap=get_cmap_by_metric(result.metric),
-                xticklabels=ticks, yticklabels=ticks, fmt='.3f', ax=ax,
-                **heatmap_kwargs
-                )
+    sns.heatmap(
+        result.cube[metric_i],
+        annot=True,
+        square=True,
+        cmap=get_cmap_by_metric(result.metric),
+        xticklabels=ticks,
+        yticklabels=ticks,
+        fmt=".3f",
+        ax=ax,
+        **heatmap_kwargs,
+    )
 
     if title:
         ax.set_title(
-            f'{pretty_metric} in {exp.abnormality} ({result.sampler})',
+            f"{pretty_metric} in {exp.abnormality} ({result.sampler})",
             fontsize=title_fontsize,
         )
     if xlabel:
-        ax.set_xlabel('Generated', fontsize=xlabel_fontsize)
+        ax.set_xlabel("Generated", fontsize=xlabel_fontsize)
     if ylabel:
-        ax.set_ylabel('Ground-Truth', fontsize=ylabel_fontsize)
+        ax.set_ylabel("Ground-Truth", fontsize=ylabel_fontsize)
 
     ax.set_xticklabels(ax.get_xticklabels(), fontsize=ticks_fontsize)
     ax.set_yticklabels(ax.get_yticklabels(), fontsize=ticks_fontsize)
 
 
 #### Plot hist functions
-def plot_hists(exp, keys, result_i=-1, metric_i=0,
-               title=True, xlabel=True, ylabel=True, bins=15, alpha=0.5,
-               add_n_to_label=False,
-               legend_fontsize=12,
-               title_fontsize=12,
-               ylabel_fontsize=12,
-               xlabel_fontsize=12,
-               xlog=False,
-               ax=None,
-               verbose=False,
-               **hist_kwargs):
+def plot_hists(
+    exp,
+    keys,
+    result_i=-1,
+    metric_i=0,
+    title=True,
+    xlabel=True,
+    ylabel=True,
+    bins=15,
+    alpha=0.5,
+    add_n_to_label=False,
+    legend_fontsize=12,
+    title_fontsize=12,
+    ylabel_fontsize=12,
+    xlabel_fontsize=12,
+    xlog=False,
+    ax=None,
+    verbose=False,
+    **hist_kwargs,
+):
     if ax is None:
         ax = plt.gca()
 
@@ -341,50 +375,60 @@ def plot_hists(exp, keys, result_i=-1, metric_i=0,
     for key in keys:
         dist = result.dists[key]
         if dist.ndim > 1:
-            values = dist[metric_i] # useful for bleu-1, -2, -3, -4
+            values = dist[metric_i]  # useful for bleu-1, -2, -3, -4
         else:
             values = dist
 
         assert len(key) == 2
         gt_key, gen_key = key
-        label = f'GT={KEY_TO_LABEL[gt_key]}, Gen={KEY_TO_LABEL[gen_key]}'
+        label = f"GT={KEY_TO_LABEL[gt_key]}, Gen={KEY_TO_LABEL[gen_key]}"
         if add_n_to_label:
-            label += f' / (N={len(values):,})'
-        ax.hist(values, label=label, alpha=alpha, bins=bins, density=True, **hist_kwargs)
+            label += f" / (N={len(values):,})"
+        ax.hist(
+            values, label=label, alpha=alpha, bins=bins, density=True, **hist_kwargs
+        )
 
         if verbose:
-            print(f'{label} -- mean={values.mean():.4f} -- n={len(values):,}')
+            print(f"{label} -- mean={values.mean():.4f} -- n={len(values):,}")
 
     pretty_metric = get_pretty_metric(result.metric, metric_i)
 
     ax.legend(fontsize=legend_fontsize)
     if title:
-        dataset = 'IU' if exp.dataset == 'iu' else 'MIMIC'
+        dataset = "IU" if exp.dataset == "iu" else "MIMIC"
         ax.set_title(
-            f'{pretty_metric} scores in {exp.abnormality} sentences ({dataset})',
+            f"{pretty_metric} scores in {exp.abnormality} sentences ({dataset})",
             fontsize=title_fontsize,
         )
     if xlabel:
-        ax.set_xlabel(f'{pretty_metric} score', fontsize=xlabel_fontsize)
+        ax.set_xlabel(f"{pretty_metric} score", fontsize=xlabel_fontsize)
     if ylabel:
-        ax.set_ylabel('Frequency', fontsize=ylabel_fontsize)
+        ax.set_ylabel("Frequency", fontsize=ylabel_fontsize)
     if xlog:
-        ax.set_xscale('log')
+        ax.set_xscale("log")
+
 
 #### Plot distributions as boxplots
 # Useful when there are many keys!
-def plot_boxplots(exp, keys, result_i=-1, metric_i=0,
-                  title=True, xlabel=True, ylabel=True,
-                  # add_n_to_label=False,
-                  title_fontsize=12,
-                  ylabel_fontsize=12,
-                  xlabel_fontsize=12,
-                  labels_fontsize=12,
-                  labelrot=0,
-                  ylog=False,
-                  correct_color='green',
-                  incorrect_color='red',
-                  ax=None):
+def plot_boxplots(
+    exp,
+    keys,
+    result_i=-1,
+    metric_i=0,
+    title=True,
+    xlabel=True,
+    ylabel=True,
+    # add_n_to_label=False,
+    title_fontsize=12,
+    ylabel_fontsize=12,
+    xlabel_fontsize=12,
+    labels_fontsize=12,
+    labelrot=0,
+    ylog=False,
+    correct_color="green",
+    incorrect_color="red",
+    ax=None,
+):
     if ax is None:
         ax = plt.gca()
 
@@ -396,14 +440,14 @@ def plot_boxplots(exp, keys, result_i=-1, metric_i=0,
     for key in keys:
         dist = result.dists.get(key, np.zeros((1,)))
         if dist.ndim > 1:
-            values = dist[metric_i] # useful for bleu-1, -2, -3, -4
+            values = dist[metric_i]  # useful for bleu-1, -2, -3, -4
         else:
             values = dist
         data.append(values)
 
         assert len(key) == 2
         gt_key, gen_key = key
-        label = f'{KEY_TO_LABEL[gt_key]}-{KEY_TO_LABEL[gen_key]}'
+        label = f"{KEY_TO_LABEL[gt_key]}-{KEY_TO_LABEL[gen_key]}"
         # if add_n_to_label:
         #     label += f' / (N={len(values):,})'
         labels.append(label)
@@ -414,7 +458,7 @@ def plot_boxplots(exp, keys, result_i=-1, metric_i=0,
     ax.set_xticklabels(labels, fontsize=labels_fontsize, rotation=labelrot)
 
     xticks = ax.get_xticklabels()
-    assert len(xticks) == len(colors), f'{len(xticks)} vs {len(colors)}'
+    assert len(xticks) == len(colors), f"{len(xticks)} vs {len(colors)}"
     for color, xtick in zip(colors, xticks):
         xtick.set_color(color)
 
@@ -422,61 +466,71 @@ def plot_boxplots(exp, keys, result_i=-1, metric_i=0,
 
     # ax.legend(fontsize=legend_fontsize)
     if title:
-        dataset = 'IU' if exp.dataset == 'iu' else 'MIMIC'
+        dataset = "IU" if exp.dataset == "iu" else "MIMIC"
         ax.set_title(
-            f'{pretty_metric} scores in {exp.abnormality} sentences ({dataset})',
+            f"{pretty_metric} scores in {exp.abnormality} sentences ({dataset})",
             fontsize=title_fontsize,
         )
     if ylabel:
         ax.set_ylabel(pretty_metric, fontsize=ylabel_fontsize)
     if xlabel:
-        ax.set_xlabel('Corpus', fontsize=xlabel_fontsize)
+        ax.set_xlabel("Corpus", fontsize=xlabel_fontsize)
     if ylog:
-        ax.set_yscale('log')
-
+        ax.set_yscale("log")
 
 
 #### Load/save pickle functions
 
-_EXP_FOLDER = os.path.join(WORKSPACE_DIR, 'report_generation', 'nlp-controlled-corpus')
-def save_experiment_pickle(exp, name, overwrite=False):
-    fpath = os.path.join(_EXP_FOLDER, f'{name}.data')
-    if not overwrite and os.path.isfile(fpath):
-        raise Exception(f'{fpath} file exists!')
+_EXP_FOLDER = os.path.join(WORKSPACE_DIR, "report_generation", "nlp-controlled-corpus")
 
-    with open(fpath, 'wb') as f:
+
+def save_experiment_pickle(exp, name, overwrite=False):
+    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
+    if not overwrite and os.path.isfile(fpath):
+        raise Exception(f"{fpath} file exists!")
+
+    with open(fpath, "wb") as f:
         pickle.dump(exp, f)
-    LOGGER.info('Saved to %s', fpath)
+    LOGGER.info("Saved to %s", fpath)
+
 
 def exist_experiment_pickle(name):
-    fpath = os.path.join(_EXP_FOLDER, f'{name}.data')
+    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
     return os.path.isfile(fpath)
 
-def load_experiment_pickle(name):
-    fpath = os.path.join(_EXP_FOLDER, f'{name}.data')
-    if not os.path.isfile(fpath):
-        raise Exception(f'No {fpath} file exists!')
 
-    with open(fpath, 'rb') as f:
+def load_experiment_pickle(name):
+    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
+    if not os.path.isfile(fpath):
+        raise Exception(f"No {fpath} file exists!")
+
+    with open(fpath, "rb") as f:
         exp = pickle.load(f)
     return exp
 
 
 ####### Dataset loading
-DatasetInfo = namedtuple('DatasetInfo', [
-    'name', 'reports_df', 'sentences_df', 'doc_freq', 'log_ref_len',
-])
+DatasetInfo = namedtuple(
+    "DatasetInfo",
+    [
+        "name",
+        "reports_df",
+        "sentences_df",
+        "doc_freq",
+        "log_ref_len",
+    ],
+)
+
 
 def init_dataset_info(name):
-    dataset_dir = IU_DIR if name == 'iu' else MIMIC_DIR
+    dataset_dir = IU_DIR if name == "iu" else MIMIC_DIR
 
-    fpath = os.path.join(dataset_dir, 'reports', 'sentences_with_chexpert_labels.csv')
+    fpath = os.path.join(dataset_dir, "reports", "sentences_with_chexpert_labels.csv")
     sentences_df = pd.read_csv(fpath)
-    fpath = os.path.join(dataset_dir, 'reports', 'reports_with_chexpert_labels.csv')
+    fpath = os.path.join(dataset_dir, "reports", "reports_with_chexpert_labels.csv")
     reports_df = pd.read_csv(fpath)
 
-
-    doc_freq = compute_doc_freq(list(reports_df['Reports']))
+    doc_freq = compute_doc_freq(list(reports_df["Reports"]))
     log_ref_len = np.log(len(reports_df))
 
     return DatasetInfo(
@@ -487,25 +541,27 @@ def init_dataset_info(name):
         log_ref_len=log_ref_len,
     )
 
+
 @timeit_main(LOGGER)
-def run_experiments(dataset='iu',
-                    abns=[],
-                    metrics=['bleu', 'rouge', 'cider-IDF'],
-                    k_times=50,
-                    max_n=50,
-                    ):
+def run_experiments(
+    dataset="iu",
+    abns=[],
+    metrics=["bleu", "rouge", "cider-IDF"],
+    k_times=50,
+    max_n=50,
+):
     dataset_info = init_dataset_info(dataset)
 
     kwargs = {
-        'sampler': 'random-gen',
-        'k_times': k_times,
+        "sampler": "random-gen",
+        "k_times": k_times,
         # 'k_gts': 1,
-        'max_n': max_n,
+        "max_n": max_n,
     }
 
     for abn in abns:
         fname = f'{dataset_info.name}-{abn.replace(" ", "-").lower()}'
-        LOGGER.info('Computing %s', fname)
+        LOGGER.info("Computing %s", fname)
 
         # Save only one per dataset per abnormality, with a list of results
         exist = exist_experiment_pickle(fname)
@@ -515,25 +571,37 @@ def run_experiments(dataset='iu',
             exp = init_experiment(abn, dataset_info)
 
         for metric in metrics:
-            LOGGER.info('\tcomputing 4x4 for %s', metric)
-            exp.append(calc_score_matrices(
-                exp.grouped, dataset_info, metric=metric, **kwargs,
-            ))
-            LOGGER.info('\tcomputing 2x2 for %s', metric)
-            exp.append(calc_score_matrices(
-                exp.grouped_2, dataset_info, groups=(0, 1), metric=metric, **kwargs,
-            ))
+            LOGGER.info("\tcomputing 4x4 for %s", metric)
+            exp.append(
+                calc_score_matrices(
+                    exp.grouped,
+                    dataset_info,
+                    metric=metric,
+                    **kwargs,
+                )
+            )
+            LOGGER.info("\tcomputing 2x2 for %s", metric)
+            exp.append(
+                calc_score_matrices(
+                    exp.grouped_2,
+                    dataset_info,
+                    groups=(0, 1),
+                    metric=metric,
+                    **kwargs,
+                )
+            )
 
         save_experiment_pickle(exp, fname, overwrite=exist)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     config_logging()
 
     run_experiments(
-        'mimic',
+        "mimic",
         abns=CHEXPERT_DISEASES[1:],
         # abns=['Support Devices'],
-        metrics=['bleu', 'rouge', 'cider-IDF'],
+        metrics=["bleu", "rouge", "cider-IDF"],
         k_times=50,
         max_n=100,
     )
