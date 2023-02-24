@@ -1,5 +1,6 @@
 import os
 import random
+import argparse
 import pickle
 import logging
 from collections import namedtuple, defaultdict
@@ -13,10 +14,14 @@ import matplotlib.pyplot as plt
 from pycocoevalcap.bleu import bleu_scorer
 from pycocoevalcap.cider import cider_scorer
 
-from medai.notebooks.analyze_nlp_chexpert.utils import RougeLScorer
 from medai.datasets.iu_xray import DATASET_DIR as IU_DIR
 from medai.datasets.common.constants import CHEXPERT_DISEASES
 from medai.datasets.mimic_cxr import DATASET_DIR as MIMIC_DIR
+from medai.metrics.report_generation.nlp.rouge import RougeLScorer
+from medai.metrics.report_generation.nlp.huggingface import (
+    BLEURT,
+    BertScore,
+)
 from medai.metrics.report_generation.nlp.cider_idf import (
     CiderScorerIDFModified,
     compute_doc_freq,
@@ -32,6 +37,8 @@ _SCORERS = {
     "rouge": (RougeLScorer, 1),
     "cider": (cider_scorer.CiderScorer, 1),
     "cider-IDF": (CiderScorerIDFModified, 1),
+    "bleurt": (BLEURT, BLEURT.n_metrics),
+    "bertscore": (BertScore, BertScore.n_metrics),
 }
 
 
@@ -140,10 +147,14 @@ def calc_score_matrices(
     dataset_info,
     groups=(-2, 0, -1, 1),
     metric="bleu",
-    show=True,
+    show="groups",
     sampler="all",
+    seed=None,
     **sampler_kwargs,
 ):
+    if seed is not None:
+        random.seed(seed)
+
     for g in groups:
         if g not in grouped:
             LOGGER.warning("%s not in grouped!", g)
@@ -156,9 +167,12 @@ def calc_score_matrices(
 
     out_dists = dict()
 
-    for (row_i, group_gen), (col_j, group_gt) in product(
+    if hasattr(ScorerClass, 'preload'):
+        ScorerClass.preload()
+
+    for (row_i, group_gen), (col_j, group_gt) in tqdm(product(
         enumerate(groups), enumerate(groups)
-    ):
+    ), disable=show != "groups", total=len(groups) ** 2):
         scorer = ScorerClass()
 
         if metric == "cider-IDF":
@@ -171,10 +185,8 @@ def calc_score_matrices(
         sentences_gt = grouped.get(group_gt, [])
 
         content = SamplerClass(sentences_gen, sentences_gt, **sampler_kwargs)
-        if show:
-            content = tqdm(content, desc=f"{group_gen:>2} vs {group_gt:>2}")
 
-        for sentence_gen, sentences_gt in content:
+        for sentence_gen, sentences_gt in tqdm(content, disable=show != "samples", desc=f"{group_gen:>2} vs {group_gt:>2}"):
             scorer += (sentence_gen, sentences_gt)
 
         summary, all_scores = scorer.compute_score()
@@ -198,7 +210,9 @@ def calc_score_matrices(
         metric=metric,
         groups=groups,
         # dummy sampler to get a string representing the sampler
-        sampler=str(SamplerClass([], [], **sampler_kwargs)),
+        sampler=f"{str(SamplerClass([], [], **sampler_kwargs))}--{seed}",
+        # HACK: seed is concated at the end (instead of a separate attribute)
+        # to avoid re-creating pickle objects already dumped
     )
 
 
@@ -273,11 +287,12 @@ PRETTIER_METRIC = {
     "cider-IDF": "CIDEr-D",
     "cider": "CIDEr-D-NONIDF",
     "rouge": "ROUGE-L",
+    "bleurt": "BLEURT",
 }
 
 
 def get_pretty_metric(metric, metric_i=0, include_range=False):
-    pretty_metric = PRETTIER_METRIC[metric]
+    pretty_metric = PRETTIER_METRIC.get(metric, metric)
     if pretty_metric == "BLEU":
         pretty_metric += f"-{metric_i+1}"
     if include_range:
@@ -487,7 +502,7 @@ _EXP_FOLDER = os.path.join(WORKSPACE_DIR, "report_generation", "nlp-controlled-c
 def save_experiment_pickle(exp, name, overwrite=False):
     fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
     if not overwrite and os.path.isfile(fpath):
-        raise Exception(f"{fpath} file exists!")
+        raise FileExistsError(f"{fpath} file exists!")
 
     with open(fpath, "wb") as f:
         pickle.dump(exp, f)
@@ -502,7 +517,7 @@ def exist_experiment_pickle(name):
 def load_experiment_pickle(name):
     fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
     if not os.path.isfile(fpath):
-        raise Exception(f"No {fpath} file exists!")
+        raise FileNotFoundError(f"No {fpath} file exists!")
 
     with open(fpath, "rb") as f:
         exp = pickle.load(f)
@@ -549,6 +564,10 @@ def run_experiments(
     metrics=["bleu", "rouge", "cider-IDF"],
     k_times=50,
     max_n=50,
+    chex2=True,
+    chex4=True,
+    suffix=None,
+    seed=None,
 ):
     dataset_info = init_dataset_info(dataset)
 
@@ -561,6 +580,8 @@ def run_experiments(
 
     for abn in abns:
         fname = f'{dataset_info.name}-{abn.replace(" ", "-").lower()}'
+        if suffix:
+            fname += f'-{suffix}'
         LOGGER.info("Computing %s", fname)
 
         # Save only one per dataset per abnormality, with a list of results
@@ -571,25 +592,29 @@ def run_experiments(
             exp = init_experiment(abn, dataset_info)
 
         for metric in metrics:
-            LOGGER.info("\tcomputing 4x4 for %s", metric)
-            exp.append(
-                calc_score_matrices(
-                    exp.grouped,
-                    dataset_info,
-                    metric=metric,
-                    **kwargs,
+            if chex4:
+                LOGGER.info("\tcomputing 4x4 for %s", metric)
+                exp.append(
+                    calc_score_matrices(
+                        exp.grouped,
+                        dataset_info,
+                        metric=metric,
+                        seed=seed,
+                        **kwargs,
+                    )
                 )
-            )
-            LOGGER.info("\tcomputing 2x2 for %s", metric)
-            exp.append(
-                calc_score_matrices(
-                    exp.grouped_2,
-                    dataset_info,
-                    groups=(0, 1),
-                    metric=metric,
-                    **kwargs,
+            if chex2:
+                LOGGER.info("\tcomputing 2x2 for %s", metric)
+                exp.append(
+                    calc_score_matrices(
+                        exp.grouped_2,
+                        dataset_info,
+                        groups=(0, 1),
+                        metric=metric,
+                        seed=seed,
+                        **kwargs,
+                    )
                 )
-            )
 
         save_experiment_pickle(exp, fname, overwrite=exist)
 
@@ -597,11 +622,19 @@ def run_experiments(
 if __name__ == "__main__":
     config_logging()
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('metric_chosen', type=str, default=None, choices=["bleurt", "bertscore"],
+                        help='Select metric')
+    args = parser.parse_args()
+
     run_experiments(
-        "mimic",
+        "iu",
         abns=CHEXPERT_DISEASES[1:],
-        # abns=['Support Devices'],
-        metrics=["bleu", "rouge", "cider-IDF"],
-        k_times=50,
+        # abns=["Cardiomegaly"],
+        # metrics=["bleu", "rouge", "cider-IDF"],
+        metrics=[args.metric_chosen],
+        k_times=100,
         max_n=100,
+        suffix=args.metric_chosen,
+        seed=1234,
     )

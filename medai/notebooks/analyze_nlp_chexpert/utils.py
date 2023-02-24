@@ -5,36 +5,13 @@ import numpy as np
 
 from pycocoevalcap.bleu.bleu_scorer import BleuScorer
 from pycocoevalcap.cider.cider_scorer import CiderScorer
-from pycocoevalcap.rouge import rouge as rouge_lib
 
 from medai.datasets.common.constants import CHEXPERT_DISEASES
 from medai.metrics.report_generation.chexpert import labels_with_suffix
+from medai.metrics.report_generation.nlp.rouge import RougeLScorer
 
 
 #### NLP STUFF
-
-class RougeLScorer:
-    """Comply with BLEU api."""
-    def __init__(self):
-        self._all_scores = []
-
-        self._scorer = rouge_lib.Rouge()
-
-    def update(self, generated, gt):
-        new_score = self._scorer.calc_score([generated], [gt])
-        self._all_scores.append(new_score)
-
-    def __iadd__(self, tup):
-        assert isinstance(tup, tuple) and len(tup) == 2
-        gen, gt_list = tup
-        assert len(gt_list) == 1
-        self.update(gen, gt_list[0])
-        return self
-
-    def compute_score(self):
-        # scores = np.array(self._all_scores)
-        return np.mean(self._all_scores), self._all_scores
-
 
 def add_nlp_metrics_to_df(df, show=True):
     """Given a RG-outputs file compute NLP metrics for each sample."""
