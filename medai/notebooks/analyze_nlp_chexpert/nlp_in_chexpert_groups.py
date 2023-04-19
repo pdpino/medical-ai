@@ -1,7 +1,6 @@
 import os
 import random
 import argparse
-import pickle
 import logging
 from collections import namedtuple, defaultdict
 from itertools import product
@@ -29,10 +28,18 @@ from medai.metrics.report_generation.nlp.cider_idf import (
 from medai.metrics.report_generation.chexpert import ChexpertScorer
 from medai.utils import timeit_main, config_logging
 from medai.utils.files import WORKSPACE_DIR
+from medai.notebooks.analyze_nlp_chexpert.nlp_in_chexpert_groups_utils import (
+    Experiment,
+    MatrixResult,
+    save_experiment_pickle,
+    exist_experiment_pickle,
+    load_experiment_pickle,
+    get_pretty_metric,
+    get_cmap_by_metric,
+    get_pretty_valuation,
+)
 
 LOGGER = logging.getLogger("medai.analyze.nlp-chex-groups")
-
-# FIXME: reuse code in streamlit app?
 
 ###### Scorers
 _SCORERS = {
@@ -141,11 +148,6 @@ _SAMPLERS = {
 
 ###### Matrices functions
 
-MatrixResult = namedtuple(
-    "MatrixResult", ["cube", "dists", "metric", "groups", "sampler"]
-)
-
-
 def calc_score_matrices(
     grouped,
     dataset_info,
@@ -228,37 +230,6 @@ def calc_score_matrices(
 
 
 #### Experiment functions
-
-
-class Experiment:
-    def __init__(self, abnormality, grouped, dataset):
-        self.abnormality = abnormality
-        self.grouped = grouped
-        self.dataset = dataset
-
-        self.grouped_2 = dict()
-        self.grouped_2[0] = grouped.get(0, []) + grouped.get(-2, [])
-        self.grouped_2[1] = grouped.get(1, []) + grouped.get(-1, [])
-        self.results = []
-
-    def add_result(self, result):
-        assert isinstance(result, MatrixResult)
-        self.results.append(result)
-
-    def append(self, result):
-        self.add_result(result)
-
-    def __getitem__(self, idx):
-        return self.results[idx]
-
-    def __str__(self):
-        lens = tuple([len(self.grouped.get(group, [])) for group in (-2, 0, -1, 1)])
-        return f"{self.abnormality} data={self.dataset} n_sent={lens} n_results={len(self.results)}"
-
-    def __repr__(self):
-        return self.__str__()
-
-
 def init_experiment(abnormality, dataset_info):
     grouped = dataset_info.sentences_df.groupby(abnormality)["sentence"].apply(
         lambda x: sorted(list(x), key=len),
@@ -291,37 +262,6 @@ def load_experiments(dataset_name):
 
 
 ### Plot matrix functions
-
-KEY_TO_LABEL = {-2: "None", 0: "Neg", 1: "Pos", -1: "Unc"}
-PRETTIER_METRIC = {
-    "bleu": "BLEU",
-    "cider-IDF": "CIDEr-D",
-    "cider": "CIDEr-D-NONIDF",
-    "rouge": "ROUGE-L",
-    "bleurt": "BLEURT",
-    "bertscore": "Bertscore",
-    "chexpert": "CheXpert",
-}
-
-
-def get_pretty_metric(metric, metric_i=0, include_range=False):
-    pretty_metric = PRETTIER_METRIC.get(metric, metric)
-    if metric == "chexpert":
-        pretty_metric += f"-{ChexpertScorer.metric_names[metric_i]}"
-    if metric == "bertscore":
-        pretty_metric += f"-{BertScore.metric_names[metric_i]}"
-    if metric == "bleu":
-        pretty_metric += f"-{metric_i+1}"
-    if include_range:
-        max_value = 10 if "cider" in metric else 1
-        pretty_metric += f" (0-{max_value})"
-    return pretty_metric
-
-
-def get_cmap_by_metric(metric):
-    return "Blues" if "cider" in metric else "YlOrRd"
-
-
 def plot_heatmap(
     exp,
     result_i=-1,
@@ -349,7 +289,7 @@ def plot_heatmap(
         metric_i = 0
 
     # Prettier
-    ticks = [KEY_TO_LABEL[k] for k in result.groups]
+    ticks = [get_pretty_valuation(k) for k in result.groups]
     pretty_metric = get_pretty_metric(result.metric, metric_i=metric_i)
 
     sns.heatmap(
@@ -413,7 +353,7 @@ def plot_hists(
 
         assert len(key) == 2
         gt_key, gen_key = key
-        label = f"GT={KEY_TO_LABEL[gt_key]}, Gen={KEY_TO_LABEL[gen_key]}"
+        label = f"GT={get_pretty_valuation(gt_key)}, Gen={get_pretty_valuation(gen_key)}"
         if add_n_to_label:
             label += f" / (N={len(values):,})"
         ax.hist(
@@ -479,7 +419,7 @@ def plot_boxplots(
 
         assert len(key) == 2
         gt_key, gen_key = key
-        label = f"{KEY_TO_LABEL[gt_key]}-{KEY_TO_LABEL[gen_key]}"
+        label = f"{get_pretty_valuation(gt_key)}-{get_pretty_valuation(gen_key)}"
         # if add_n_to_label:
         #     label += f' / (N={len(values):,})'
         labels.append(label)
@@ -509,36 +449,6 @@ def plot_boxplots(
         ax.set_xlabel("Corpus", fontsize=xlabel_fontsize)
     if ylog:
         ax.set_yscale("log")
-
-
-#### Load/save pickle functions
-
-_EXP_FOLDER = os.path.join(WORKSPACE_DIR, "report_generation", "nlp-controlled-corpus")
-
-
-def save_experiment_pickle(exp, name, overwrite=False):
-    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
-    if not overwrite and os.path.isfile(fpath):
-        raise FileExistsError(f"{fpath} file exists!")
-
-    with open(fpath, "wb") as f:
-        pickle.dump(exp, f)
-    LOGGER.info("Saved to %s", fpath)
-
-
-def exist_experiment_pickle(name):
-    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
-    return os.path.isfile(fpath)
-
-
-def load_experiment_pickle(name):
-    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
-    if not os.path.isfile(fpath):
-        raise FileNotFoundError(f"No {fpath} file exists!")
-
-    with open(fpath, "rb") as f:
-        exp = pickle.load(f)
-    return exp
 
 
 ####### Dataset loading

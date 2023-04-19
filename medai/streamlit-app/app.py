@@ -1,4 +1,5 @@
 import itertools
+import logging
 import streamlit as st
 import pandas as pd
 import seaborn as sns
@@ -7,16 +8,21 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
+# HACK: utils.py is a symlink to the actual file
+# I cannot get relative imports to work!
 from utils import (
-    load_experiment_pickle,
     Experiment,
     MatrixResult,
-    plot_heatmap,
-    plot_hists,
-    get_pretty_metric,
-    KEY_TO_LABEL,
+    load_experiment_pickle,
+    save_experiment_pickle,
+    exist_experiment_pickle,
     get_cmap_by_metric,
+    get_pretty_metric,
+    get_pretty_valuation,
+    get_pretty_valuation_pair,
 )
+
+LOGGER = logging.getLogger('medai.streamlit-app')
 
 
 def build_suptitle(exp, result_i, metric_i):
@@ -79,11 +85,6 @@ def groups_to_str(groups):
     return "unk"
 
 
-def valuation_pair_to_str(val_pair):
-    gt, gen = val_pair
-    return f"{KEY_TO_LABEL[gt]}-{KEY_TO_LABEL[gen]}"
-
-
 def build_available_valuations(groups):
     return list(itertools.product(groups, groups))
 
@@ -110,7 +111,7 @@ def main():
         "Valuations",
         build_available_valuations(groups),
         default=[(0, 0), (0, 1)],
-        format_func=valuation_pair_to_str,
+        format_func=get_pretty_valuation_pair,
     )
     # bins = st.sidebar.slider("Histogram bins", 2, 100, 50)
     opacity = st.sidebar.slider("Histogram opacity", 0.0, 1.0, 1.0, step=0.1)
@@ -126,7 +127,7 @@ def main():
 
     # With plotly
     result = exp.results[RESULT_I]
-    ticks = [KEY_TO_LABEL[k] for k in result.groups]
+    ticks = [get_pretty_valuation(k) for k in result.groups]
 
     fig = make_subplots(rows=1, cols=2)
 
