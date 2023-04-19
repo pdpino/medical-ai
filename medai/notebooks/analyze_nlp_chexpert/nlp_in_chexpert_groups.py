@@ -26,10 +26,13 @@ from medai.metrics.report_generation.nlp.cider_idf import (
     CiderScorerIDFModified,
     compute_doc_freq,
 )
+from medai.metrics.report_generation.chexpert import ChexpertScorer
 from medai.utils import timeit_main, config_logging
 from medai.utils.files import WORKSPACE_DIR
 
 LOGGER = logging.getLogger("medai.analyze.nlp-chex-groups")
+
+# FIXME: reuse code in streamlit app?
 
 ###### Scorers
 _SCORERS = {
@@ -39,6 +42,7 @@ _SCORERS = {
     "cider-IDF": (CiderScorerIDFModified, 1),
     "bleurt": (BLEURT, BLEURT.n_metrics),
     "bertscore": (BertScore, BertScore.n_metrics),
+    "chexpert": (ChexpertScorer, ChexpertScorer.n_metrics),
 }
 
 
@@ -145,6 +149,7 @@ MatrixResult = namedtuple(
 def calc_score_matrices(
     grouped,
     dataset_info,
+    abnormality=None,
     groups=(-2, 0, -1, 1),
     metric="bleu",
     show="groups",
@@ -181,6 +186,12 @@ def calc_score_matrices(
             # Also needs to update ref_len
             scorer.ref_len = dataset_info.log_ref_len
 
+        # Useful for ChexpertScorer
+        if hasattr(scorer, 'use_cache'):
+            scorer.use_cache(dataset_info.chexpert_cache_sentences)
+        if hasattr(scorer, 'set_abnormalities'):
+            scorer.set_abnormalities([abnormality])
+
         sentences_gen = grouped.get(group_gen, [])
         sentences_gt = grouped.get(group_gt, [])
 
@@ -193,10 +204,10 @@ def calc_score_matrices(
         # all_scores shape: n_metrics, n_samples=n_group1 x n_group2
         # summary shape: n_metrics
 
-        if len(all_scores) == 0:
+        if len(all_scores) == 0 and metric != "chexpert":
             continue
 
-        # REMEMBER THEY ARE FLIPPED!!
+        # REMEMBER THEY ARE FLIPPED!! GT first, then GEN
         # out_cube[:, row_i, col_j] = np.array(summary)
         out_cube[:, col_j, row_i] = np.array(summary)
 
@@ -288,12 +299,18 @@ PRETTIER_METRIC = {
     "cider": "CIDEr-D-NONIDF",
     "rouge": "ROUGE-L",
     "bleurt": "BLEURT",
+    "bertscore": "Bertscore",
+    "chexpert": "CheXpert",
 }
 
 
 def get_pretty_metric(metric, metric_i=0, include_range=False):
     pretty_metric = PRETTIER_METRIC.get(metric, metric)
-    if pretty_metric == "BLEU":
+    if metric == "chexpert":
+        pretty_metric += f"-{ChexpertScorer.metric_names[metric_i]}"
+    if metric == "bertscore":
+        pretty_metric += f"-{BertScore.metric_names[metric_i]}"
+    if metric == "bleu":
         pretty_metric += f"-{metric_i+1}"
     if include_range:
         max_value = 10 if "cider" in metric else 1
@@ -533,6 +550,7 @@ DatasetInfo = namedtuple(
         "sentences_df",
         "doc_freq",
         "log_ref_len",
+        "chexpert_cache_sentences",
     ],
 )
 
@@ -541,7 +559,14 @@ def init_dataset_info(name):
     dataset_dir = IU_DIR if name == "iu" else MIMIC_DIR
 
     fpath = os.path.join(dataset_dir, "reports", "sentences_with_chexpert_labels.csv")
-    sentences_df = pd.read_csv(fpath)
+    sentences_df_chex = pd.read_csv(fpath)
+
+    if 'expert' in name:
+        fpath = f'{WORKSPACE_DIR}/report_generation/nlp-chex-gold-sentences/{name}.csv'
+        sentences_df = pd.read_csv(fpath)
+    else:
+        sentences_df = sentences_df_chex
+
     fpath = os.path.join(dataset_dir, "reports", "reports_with_chexpert_labels.csv")
     reports_df = pd.read_csv(fpath)
 
@@ -554,6 +579,7 @@ def init_dataset_info(name):
         sentences_df=sentences_df,
         doc_freq=doc_freq,
         log_ref_len=log_ref_len,
+        chexpert_cache_sentences=sentences_df_chex,
     )
 
 
@@ -598,6 +624,7 @@ def run_experiments(
                     calc_score_matrices(
                         exp.grouped,
                         dataset_info,
+                        abnormality=abn,
                         metric=metric,
                         seed=seed,
                         **kwargs,
@@ -609,6 +636,7 @@ def run_experiments(
                     calc_score_matrices(
                         exp.grouped_2,
                         dataset_info,
+                        abnormality=abn,
                         groups=(0, 1),
                         metric=metric,
                         seed=seed,
@@ -623,18 +651,32 @@ if __name__ == "__main__":
     config_logging()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('metric_chosen', type=str, default=None, choices=["bleurt", "bertscore"],
-                        help='Select metric')
+    # parser.add_argument('--metric', type=str, default=None, choices=_SCORERS.keys(),
+    #                     help='Select metric')
+    parser.add_argument('--dataset', type=str, default=None, choices=["iu", "mimic", "mimic-expert1", "mimic-expert2"],
+                        help='Select dataset')
+    # parser.add_argument('--abnormality', type=str, default=None, choices=CHEXPERT_DISEASES,
+    #                     help='Select abnormality')
     args = parser.parse_args()
 
+    CHEXPERT_LABELS_5 = [
+        # 'Atelectasis',
+        'Cardiomegaly',
+        'Consolidation',
+        'Edema',
+        'Pleural Effusion',
+    ]
+
     run_experiments(
-        "iu",
-        abns=CHEXPERT_DISEASES[1:],
-        # abns=["Cardiomegaly"],
-        # metrics=["bleu", "rouge", "cider-IDF"],
-        metrics=[args.metric_chosen],
-        k_times=100,
-        max_n=100,
-        suffix=args.metric_chosen,
+        args.dataset,
+        #abns=CHEXPERT_DISEASES[2:-1],
+        # abns=[args.abnormality],
+        abns=CHEXPERT_LABELS_5,
+        # metrics=["bleu", "rouge", "cider-IDF", "chexpert"], #
+        metrics=["bleurt", "bertscore"],
+        # metrics=[args.metric],
+        k_times=200,
+        max_n=200,
+        # suffix=args.metric,
         seed=1234,
     )

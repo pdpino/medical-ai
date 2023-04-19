@@ -4,13 +4,6 @@ import argparse
 import logging
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (
-    precision_recall_fscore_support as prf1s,
-    roc_auc_score,
-    accuracy_score,
-    auc,
-    precision_recall_curve as pr_curve,
-)
 
 from medai.datasets.common import CHEXPERT_LABELS
 from medai.metrics.report_generation import (
@@ -33,51 +26,6 @@ from medai.utils import (
 LOGGER = logging.getLogger('medai.rg.eval.chexpert')
 
 
-def _calculate_metrics(df):
-    """Calculate metrics for a set of reports."""
-    labels_gt = chexpert.labels_with_suffix('gt')
-    labels_gen = chexpert.labels_with_suffix('gen')
-
-    ground_truth = df[labels_gt].to_numpy()
-    generated = df[labels_gen].to_numpy()
-
-    acc = np.array([
-        accuracy_score(ground_truth[:, i], generated[:, i])
-        for i in range(len(CHEXPERT_LABELS))
-    ])
-
-    precision, recall, f1, _ = prf1s(ground_truth, generated, zero_division=0)
-
-    # Calculate ROC-AUC
-    try:
-        roc_auc = roc_auc_score(ground_truth, generated, average=None)
-    except ValueError as e:
-        # FIXME: calculate independently for each disease,
-        # so if one disease fails, the other values can be computed anyway
-        LOGGER.warning(e)
-        roc_auc = np.array([-1]*len(CHEXPERT_LABELS))
-
-    # Calculate PR-AUC
-    pr_auc = []
-    for i, disease in enumerate(CHEXPERT_LABELS):
-        gt = ground_truth[:, i]
-        gen = generated[:, i]
-
-        prec_values, rec_values, unused_thresholds = pr_curve(gt, gen)
-        pr = auc(rec_values, prec_values)
-
-        if np.isnan(pr):
-            LOGGER.warning('PR-auc is nan for disease %s', disease)
-            pr = -1
-
-        pr_auc.append(pr)
-
-    pr_auc = np.array(pr_auc)
-
-
-    return acc, precision, recall, f1, roc_auc, pr_auc
-
-
 def _non_null_average(array):
     non_null_values = array[array != -1]
     if len(non_null_values) == 0:
@@ -85,7 +33,7 @@ def _non_null_average(array):
     return non_null_values.mean().item()
 
 
-def _calculate_metrics_dict(df):
+def _calculate_metrics_for_splits(df):
     """Calculates metrics for all dataset_types (train, val, test)."""
     all_metrics = {}
 
@@ -106,10 +54,17 @@ def _calculate_metrics_dict(df):
         for label, value in zip(CHEXPERT_LABELS, array):
             metrics[f'{prefix}-{label}'] = value
 
+    LABELS_GT = chexpert.labels_with_suffix('gt')
+    LABELS_GEN = chexpert.labels_with_suffix('gen')
+
     for dataset_type in set(df['dataset_type']):
         sub_df = df[df['dataset_type'] == dataset_type]
 
-        acc, precision, recall, f1, roc_auc, pr_auc = _calculate_metrics(sub_df)
+        ground_truth = sub_df[LABELS_GT].to_numpy()
+        generated = sub_df[LABELS_GEN].to_numpy()
+        acc, precision, recall, f1, roc_auc, pr_auc = chexpert.calculate_metrics(
+            ground_truth, generated,
+        )
 
         metrics = {}
         _add_to_results(metrics, acc, 'acc')
@@ -189,7 +144,7 @@ def evaluate_run(run_id,
         df.to_csv(labeled_output_path, index=False)
 
     # Calculate metrics over train, val and test
-    metrics = _calculate_metrics_dict(df)
+    metrics = _calculate_metrics_for_splits(df)
 
     # Save metrics to file
     chexpert_metrics_path = os.path.join(results_folder, f'chexpert-metrics-{suffix}.json')

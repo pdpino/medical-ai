@@ -42,6 +42,7 @@ class BLEURT(HuggingFaceMetric):
 class BertScore(HuggingFaceMetric):
     metric_name = "bertscore"
     metric_args = ("microsoft/deberta-xlarge-mnli",)
+    metric_names = ['prec', 'recall', 'f1']
     n_metrics = 3
 
     def update(self, generated, gt):

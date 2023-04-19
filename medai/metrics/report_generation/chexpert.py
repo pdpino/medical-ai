@@ -42,7 +42,7 @@ def _load_gt_df(dataset_name, fill_uncertain=1, fill_empty=0):
         'reports', 'reports_with_chexpert_labels.csv',
     )
     if not os.path.isfile(gt_labels_filepath):
-        raise Exception('Ground truth labels not found: ', gt_labels_filepath)
+        raise FileNotFoundError('Ground truth labels not found: ', gt_labels_filepath)
 
     # Load CSV
     gt_with_labels = pd.read_csv(gt_labels_filepath)
@@ -185,3 +185,113 @@ class ChexpertLabeler(HolisticLabeler):
         labels = apply_labeler_to_column(reports, **self.kwargs)
 
         return labels
+
+# pylint: disable=wrong-import-position
+# pylint: disable=wrong-import-order
+from sklearn.metrics import (
+    accuracy_score,
+    auc,
+    precision_recall_fscore_support as prf1s,
+    precision_recall_curve as pr_curve,
+    roc_auc_score,
+)
+
+def calculate_metrics(ground_truth, generated):
+    """Calculate metrics for a set of reports.
+
+    Args:
+        ground_truth -- np.array (n_samples, n_labels)
+        generated -- np.array (n_samples, n_labels)
+        labels -- list (defaults to CHEXPERT_DISEASES)
+    """
+    n_labels = ground_truth.shape[1]
+
+    acc = np.array([
+        accuracy_score(ground_truth[:, i], generated[:, i])
+        for i in range(n_labels)
+    ])
+
+    precision, recall, f1, _ = prf1s(ground_truth, generated, zero_division=0, average='binary')
+
+    # Calculate ROC-AUC
+    try:
+        roc_auc = roc_auc_score(ground_truth, generated, average=None)
+    except ValueError as e:
+        # FIXME: calculate independently for each disease,
+        # so if one disease fails, the other values can be computed anyway
+        LOGGER.warning(e)
+        roc_auc = np.array([-1] * n_labels)
+
+    # Calculate PR-AUC
+    pr_auc = []
+    for i in range(n_labels):
+        gt = ground_truth[:, i]
+        gen = generated[:, i]
+
+        prec_values, rec_values, unused_thresholds = pr_curve(gt, gen)
+        pr = auc(rec_values, prec_values)
+
+        if np.isnan(pr):
+            LOGGER.warning('PR-auc is nan for disease index=%s', i)
+            pr = -1
+
+        pr_auc.append(pr)
+
+    pr_auc = np.array(pr_auc)
+
+    return acc, precision, recall, f1, roc_auc, pr_auc
+
+
+class ChexpertScorer():
+    # Comply with BLEUScorer API
+    metric_names = ['acc', 'precision', 'recall', 'f1', 'roc_auc', 'pr_auc']
+    n_metrics = 6
+
+    def __init__(self, labels=CHEXPERT_DISEASES, caller_id='chexpert-scorer'):
+        self.labels = labels
+
+        self.labeler = ChexpertLabeler(fill_empty=0, fill_uncertain=1, caller_id=caller_id)
+
+        self.reports_gt = []
+        self.reports_gen = []
+
+    def update(self, generated, gt):
+        self.reports_gt.append(gt)
+        self.reports_gen.append(generated)
+
+    def __iadd__(self, tup):
+        assert isinstance(tup, tuple) and len(tup) == 2
+        gen, gt_list = tup
+        assert len(gt_list) == 1
+        self.update(gen, gt_list[0])
+        return self
+
+    def compute_score(self):
+        all_labels = self.labeler(self.reports_gt + self.reports_gen)
+
+        # Keep only labels of interest
+        target_indexes = [i for i, disease in enumerate(CHEXPERT_DISEASES) if disease in self.labels]
+        all_labels = all_labels[:, target_indexes]
+
+        ground_truth = all_labels[:len(self.reports_gt), :]
+        generated = all_labels[len(self.reports_gt):, :]
+
+        # import pdb
+        # pdb.set_trace()
+
+        results = calculate_metrics(ground_truth, generated)
+        # acc, precision, recall, f1, roc_auc, pr_auc = results
+        results = [r.item() for r in results]
+
+        # NOTE: score per sample is not provided!
+        return np.array(results), []
+
+    def use_cache(self, sentences_df):
+        if sentences_df is not None:
+            self.labeler = CacheLookupLabeler(self.labeler, sentences_df.replace(-1, 1).replace(-2, 0), 'sentence')
+
+        self.labeler = NBatchesLabeler(self.labeler, None)
+        self.labeler = AvoidDuplicatedLabeler(self.labeler)
+
+    def set_abnormalities(self, abnormalities):
+        self.labels = abnormalities
