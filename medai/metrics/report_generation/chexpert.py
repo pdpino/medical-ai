@@ -60,7 +60,7 @@ def _fetch_gt_labels(target_df, gt_with_labels):
     saved_reports = set(gt_with_labels['filename'])
     if not target_reports.issubset(saved_reports):
         missing = saved_reports.difference(target_reports)
-        raise Exception(f'GT missing {len(missing)} reports')
+        raise AssertionError(f'GT missing {len(missing)} reports')
 
     # Merge on filenames
     merged = target_df.merge(gt_with_labels, how='left', on='filename')
@@ -196,7 +196,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-def calculate_metrics(ground_truth, generated):
+def calculate_metrics(ground_truth, generated, average=None):
     """Calculate metrics for a set of reports.
 
     Args:
@@ -211,7 +211,7 @@ def calculate_metrics(ground_truth, generated):
         for i in range(n_labels)
     ])
 
-    precision, recall, f1, _ = prf1s(ground_truth, generated, zero_division=0, average='binary')
+    precision, recall, f1, _ = prf1s(ground_truth, generated, zero_division=0, average=average)
 
     # Calculate ROC-AUC
     try:
@@ -247,8 +247,8 @@ class ChexpertScorer():
     metric_names = ['acc', 'precision', 'recall', 'f1', 'roc_auc', 'pr_auc']
     n_metrics = 6
 
-    def __init__(self, labels=CHEXPERT_DISEASES, caller_id='chexpert-scorer'):
-        self.labels = labels
+    def __init__(self, caller_id='chexpert-scorer'):
+        self.abnormality = None
 
         self.labeler = ChexpertLabeler(fill_empty=0, fill_uncertain=1, caller_id=caller_id)
 
@@ -267,31 +267,37 @@ class ChexpertScorer():
         return self
 
     def compute_score(self):
+        if self.abnormality is None:
+            raise AssertionError('cannot compute score without setting abnormality')
+
         all_labels = self.labeler(self.reports_gt + self.reports_gen)
 
         # Keep only labels of interest
-        target_indexes = [i for i, disease in enumerate(CHEXPERT_DISEASES) if disease in self.labels]
-        all_labels = all_labels[:, target_indexes]
+        target_index = CHEXPERT_DISEASES.index(self.abnormality)
+        all_labels = all_labels[:, [target_index]] # shape: (n_samples, 1)
 
         ground_truth = all_labels[:len(self.reports_gt), :]
         generated = all_labels[len(self.reports_gt):, :]
+        # shapes: n_samples, 1
 
-        # import pdb
-        # pdb.set_trace()
-
-        results = calculate_metrics(ground_truth, generated)
+        results = calculate_metrics(ground_truth, generated, average='binary')
         # acc, precision, recall, f1, roc_auc, pr_auc = results
         results = [r.item() for r in results]
 
-        # NOTE: score per sample is not provided!
-        return np.array(results), []
+        score_per_sample = np.expand_dims((generated == ground_truth).astype(int).squeeze(), axis=0)
+        # shape: (1, n_samples)
+
+        return np.array(results), score_per_sample
 
     def use_cache(self, sentences_df):
         if sentences_df is not None:
-            self.labeler = CacheLookupLabeler(self.labeler, sentences_df.replace(-1, 1).replace(-2, 0), 'sentence')
+            self.labeler = CacheLookupLabeler(
+                self.labeler, sentences_df.replace(-1, 1).replace(-2, 0), 'sentence',
+            )
 
         self.labeler = NBatchesLabeler(self.labeler, None)
         self.labeler = AvoidDuplicatedLabeler(self.labeler)
 
-    def set_abnormalities(self, abnormalities):
-        self.labels = abnormalities
+    def set_abnormality(self, abnormality):
+        assert abnormality in CHEXPERT_DISEASES
+        self.abnormality = abnormality

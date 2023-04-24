@@ -62,10 +62,10 @@ def exist_experiment_pickle(name):
     return os.path.isfile(fpath)
 
 
-def load_experiment_pickle(name, ignore=False):
+def load_experiment_pickle(name, raise_error=False):
     fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
     if not os.path.isfile(fpath):
-        if ignore:
+        if raise_error:
             return None
         raise FileNotFoundError(f"No {fpath} file exists!")
 
@@ -74,30 +74,36 @@ def load_experiment_pickle(name, ignore=False):
     return exp
 
 
-_VALUATION_TO_LABEL = {-2: "None", 0: "Neg", 1: "Pos", -1: "Unc"}
-def get_pretty_valuation(valuation):
-    return _VALUATION_TO_LABEL.get(valuation, valuation)
+_VALUATION_TO_LABEL = {
+    -2: ("Unmention", "Unm"),
+    0: ("Healthy", "Heal"),
+    1: ("Abnormal", "Abn"),
+    -1: ("Uncertain", "Unc"),
+}
+def get_pretty_valuation(valuation, short=False):
+    short_index = 1 if short else 0
+    return _VALUATION_TO_LABEL[valuation][short_index] if valuation in _VALUATION_TO_LABEL else valuation
 
 def get_pretty_valuation_pair(val_pair):
     gt, gen = val_pair
     return f"{get_pretty_valuation(gt)}-{get_pretty_valuation(gen)}"
 
-PRETTIER_METRIC = {
+AVAILABLE_METRICS = {
     "bleu": "BLEU",
     "cider-IDF": "CIDEr-D",
     "cider": "CIDEr-D-NONIDF",
     "rouge": "ROUGE-L",
     "bleurt": "BLEURT",
-    "bertscore": "Bertscore",
+    "bertscore": "BERTscore",
     "chexpert": "CheXpert",
 }
 
 # Copied from medai classes
-_CHEXPERT_SCORER_METRICS = ['acc', 'precision', 'recall', 'f1', 'roc_auc', 'pr_auc']
-_BERT_SCORE_METRICS = ['prec', 'recall', 'f1']
+_CHEXPERT_SCORER_METRICS = ['acc', 'precision', 'recall', 'F1', 'roc_auc', 'pr_auc']
+_BERT_SCORE_METRICS = ['prec', 'recall', 'F1']
 
 def get_pretty_metric(metric, metric_i=0, include_range=False):
-    pretty_metric = PRETTIER_METRIC.get(metric, metric)
+    pretty_metric = AVAILABLE_METRICS.get(metric, metric)
     if metric == "chexpert":
         pretty_metric += f"-{_CHEXPERT_SCORER_METRICS[metric_i]}"
     if metric == "bertscore":

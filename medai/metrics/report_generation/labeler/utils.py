@@ -99,7 +99,7 @@ class CacheLookupLabeler(HolisticLabeler):
         if len(cached_reports) == 0:
             return self.labeler(reports)
 
-        LOGGER.info(
+        LOGGER.debug(
             'Using GT cache: %s found in cache, %s new ones',
             f'{len(cached_reports):,}',
             f'{len(non_cached_reports):,}'
@@ -155,7 +155,7 @@ class NBatchesLabeler(HolisticLabeler):
         if self.n_batches <= 1:
             return self.labeler(reports)
 
-        LOGGER.info(
+        LOGGER.debug(
             'Total reports %s splitted in n_batches=%d of approx %s reports each',
             f'{n_reports:,}', self.n_batches, math.ceil(n_reports / self.n_batches),
         )
@@ -191,7 +191,7 @@ class AvoidDuplicatedLabeler(HolisticLabeler):
         if n_samples == n_unique_reports:
             return self.labeler(reports)
 
-        LOGGER.info(
+        LOGGER.debug(
             'Reduced duplicated reports: from %s to %s unique',
             f'{n_samples:,}',
             f'{n_unique_reports:,}',

@@ -1,7 +1,9 @@
 import numpy as np
-import evaluate
 
 _singleton_loaded_models = {}
+
+# HACK: only import when using it!
+DYN_IMPORTS = {}
 
 class HuggingFaceMetric:
     metric_name = "none"
@@ -31,9 +33,19 @@ class HuggingFaceMetric:
 
     @classmethod
     def preload(cls):
-        _singleton_loaded_models[cls.metric_name] = evaluate.load(
-            cls.metric_name, *cls.metric_args, module_type="metric",
-        )
+        if 'evaluate' not in DYN_IMPORTS or DYN_IMPORTS['evaluate'] is None:
+            # pylint:disable=import-outside-toplevel
+            import evaluate
+            DYN_IMPORTS['evaluate'] = evaluate
+
+        evaluate = DYN_IMPORTS.get('evaluate')
+        if evaluate is None:
+            raise ModuleNotFoundError('evaluate module has not been loaded!')
+
+        if cls.metric_name not in _singleton_loaded_models:
+            _singleton_loaded_models[cls.metric_name] = evaluate.load(
+                cls.metric_name, *cls.metric_args, module_type="metric",
+            )
 
 class BLEURT(HuggingFaceMetric):
     metric_name = 'bleurt'

@@ -78,6 +78,7 @@ class IUXRayDataset(Dataset):
 
         self.images_dir = os.path.join(DATASET_DIR, 'images')
         self.reports_dir = os.path.join(DATASET_DIR, 'reports')
+        self.dataset_pdpino_dir = os.path.join(DATASET_DIR).replace('dataset', 'dataset-pdpino')
 
         # Only frontal masks are available
         assert not masks or frontal_only, 'if masks is True, set frontal_only=True'
@@ -90,7 +91,7 @@ class IUXRayDataset(Dataset):
 
         # Load reports
         self.reports_version = reports_version
-        reports_fname = os.path.join(self.reports_dir, _REPORTS_FNAME.format(reports_version))
+        reports_fname = os.path.join(self.dataset_pdpino_dir, _REPORTS_FNAME.format(reports_version))
         with open(reports_fname, 'r') as f:
             reports = list(json.load(f).values())
 

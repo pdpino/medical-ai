@@ -1,5 +1,6 @@
 import os
 import random
+import pickle
 import argparse
 import logging
 from collections import namedtuple, defaultdict
@@ -191,8 +192,8 @@ def calc_score_matrices(
         # Useful for ChexpertScorer
         if hasattr(scorer, 'use_cache'):
             scorer.use_cache(dataset_info.chexpert_cache_sentences)
-        if hasattr(scorer, 'set_abnormalities'):
-            scorer.set_abnormalities([abnormality])
+        if hasattr(scorer, 'set_abnormality'):
+            scorer.set_abnormality(abnormality)
 
         sentences_gen = grouped.get(group_gen, [])
         sentences_gt = grouped.get(group_gt, [])
@@ -206,7 +207,8 @@ def calc_score_matrices(
         # all_scores shape: n_metrics, n_samples=n_group1 x n_group2
         # summary shape: n_metrics
 
-        if len(all_scores) == 0 and metric != "chexpert":
+        if len(all_scores) == 0:
+            LOGGER.error('Empty scores: %s', metric)
             continue
 
         # REMEMBER THEY ARE FLIPPED!! GT first, then GEN
@@ -353,7 +355,7 @@ def plot_hists(
 
         assert len(key) == 2
         gt_key, gen_key = key
-        label = f"GT={get_pretty_valuation(gt_key)}, Gen={get_pretty_valuation(gen_key)}"
+        label = f"GT={get_pretty_valuation(gt_key, short=True)}, Gen={get_pretty_valuation(gen_key, short=True)}"
         if add_n_to_label:
             label += f" / (N={len(values):,})"
         ax.hist(
@@ -373,7 +375,7 @@ def plot_hists(
             fontsize=title_fontsize,
         )
     if xlabel:
-        ax.set_xlabel(f"{pretty_metric} score", fontsize=xlabel_fontsize)
+        ax.set_xlabel(f"{pretty_metric}", fontsize=xlabel_fontsize)
     if ylabel:
         ax.set_ylabel("Frequency", fontsize=ylabel_fontsize)
     if xlog:
@@ -419,7 +421,7 @@ def plot_boxplots(
 
         assert len(key) == 2
         gt_key, gen_key = key
-        label = f"{get_pretty_valuation(gt_key)}-{get_pretty_valuation(gen_key)}"
+        label = f"{get_pretty_valuation(gt_key, short=True)}-{get_pretty_valuation(gen_key, short=True)}"
         # if add_n_to_label:
         #     label += f' / (N={len(values):,})'
         labels.append(label)
@@ -464,8 +466,9 @@ DatasetInfo = namedtuple(
     ],
 )
 
+_CACHED_DOC_FREQ = {}
 
-def init_dataset_info(name):
+def init_dataset_info(name, skip_docfreq=False):
     dataset_dir = IU_DIR if name == "iu" else MIMIC_DIR
 
     fpath = os.path.join(dataset_dir, "reports", "sentences_with_chexpert_labels.csv")
@@ -480,7 +483,25 @@ def init_dataset_info(name):
     fpath = os.path.join(dataset_dir, "reports", "reports_with_chexpert_labels.csv")
     reports_df = pd.read_csv(fpath)
 
-    doc_freq = compute_doc_freq(list(reports_df["Reports"]))
+    if skip_docfreq:
+        doc_freq = {}
+    else:
+        dataset_simple = "iu" if name == "iu" else "mimic"
+        if dataset_simple in _CACHED_DOC_FREQ:
+            # in-memory cache
+            doc_freq = _CACHED_DOC_FREQ[dataset_simple]
+        else:
+            # read instead of re-computing each time
+            docfreq_fpath = f'{WORKSPACE_DIR}/report_generation/nlp-chex-gold-sentences/docfreq-{dataset_simple}.data'
+            if os.path.isfile(docfreq_fpath):
+                with open(docfreq_fpath, 'rb') as f:
+                    doc_freq = pickle.load(f)
+            else:
+                doc_freq = compute_doc_freq(list(reports_df["Reports"]))
+                with open(docfreq_fpath, 'wb') as f:
+                    pickle.dump(doc_freq, f)
+            _CACHED_DOC_FREQ[dataset_simple] = doc_freq
+
     log_ref_len = np.log(len(reports_df))
 
     return DatasetInfo(
@@ -561,20 +582,22 @@ if __name__ == "__main__":
     config_logging()
 
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--metric', type=str, default=None, choices=_SCORERS.keys(),
-    #                     help='Select metric')
-    parser.add_argument('--dataset', type=str, default=None, choices=["iu", "mimic", "mimic-expert1", "mimic-expert2"],
-                        help='Select dataset')
+    parser.add_argument('--metric', type=str, required=True,
+                        default=None, choices=_SCORERS.keys(), help='Select metric')
+    parser.add_argument('--dataset', type=str, default="",
+                        choices=["iu", "mimic", "mimic-expert1", "mimic-expert2"], help='Select dataset')
+    parser.add_argument('-n', '--n-times', type=int, default=10, help='Choose k_times and max_n')
     # parser.add_argument('--abnormality', type=str, default=None, choices=CHEXPERT_DISEASES,
     #                     help='Select abnormality')
     args = parser.parse_args()
 
     CHEXPERT_LABELS_5 = [
-        # 'Atelectasis',
         'Cardiomegaly',
         'Consolidation',
         'Edema',
         'Pleural Effusion',
+        'Atelectasis',
+        'Lung Opacity',
     ]
 
     run_experiments(
@@ -582,11 +605,10 @@ if __name__ == "__main__":
         #abns=CHEXPERT_DISEASES[2:-1],
         # abns=[args.abnormality],
         abns=CHEXPERT_LABELS_5,
-        # metrics=["bleu", "rouge", "cider-IDF", "chexpert"], #
-        metrics=["bleurt", "bertscore"],
-        # metrics=[args.metric],
-        k_times=200,
-        max_n=200,
+        # metrics=["bleu", "rouge", "cider-IDF"], #
+        metrics=[args.metric],
+        k_times=args.n_times,
+        max_n=args.n_times,
         # suffix=args.metric,
         seed=1234,
     )

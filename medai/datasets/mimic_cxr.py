@@ -283,8 +283,8 @@ class MIMICCXRDataset(Dataset):
             target_label = self.labels[target_label]
 
         filename_to_label = dict(zip(
-            self.labels_df['filename'],
-            self.labels_df[target_label].astype(int),
+            self.master_df['filename'],
+            self.master_df[target_label].astype(int),
         ))
 
         return [

@@ -151,7 +151,7 @@ def evaluate_dummy_model(model_name,
         model.fit(train_dataloader, device=device)
 
     else:
-        raise Exception(f'Model not recognized: {model_name}')
+        raise AssertionError(f'Model not recognized: {model_name}')
 
 
     # FIXME: this will not allow loading other split than train/val/test
