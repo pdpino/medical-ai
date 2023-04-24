@@ -28,3 +28,4 @@ medai/batch*.sh
 medai/utils/*.sh
 medai/notebooks/debug.ipynb
 medai/notebooks/pamessina/
+*.code-workspace

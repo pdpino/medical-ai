@@ -20,6 +20,11 @@ And master thesis:
 > [Computer Science Department at PUC Chile](https://dcc.ing.puc.cl/)
 
 
+### Docs
+
+Find shared data from the papers in the [data/](./data) folder.
+
+
 ### Citations
 
 ```
