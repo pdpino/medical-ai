@@ -65,7 +65,7 @@ def exist_experiment_pickle(name):
 def load_experiment_pickle(name, raise_error=False):
     fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
     if not os.path.isfile(fpath):
-        if raise_error:
+        if not raise_error:
             return None
         raise FileNotFoundError(f"No {fpath} file exists!")
 
