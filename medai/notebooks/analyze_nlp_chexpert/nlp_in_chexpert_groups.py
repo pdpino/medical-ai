@@ -32,9 +32,6 @@ from medai.utils.files import WORKSPACE_DIR
 from medai.notebooks.analyze_nlp_chexpert.nlp_in_chexpert_groups_utils import (
     Experiment,
     MatrixResult,
-    save_experiment_pickle,
-    exist_experiment_pickle,
-    load_experiment_pickle,
     get_pretty_metric,
     get_cmap_by_metric,
     get_pretty_valuation,
@@ -243,6 +240,34 @@ def init_experiment(abnormality, dataset_info):
         grouped=grouped,
         dataset=dataset_info.name,
     )
+
+_EXP_FOLDER = os.path.join(WORKSPACE_DIR, "report_generation", "nlp-controlled-corpus")
+
+def save_experiment_pickle(exp, name, overwrite=False):
+    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
+    if not overwrite and os.path.isfile(fpath):
+        raise FileExistsError(f"{fpath} file exists!")
+
+    with open(fpath, "wb") as f:
+        pickle.dump(exp, f)
+    LOGGER.info("Saved to %s", fpath)
+
+
+def exist_experiment_pickle(name):
+    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
+    return os.path.isfile(fpath)
+
+
+def load_experiment_pickle(name, raise_error=False):
+    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
+    if not os.path.isfile(fpath):
+        if not raise_error:
+            return None
+        raise FileNotFoundError(f"No {fpath} file exists!")
+
+    with open(fpath, "rb") as f:
+        exp = pickle.load(f)
+    return exp
 
 
 # Load experiments

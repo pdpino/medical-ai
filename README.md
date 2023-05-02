@@ -2,6 +2,11 @@
 
 Code used for the papers:
 
+> Preprint: [_A Critical Analysis Of Nlp and Clinical Correctness Metrics to Measure Progress on X-Ray Report Generation._](https://ssrn.com/abstract=4052411)
+> Pablo Pino, Denis Parra, Jocelyn Dunstan, and Cecilia Besa
+> Submitted to [Artificial Intelligence in Medicine (AIM)](https://www.sciencedirect.com/journal/artificial-intelligence-in-medicine)
+> Available at SSRN: https://ssrn.com/abstract=4052411 or http://dx.doi.org/10.2139/ssrn.4052411
+
 > [_Clinically Correct Report Generation from Chest X-rays using Templates_](https://link.springer.com/chapter/10.1007/978-3-030-87589-3_67) \
 > Pablo Pino, Denis Parra, Cecilia Besa and Claudio Lagos \
 > [MLMI](https://sites.google.com/view/mlmi2021/home) at MICCAI 2021, oral presentation, best paper candidate \
@@ -22,7 +27,8 @@ And master thesis:
 
 ### Docs
 
-Find shared data from the papers in the [data/](./data) folder.
+* Check our [web demo](https://pdpino-medical-ai-medaistreamlit-appapp-jg76pp.streamlit.app/) from the AIM paper, see [source code](./medai/streamlit-app)
+* Find shared data from the papers in the [data/](./data) folder
 
 
 ### Citations

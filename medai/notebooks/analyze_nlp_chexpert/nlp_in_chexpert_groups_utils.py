@@ -3,20 +3,12 @@
 # This file should not use medai code
 # --> streamlit should avoid medai
 ####################
-import os
-import pickle
 import logging
 from collections import namedtuple
-
-LOGGER = logging.getLogger("medai.analyze.nlp-chex-utils")
-
-WORKSPACE_DIR = os.environ['MED_AI_WORKSPACE_DIR']
 
 MatrixResult = namedtuple(
     "MatrixResult", ["cube", "dists", "metric", "groups", "sampler"]
 )
-
-_EXP_FOLDER = os.path.join(WORKSPACE_DIR, "report_generation", "nlp-controlled-corpus")
 
 class Experiment:
     def __init__(self, abnormality, grouped, dataset):
@@ -46,32 +38,6 @@ class Experiment:
     def __repr__(self):
         return self.__str__()
 
-
-def save_experiment_pickle(exp, name, overwrite=False):
-    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
-    if not overwrite and os.path.isfile(fpath):
-        raise FileExistsError(f"{fpath} file exists!")
-
-    with open(fpath, "wb") as f:
-        pickle.dump(exp, f)
-    LOGGER.info("Saved to %s", fpath)
-
-
-def exist_experiment_pickle(name):
-    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
-    return os.path.isfile(fpath)
-
-
-def load_experiment_pickle(name, raise_error=False):
-    fpath = os.path.join(_EXP_FOLDER, f"{name}.data")
-    if not os.path.isfile(fpath):
-        if not raise_error:
-            return None
-        raise FileNotFoundError(f"No {fpath} file exists!")
-
-    with open(fpath, "rb") as f:
-        exp = pickle.load(f)
-    return exp
 
 
 _VALUATION_TO_LABEL = {

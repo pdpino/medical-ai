@@ -1,9 +1,8 @@
+import os
+import pickle
 import itertools
-import logging
 import streamlit as st
 import pandas as pd
-# import seaborn as sns
-# import matplotlib.pyplot as plt
 # import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
@@ -13,16 +12,45 @@ import plotly.graph_objects as go
 from utils import (
     Experiment,
     MatrixResult,
-    load_experiment_pickle,
-    save_experiment_pickle,
-    exist_experiment_pickle,
     get_cmap_by_metric,
     get_pretty_metric,
     get_pretty_valuation,
     get_pretty_valuation_pair,
 )
 
-LOGGER = logging.getLogger('medai.streamlit-app')
+CHEXPERT_DISEASES_6 = [
+    'Cardiomegaly',
+    'Consolidation',
+    'Edema',
+    'Pleural Effusion',
+    'Atelectasis',
+    'Lung Opacity',
+]
+
+
+def load_experiment(name):
+    fpath = os.path.join(os.path.dirname(__file__), "experiments", f"{name}.pickle")
+    st.write(f'Loading from file: {name}.pickle')
+    if not os.path.isfile(fpath):
+        return None
+
+    with open(fpath, "rb") as f:
+        raw_exp = pickle.load(f)
+
+    if isinstance(raw_exp, dict):
+        # Parse raw dict, avoid depending on medai package
+        exp = Experiment(raw_exp['abnormality'], raw_exp['grouped'] or {}, raw_exp['dataset'])
+        for raw_result in raw_exp['results']:
+            exp.add_result(MatrixResult(
+                *raw_result,
+            ))
+
+        return exp
+    elif isinstance(exp, Experiment):
+        return raw_exp
+    else:
+        st.write(f'Wrong pickle type: {type(raw_exp)}')
+        return None
 
 
 def build_suptitle(exp, result_i, metric_i):
@@ -37,9 +65,8 @@ def find_result_index(exp, metric_name, groups):
         if result.metric == metric_name and result.groups == groups:
             return result_i
 
-    available = [(r.metric, r.groups) for r in exp.results]
-    st.write(f"metric not found in experiments, try: {available}")
     return None
+
 
 AVAILABLE_DATASETS = ["mimic", "iu"]
 
@@ -73,7 +100,7 @@ AVAILABLE_METRICS = [
     ("chexpert", 0),
 ]
 
-AVAILABLE_GROUPS = [
+AVAILABLE_GROUPSELECTION = [
     (0, 1),
     (-2, 0, -1, 1),
 ]
@@ -92,7 +119,16 @@ def metric_to_str(metric_pair):
     return get_pretty_metric(metric_name, metric_i)
 
 
-def groups_to_str(groups):
+def standard_to_str(standard):
+    _d = {
+        'gold-expert1': 'Senior radiologist (R1)',
+        'gold-expert2': 'Trainee radiologist (R2)',
+        'silver': 'CheXpert labeler',
+    }
+    return _d.get(standard, standard)
+
+
+def groupselection_to_str(groups):
     if groups == (0, 1):
         return "2: healthy / abnormal"
     if groups == (-2, 0, -1, 1):
@@ -116,40 +152,58 @@ def build_experiment_name(dataset, standard, abnormality, metric_name):
 def main():
     st.sidebar.title("Panel")
     dataset = st.sidebar.selectbox("Dataset", AVAILABLE_DATASETS, format_func=dataset_to_str)
-    standard = st.sidebar.selectbox("Standard", AVAILABLE_STANDARDS)
+    standard = st.sidebar.selectbox(
+        "Gold Standard",
+        AVAILABLE_STANDARDS,
+        AVAILABLE_STANDARDS.index("gold-expert1" if "mimic" in dataset else "silver"),
+        format_func=standard_to_str,
+    )
     abnormality = st.sidebar.selectbox("Abnormality", AVAILABLE_ABNORMALITIES, 0, format_func=abn_to_str)
-    metric_name, metric_i = st.sidebar.selectbox("NLP metric", AVAILABLE_METRICS, format_func=metric_to_str)
-    groups = st.sidebar.selectbox(
-        "N classes",
-        AVAILABLE_GROUPS,
+    metric_name, metric_i = st.sidebar.selectbox(
+        "NLP metric",
+        AVAILABLE_METRICS,
         0,
-        format_func=groups_to_str,
+        format_func=metric_to_str,
     )
-    # log_scale = st.sidebar.checkbox("Log scale", value=False)
-    valuations_chosen = st.sidebar.multiselect(
-        "Valuations",
-        build_available_valuations(groups),
-        default=[(0, 0), (0, 1)],
-        format_func=get_pretty_valuation_pair,
+    groupselection = st.sidebar.selectbox(
+        "N classes",
+        AVAILABLE_GROUPSELECTION,
+        0,
+        format_func=groupselection_to_str,
     )
-    # bins = st.sidebar.slider("Histogram bins", 2, 100, 50)
-    opacity = st.sidebar.slider("Histogram opacity", 0.0, 1.0, 1.0, step=0.1)
+    log_scale = st.sidebar.checkbox(
+        "Histogram: log scale",
+        value="cider" in metric_name or ("bleu" in metric_name and metric_i != 0),
+    )
+    bins = st.sidebar.slider("Histogram: n bins", 2, 100, 50)
+    opacity = st.sidebar.slider("Histogram: opacity", 0.0, 1.0, 0.7, step=0.1)
 
     exp_name = build_experiment_name(dataset, standard, abnormality, metric_name)
-    exp = load_experiment_pickle(exp_name, raise_error=False)
+    exp = load_experiment(exp_name)
     if exp is None:
-        st.write(f"Experiment not found: {exp_name}")
+        if "expert" in standard and "iu" in dataset:
+            msg = "Using a radiologist as gold-standard is only available in MIMIC-CXR"
+        elif "expert" in standard and abnormality not in CHEXPERT_DISEASES_6:
+            available_labels = '\n'.join(f'* {l}' for l in CHEXPERT_DISEASES_6)
+            msg = f"Using a radiologist as gold-standard is only available for these abnormalities:\n{available_labels}"
+        else:
+            msg = ""
+        st.markdown(f"Experiment not found: {msg}")
         return
 
-    result_i = find_result_index(exp, metric_name, groups)
+    result_i = find_result_index(exp, metric_name, groupselection)
     if result_i is None:
+        if "silver" in standard and "chexpert" in metric_name:
+            msg = "CheXpert metrics are not available using the CheXpert labeler as gold-standard"
+        else:
+            msg = get_pretty_metric(metric_name, metric_i)
+        st.markdown(f"Metric not found: {msg}")
         return
 
-    # With plotly
     result = exp.results[result_i]
     ticks = [get_pretty_valuation(k) for k in result.groups]
 
-    fig = make_subplots(rows=1, cols=2)
+    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.2)
 
     fig.add_trace(
         go.Heatmap(
@@ -159,33 +213,32 @@ def main():
             colorscale=get_cmap_by_metric(metric_name),
             texttemplate="%{z:.3f}",
             showlegend=False,
-            colorbar=dict(
-                # len=0.35, # Change size of bar
-                # title='Speed(RPM)<br\><br\>', # set title
-                # titleside='top', # set postion
-                # tickvals=[0,50,100],
-                # x=-.2,
-                # ticklabelposition="outside top",
-            ),
-            # layout=go.Layout(
-            #     xaxis=dict(title="Generated"),
-            #     yaxis=dict(title="Ground Truth", autorange="reversed"),
-            # ),
+            showscale=False,
+            hovertemplate="%{y}-%{x}",
         ),
         row=1,
         col=1,
     )
-    for chosen in valuations_chosen:
+
+    # FIXME: this could use session_state?
+    # https://docs.streamlit.io/library/api-reference/session-state
+    DEFAULT_VALUATIONS_CHOSEN = [(0, 0), (0, 1)]
+    for chosen in build_available_valuations(groupselection):
         values = result.dists[chosen]
         if values.ndim > 1:
             values = values[metric_i]  # useful for bleu-1, -2, -3, -4
+
+        name = "-".join(get_pretty_valuation(v) for v in chosen)
         fig.add_trace(
             go.Histogram(
                 x=values,
                 opacity=opacity,
-                texttemplate="%{y:.2f}",
+                texttemplate="%{y:.2f}" if "chexpert" in metric_name else "",
                 histnorm="probability",
-                # ybins={"size": bins},
+                name=name,
+                hoverinfo="none",
+                visible=True if chosen in DEFAULT_VALUATIONS_CHOSEN else "legendonly",
+                nbinsx=2 if "chexpert" in metric_name else bins,
             ),
             row=1,
             col=2,
@@ -193,26 +246,26 @@ def main():
 
 
     fig.update_layout(
+        barmode="group" if "chexpert" in metric_name else "overlay",
         title=build_suptitle(exp, result_i, metric_i),
-        xaxis=dict(title="Generated"),
-        yaxis=dict(title="Ground Truth", autorange="reversed"),
     )
 
+    fig.update_xaxes(title_text="Generated", row=1, col=1)
+    fig.update_yaxes(title_text="Ground Truth", autorange="reversed", scaleanchor='x', row=1, col=1)
 
-    # df = pd.DataFrame(result.cube[METRIC_I], columns=ticks, index=ticks)
-    # st.write(df)
-    # fig = px.imshow(
-    #     df,
-    #     text_auto=".2f",
-    #     color_continuous_scale=get_cmap_by_metric(metric),
-    #     title="something",
-    # )
+    fig.update_xaxes(
+        title_text=f"{get_pretty_metric(metric_name, metric_i)} score",
+        row=1,
+        col=2,
+    )
+    fig.update_yaxes(
+        title_text="Frequency",
+        type="log" if log_scale else None,
+        row=1,
+        col=2,
+    )
+
     st.plotly_chart(fig)
-
-    # fig = plt.figure(figsize=(15, 6))
-    # shape = (1, 2)  # Axes shape
-    # ax_hmap = plt.subplot2grid(shape, (0, 0), fig=fig)
-    # ax_hist = plt.subplot2grid(shape, (0, 1), fig=fig)
 
     # _kw = {
     #     "xlabel_fontsize": 14,
@@ -232,9 +285,6 @@ def main():
     # }
     # plot_hists(exp, valuations_chosen, title=False, xlabel=False, ax=ax_hist, **_kw)
 
-    # # Set suptitle
-    # plt.suptitle(build_suptitle(exp, result_i, METRIC_I), fontsize=17)
-
     # # Set titles
     # ax_hist.set_title("Scores distribution", fontsize=_kw["title_fontsize"])
     # ax_hmap.set_title("Scores matrix", fontsize=_kw["title_fontsize"])
@@ -246,10 +296,6 @@ def main():
     # a = fig.axes[0]  # get the first plot
     # a.set_xticklabels(a.get_xticklabels(), fontsize=12)
     # a.set_yticklabels(a.get_yticklabels(), fontsize=12)
-
-    # # st.write(fig)
-
-    # st.write("Sampler used: ", exp.results[result_i].sampler)
 
 
 if __name__ == "__main__":
